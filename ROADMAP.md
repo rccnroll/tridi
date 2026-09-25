@@ -1,0 +1,248 @@
+# Roadmap
+
+## 2.0 (released 25/09/2026, tag `v2.0.0`)
+
+1.0 (tag `v1.0.0`) was this: Python + Open3D via `uv`, installed by chezmoi,
+local only. It costs ~1.1 s of `import open3d` with a warm cache and 1.3 GB of
+dependencies (open3d + OCP) on first launch.
+
+Decided on 25 September 2026:
+- **Rewrite in Rust**, viewer and thumbnailer in the same binary (offscreen
+  rendering): no more uv, f3d and the stdlib-only Python thumbnailer.
+- **Render with `three-d`**, 3D view only, no panel — confirmed by the
+  prototype, see below.
+- **STEP out of 2.0**: Rust has no mature tessellator short of compiling
+  OpenCascade. It stays a future item (see Later), not to be reopened.
+- **The repo stays private**: no license. Docs, code and commits are in
+  English (switched from Italian on 25 September 2026).
+- Acceptance: the cases in `tests/test-pcdview.py` (except STEP), ported to
+  Rust.
+- Distribution: a PKGBUILD (step 7), and the package attached to the GitHub
+  release.
+
+### three-d verdict: yes (prototype of 25 September 2026)
+
+Throwaway prototype, kept as the tag `proto-three-d` (folder `proto/`): reads
+ascii/binary PCD (xyz only), window with orbit camera, Z ramp, white
+background, and `thumb IN OUT SIZE` without a window. Measured on two real
+files: 61k points (1.5 MB) and 3M points (59 MB), on the Intel Arc GPU (Mesa),
+with the NVIDIA dGPU in **D3cold from start to finish**, for both the window
+and the thumbnail.
+
+| | 1.0 | prototype |
+|---|---|---|
+| startup, first frame (61k) | > 1.1 s for `import open3d` alone | ~120 ms |
+| startup, first frame (3M) | | ~260 ms |
+| 256 px thumbnail (61k) | 1.1–1.9 s (f3d) | ~80 ms |
+| 256 px thumbnail (3M) | 4.5 s (f3d) | ~370 ms |
+| thumbnail, llvmpipe | | 250 ms / 640 ms |
+| size | 1.3 GB of dependencies | 2.6 MB binary (strip + LTO), links only libc |
+
+three-d is maintained: 0.19.0 released on 17/04/2026, last push on
+24/06/2026. It has a single maintainer and releases are slow. What the
+prototype showed:
+- **0.19 removed `HeadlessContext`**: the thumbnail is set up by hand with
+  glutin, an EGL device and a surfaceless context, then
+  `Context::from_gl_context`. It's ~25 lines and works fine: it runs with and
+  without a display (`env -u WAYLAND_DISPLAY -u DISPLAY`) and lets us pick the
+  GPU, so the thumbnail doesn't wake the NVIDIA.
+- **`Program` only draws triangles**: points go through `draw_with` with a
+  glow `draw_arrays(POINTS)` and our own shader. So point clouds are handled
+  by our code, and three-d provides the context, camera, `OrbitControl` and
+  buffers. For meshes (glb/obj/stl) there are `three-d-asset`'s loaders, not
+  yet tried.
+- **It doesn't set the Wayland app_id**: we build the winit window ourselves
+  with `with_name("pcdview", …)` and hand it to `Window::from_winit_window`.
+  Checked with `niri msg windows`.
+- It drags along old dependencies, winit 0.28 and glutin 0.30: if three-d
+  stalls, we're stuck there.
+- Mesa prints `pci id for fd N: 10de:…, driver (null)` when it enumerates EGL
+  devices: it touches the NVIDIA node but doesn't wake it. It's just noise, to
+  silence in 2.0.
+
+What the prototype leaves open is in the steps below.
+
+## Road to 2.0
+
+From the prototype to a `pcdview` that replaces 1.0 on this machine, in order.
+Every step ends with something that runs; 1.0 stays installed from dotfiles
+until step 8.
+
+### 1. Skeleton
+- [x] Cargo project at the repo root (`Cargo.toml`, `src/`), binary named
+  `pcdview`, subcommand `pcdview thumb IN OUT SIZE`. Start from
+  `proto/src/main.rs`, split only where a file gets too long (reader, render,
+  window, thumb).
+- [x] Release profile from the prototype (strip + LTO), `cargo clippy` clean.
+- [x] The Python 1.0 files (`bin/`, `tests/test-pcdview.py`) stay in the
+  tree until step 8, so 1.0 is still testable.
+
+### 2. Point clouds: same as 1.0
+- [x] PCD: every `TYPE`/`SIZE` pair (F4/F8/U1–8/I1–8), `COUNT > 1`,
+  `binary_compressed` (LZF, ~30 lines, or the `pcd-rs` crate that
+  `three-d-asset` already uses), `rgb`/`rgba` packed as float or uint. PCL
+  organized clouds: drop NaNs (already in the prototype).
+- [x] PLY without faces (ascii and binary little-endian, with or without
+  colors), `.xyz`/`.xyzrgb`/`.pts` (text, one point per line).
+- [x] Colors like 1.0: the file's own colors if present; else with one file
+  the Z ramp (RAMP_LO → RAMP_HI); with several files one flat color per file
+  from `PALETTE`, the ramp still skipped when the file has colors.
+- [x] Axis triad at the min corner of the merged bbox, size 20% of the
+  largest extent.
+- [x] One file that fails prints `[pcdview] name: error` and the others still
+  open; if none opens, exit 1. Summary line on stdout per file
+  (`N points, extent …`).
+- [x] Big clouds: measure 10M+ points, check GPU memory on the Intel.
+  10M points (120 MB binary PCD): 590 ms for a 256 px thumbnail, NVIDIA
+  still in D3cold. Counts and extents match Open3D on five real files
+  (3M and 3.5M point scans, PCD with rgb, PLY).
+
+### 3. Meshes
+- [x] glb/gltf with materials and textures via `three-d-asset` (`gltf` +
+  `data-url` features). Open3D's GLBs (JSON chunk only, no BIN) load as
+  they are: 1.0's `read_glb_open3d` workaround isn't needed, and a 13 MB
+  scan GLB that Open3D itself reads back as 0 triangles opens fine.
+- [x] obj and stl via `three-d-asset` (uppercase `.STL` included); off/coff
+  and ply with faces by hand, polygons fan-triangulated. Triangle counts
+  match Open3D on the real files (RAV4 GLB 399k, STL moulds, PLY).
+- [x] Normals computed only when the file has none (1.0 recomputed them
+  always, but only because assimp read GLB normals wrong; three-d-asset
+  doesn't). Back faces drawn and lit (no culling, three-d's shader flips
+  the normal). A headlight that follows the camera plus ambient. Meshes
+  without a material get the matte blue-grey (CAD_GREY), or white when
+  they carry vertex colors.
+- [x] Mixed clouds and meshes in one window: one layer per file, one bbox
+  and camera for all.
+- [x] Camera (decided 25/09): glTF opens Y-up, as its standard says, the
+  rest Z-up, both in three-quarter view. Open3D writes scan GLBs Z-up, so
+  those stand up: that's Open3D's problem, not ours.
+- [x] Shading: dark STLs (no material) were almost black; the mesh color
+  now comes from the theme (dark grey on light, nord4 on nord).
+
+### 4. The viewer window
+- [x] Controls (decided 25/09): left drag orbits, right or middle drag (or
+  shift + left) pans, the wheel zooms, `R` resets the view, `+`/`-` change
+  the point size, `1`–`9` turn the N-th file off and on (echoed on stdout,
+  the key map is printed at start when there are several files), `Q`/`Esc`
+  quits. Pan is our own code: three-d's `OrbitControl` has none.
+- [x] Title `pcdview — a.pcd, b.glb` with the app_id fixed at `pcdview`
+  (checked with `niri msg windows`). The title is set once: three-d owns
+  the winit window afterwards and has no `set_title`, so the on/off state
+  goes to stdout only.
+- [x] Anti-aliasing: three-d's default surface has 4× MSAA. Point size
+  scales with the device pixel ratio.
+- [x] Always on the iGPU: the window renders on `Mesa Intel(R) Graphics
+  (ARL)` (`PCDVIEW_DEBUG=1` prints it) with the NVIDIA in D3cold, and still
+  on the Intel with the NVIDIA awake (D0).
+- [x] Tried by hand (25/09): works. Rocco has notes for later.
+
+### 5. Thumbnailer
+- [x] `pcdview thumb` for every format the viewer opens, one look for all.
+- [x] Themes (decided 25/09): two, both Nord, `light` (nord6 background,
+  the default) and `dark` (nord0, 1.0's thumbnails). `pcdview theme dark`
+  switches viewer and thumbnails together: it saves the theme in
+  `~/.config/pcdview/theme` for the viewer, writes a copy of the package's
+  `.thumbnailer` with `--theme dark` in `~/.local/share/thumbnailers/`
+  (the sandbox sees neither `$HOME` nor the session bus and clears the
+  environment; the `Exec=` line is the only way in), and clears the cached
+  thumbnails of our formats so Nautilus redraws them. `pcdview theme light`
+  writes the copy without the flag (see step 7 for why it's always
+  written); `pcdview theme` prints the current one.
+- [x] Framing: the camera comes as close as the eight bbox corners allow,
+  so thumbnails fill the frame like f3d's did (the viewer's first view too).
+- [x] EGL device by vendor, never NVIDIA, llvmpipe as the fallback
+  (`PCDVIEW_DEBUG=1` lists the devices and the one used). In the thumbnail
+  path `__EGL_VENDOR_LIBRARY_FILENAMES` is pinned to Mesa when the
+  environment has been cleared, so glvnd doesn't load NVIDIA's EGL
+  (226 ms instead of 367 ms in the sandbox). Mesa's `pci id for fd …`
+  lines are gone: no env var silences them, so stderr is closed while EGL
+  starts (errors still come back as results).
+- [x] Anti-aliasing: rendered at 2× and averaged down 2×2.
+- [x] Nautilus's sandbox, simulated with the same bwrap arguments
+  (`--dev /dev` has no `/dev/dri`, `--clear-env`, `--unshare-all`): works on
+  llvmpipe with the NVIDIA in D3cold. 256 px: 61k points 226 ms, 3M
+  points 843 ms, tub_mould.stl 443 ms, RAV4 GLB with textures 2.1 s; f3d
+  took 1.1–4.5 s.
+- [x] Big files: no cap of our own. 10M points take 590 ms on the Intel;
+  Nautilus's `thumbnail-limit` (100 MB, set in step 7) stops anything much
+  bigger before it reaches us.
+- [x] Real Nautilus run: done with the package (step 7).
+- [x] Shading of point clouds (asked 25/09): eye-dome lighting, in the
+  viewer and the thumbnails. Points go to their own color + depth
+  textures, then a full-screen pass darkens each pixel by how much its
+  neighbors are closer, and writes the depth back so points and meshes
+  still hide each other. Thumbnails draw points 2 px wide: at 1 px sparse
+  scans showed their gaps as stripes.
+- [x] No third-party programs (decided 25/09): everything in Rust, so f3d
+  is gone, STEP thumbnails included.
+
+### 6. Tests
+- [x] Port cases 1–9 of `tests/test-pcdview.py` to `cargo test`: ramp
+  bottom to top, ramp and palette dark enough for white, per-file tints,
+  own colors untouched, flat cloud with no division by zero, unreadable
+  file is an error and not an empty window, fixed app_id, Open3D GLB with
+  no BIN chunk, ply without faces is a cloud. Case 10 (STEP) is dropped.
+- [x] One thumbnail test on llvmpipe (runs without a GPU or display): PNG
+  of the right size, not all background.
+- [x] Sample files in `tests/data/` (small ones generated by the tests,
+  none of the 59 MB ones in git).
+
+### 7. Packaging
+- [x] PKGBUILD in `packaging/arch/` (in the root, makepkg's `src/` would
+  collide with Rust's). It builds the committed HEAD through
+  `git+file://`, runs `cargo test`, and installs `/usr/bin/pcdview`, which
+  also satisfies bwrap's "under /usr". pacman's own hooks refresh the MIME
+  and desktop databases and the icon cache: the chezmoi hook's steps are
+  gone. Build paths are remapped out of the binary. Package: 1.6 MB.
+- [x] Contents: the binary, `pcdview.thumbnailer`
+  (`Exec=/usr/bin/pcdview thumb %i %o %s`), the MIME package, the
+  `.desktop` (no STEP, canonical MIME types), the icons (one SVG, the rest
+  relative symlinks).
+- [x] `pcdview.install`: on install and upgrade, `pcdview clear-thumbnails`
+  on every `/home/*/.cache/thumbnails` (STEP included: 1.0 drew them and
+  nothing will redraw them); after install it prints the two commands a
+  user runs once, `pcdview theme light|dark` (pacman can't ask) and the
+  Nautilus `thumbnail-limit` at 100 MB (a per-user gsettings key). Both are
+  in the README.
+- [x] The user's thumbnailer entry is always written, for light too: f3d is
+  installed and its entries in `/usr/share/thumbnailers` also claim glb,
+  stl and obj, and between two entries there directory order decides; the
+  user's directory comes first (1.0 relied on this too).
+- [x] Installed and checked for real (25/09): `pcdview 2.0.0dev.r28`,
+  then `pcdview theme dark`. Nautilus drew 15 thumbnails in its sandbox
+  (12 PCD, 2 STL, the RAV4 GLB), all 512 px on nord0, none failed: our
+  entry in `~/.local/share` wins over f3d's.
+
+### 8. Switching over
+- [x] Remove pcdview from `rccnroll/dotfiles` (Rocco, 25/09, `74cbc5c`): the files, the
+  chezmoi hook, and what they installed: `/usr/local/bin/pcd-thumbnailer`,
+  `~/.local/bin/pcdview`, `~/.local/share/thumbnailers/pcd.thumbnailer`,
+  `~/.local/share/applications/pcdview.desktop` (it would shadow the
+  package's), `~/.local/share/mime/packages/pointcloud.xml`. Before
+  installing the package.
+- [x] `model/step` out of the `.desktop` MimeType and the thumbnailer entry
+  (the 2.0 ones in `share/`).
+- [x] Remove `bin/`, the Python test, `chezmoi/` and 1.0's
+  `pcd.thumbnailer` from the tree (they stay in the history and in
+  `v1.0.0`); README rewritten for 2.0.
+- [x] Tag `v2.0.0`, GitHub release with the package; the prototype branch
+  becomes the tag `proto-three-d`.
+
+## After 2.0
+
+- [ ] STL, OBJ, PLY and OFF still open with f3d on double click: the
+  package can't set a user's default apps, and `~/.config/mimeapps.list`
+  only names pcdview for pcd, xyz and glTF. Maybe `pcdview theme` (the
+  once-per-user step) also runs `xdg-mime default pcdview.desktop` for our
+  types.
+- [ ] pcdview's icon doesn't show after the package install (seen 25/09):
+  find out where it's missing (hicolor, Papirus, the icon caches).
+- [ ] Rocco's notes on the viewer, from trying it (25/09).
+- [ ] If the package's MIME list changes, users' copies of the thumbnailer
+  entry go stale until they run `pcdview theme` again.
+
+## Later
+
+- STEP, opening and thumbnails, in Rust (settled on 25/09: not in 2.0, no
+  third-party programs). Start with a throwaway prototype like the three-d
+  one, e.g. on `truck`'s STEP reader.

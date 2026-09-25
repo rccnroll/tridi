@@ -1,0 +1,17 @@
+[package]
+name = "pcdview"
+version = "2.0.0"
+edition = "2024"
+
+[dependencies]
+glutin = { version = "0.30", default-features = false, features = ["egl"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+libc = "0.2"
+three-d = "0.19"
+three-d-asset = { version = "0.10", features = ["gltf", "obj", "stl", "data-url", "png", "jpeg"] }
+winit = "0.28"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

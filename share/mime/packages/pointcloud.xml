@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-pcd">
+    <comment>Point Cloud Data</comment>
+    <comment xml:lang="it">Nuvola di punti (PCD)</comment>
+    <glob pattern="*.pcd"/>
+    <magic priority="60">
+      <match type="string" value="# .PCD" offset="0"/>
+    </magic>
+  </mime-type>
+  <mime-type type="application/x-xyz-pointcloud">
+    <comment>XYZ point cloud</comment>
+    <glob pattern="*.xyz"/>
+    <glob pattern="*.xyzrgb"/>
+    <glob pattern="*.pts"/>
+  </mime-type>
+</mime-info>
