@@ -269,6 +269,10 @@ package): the ticked items below.
 
 ## Next: STEP and CAD files
 
+2.2 released 28/09/2026 (tag `v2.2.0`, private GitHub release with the
+package): STEP, the ticked items below. The prototype branch is now the
+tag `proto-step`.
+
 The next step after 2.1 (decided 28/09): opening and thumbnails for CAD
 files, STEP (.step/.stp) first, in Rust and with no third-party programs
 (settled on 25/09). The open items above (Open3D keys, Open3D's Z-up GLBs)
@@ -276,7 +280,7 @@ come after it.
 
 - [x] Throwaway prototype, like the three-d one: read and tessellate a real
   STEP, e.g. with `truck`'s STEP reader, and see what fails and how fast.
-  Done 28/09 on the branch `proto-step`, see below.
+  Done 28/09 on the branch `proto-step` (now a tag), see below.
 
 ### STEP prototype (28/09): usable, with a watchdog and our own assemblies
 
