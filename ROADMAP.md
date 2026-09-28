@@ -335,9 +335,12 @@ What it means for pcdview:
   face), a solid (most exporters), or a representation (1362-A), in that
   order; faces are matched to the file's by position, and only when the
   library dropped none. Test: `tests/data/colors.step`.
-- [ ] Light CAD colors on the light theme: BBVK004 and 1362-A
+- [x] Light CAD colors on the light theme: BBVK004 and 1362-A
   (0.79, 0.82, 0.93) and FreeCAD's 0.8 grey are barely darker than nord6
-  (seen 28/09). Undecided: darken them, or leave them as the file says.
+  (seen 28/09). Decided 28/09: they stay as the file says (Rocco uses
+  dark). What made them flat was the light: the key light came straight
+  from the eye at 2.2, so every face turned to us was the same white. It
+  now comes from above-left of the camera at 1.6, for every mesh.
 - [ ] Back in the package: `model/step` in the `.desktop`, the thumbnailer
   entry and the MIME package; tests on the cubes and on a B-spline part.
 - [ ] Which other CAD formats are worth it (IGES?), once STEP works.

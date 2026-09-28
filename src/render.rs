@@ -178,10 +178,13 @@ impl Scene {
     }
 
     pub fn render(&self, target: &RenderTarget, cam: &Camera, psize: f32) {
-        // headlight: the light comes from the camera, so nothing is ever in the dark
+        // headlight from above-left of the camera: faces turned different ways
+        // get different shades (white parts would read flat with the light
+        // straight from the eye), and nothing facing us is ever in the dark
         let ctx = &self.ctx;
         let ambient = AmbientLight::new(ctx, 0.35, Srgba::WHITE);
-        let key = DirectionalLight::new(ctx, 2.2, Srgba::WHITE, cam.view_direction());
+        let (view, up) = (cam.view_direction(), cam.up());
+        let key = DirectionalLight::new(ctx, 1.6, Srgba::WHITE, view - up * 0.5 + view.cross(up) * 0.35);
         let shown = || self.layers.iter().zip(&self.visible).filter(|(_, v)| **v).map(|(l, _)| l);
         let meshes = shown().filter_map(|l| match l {
             Layer::Mesh(m) => Some(m),
