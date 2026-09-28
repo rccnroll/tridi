@@ -1,7 +1,8 @@
 //! Meshes: glb/gltf/obj/stl through three-d-asset, ply/off with faces from
-//! cloud.rs; and `load`, which decides what a file is.
+//! cloud.rs, step/stp from step.rs; and `load`, which decides what a file is.
 
 use crate::cloud::{self, Cloud};
+use crate::step;
 use std::path::Path;
 use three_d::{CpuMaterial, CpuModel, Srgba};
 use three_d_asset::{Geometry, Indices, Positions, Primitive, TriMesh};
@@ -17,6 +18,7 @@ pub fn load(path: &Path, grey: [f32; 3]) -> Result<Item, String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let mut model = match ext.as_str() {
         "glb" | "gltf" | "obj" | "stl" => load_asset(path, &ext)?,
+        "step" | "stp" => model(step::load(path)?),
         _ => {
             let c = cloud::load(path)?;
             if c.faces.is_none() {
@@ -79,12 +81,15 @@ fn load_asset(path: &Path, ext: &str) -> Result<CpuModel, String> {
 
 fn from_faces(c: Cloud) -> CpuModel {
     let colors = c.colors.map(|v| v.iter().map(|c| Srgba::from([c.x, c.y, c.z, 1.0])).collect());
-    let mesh = TriMesh {
+    model(TriMesh {
         positions: Positions::F32(c.points),
         indices: Indices::U32(c.faces.unwrap_or_default()),
         colors,
         ..Default::default()
-    };
+    })
+}
+
+fn model(mesh: TriMesh) -> CpuModel {
     CpuModel {
         name: String::new(),
         geometries: vec![Primitive {

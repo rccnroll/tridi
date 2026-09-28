@@ -1,5 +1,5 @@
 //! pcdview - minimal viewer for point clouds (pcd, ply, xyz, xyzrgb, pts) and
-//! meshes (glb, gltf, obj, stl, off, ply with faces).
+//! meshes (glb, gltf, obj, stl, off, ply with faces, step/stp).
 //!
 //!     pcdview [--theme T] FILE [FILE ...]        window
 //!     pcdview thumb [--theme T] IN OUT SIZE      PNG thumbnail, no window (for Nautilus)
@@ -21,6 +21,7 @@
 mod cloud;
 mod mesh;
 mod render;
+mod step;
 mod theme;
 
 use mesh::Item;
@@ -229,6 +230,8 @@ fn main() {
     let mut a: Vec<String> = std::env::args().skip(1).collect();
     let r = take_theme(&mut a).and_then(|t| match a.as_slice() {
         // thumbnails can't read the saved theme (sandbox): light unless told
+        // internal: step.rs runs itself as a child to tessellate
+        [cmd, i] if cmd == "step-mesh" => step::mesh_to_stdout(i),
         [cmd, i, o, s] if cmd == "thumb" => thumb(i, o, s, t.unwrap_or(&theme::LIGHT)),
         [cmd, ..] if cmd == "thumb" => Err(USAGE.into()),
         [cmd] if cmd == "theme" => theme::command(None),

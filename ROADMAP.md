@@ -310,9 +310,15 @@ What it means for pcdview:
   person's fork. Either one is heavy: 114–122 crates in
   the tree, and a 3.4–4.8 MB prototype binary (not stripped, no LTO)
   against our 1.6 MB package.
-- [ ] STEP in pcdview with `monstertruck-io`: `.step`/`.stp` (any case)
-  as a mesh layer, tessellated on a thread with a deadline (a miss is an
-  error), in the viewer and the thumbnailer.
+- [x] STEP in pcdview with `monstertruck-io`: `.step`/`.stp` (any case)
+  as a mesh layer, in the viewer and the thumbnailer. Done 28/09: a child
+  process (`pcdview step-mesh IN`, with `PR_SET_PDEATHSIG`) rather than a
+  thread, because the Pinion's memory grows ~20 MB/s while it hangs; it is
+  killed at 15 s and the file is an error. 11 of the 12 files in
+  120–740 ms, in bwrap too (BBVK004 1.1 s on llvmpipe). The library's
+  normals are kept, so the shading is clean. The binary goes from 4.1 to
+  6.2 MB. Files load one after the other, so a hanging STEP holds the
+  window for 15 s.
 - [ ] Assemblies placed by our own code (see the prototype), checked
   against 01465622.stl.
 - [ ] Colors from `STYLED_ITEM`, else CAD_GREY like the other meshes.
