@@ -18,7 +18,7 @@ pub fn load(path: &Path, grey: [f32; 3]) -> Result<Item, String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let mut model = match ext.as_str() {
         "glb" | "gltf" | "obj" | "stl" => load_asset(path, &ext)?,
-        "step" | "stp" => model(step::load(path)?),
+        "step" | "stp" => model(step::load(path, grey)?),
         _ => {
             let c = cloud::load(path)?;
             if c.faces.is_none() {

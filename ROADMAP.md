@@ -328,7 +328,16 @@ What it means for pcdview:
   STL. Each solid is tessellated once, however many times it is used.
   Test: `tests/data/assembly.step`, the cube twice, one copy moved and
   turned. Not handled: assemblies through MAPPED_ITEM (none seen yet).
-- [ ] Colors from `STYLED_ITEM`, else CAD_GREY like the other meshes.
+- [x] Colors from `STYLED_ITEM`, else CAD_GREY like the other meshes.
+  Done 28/09: monstertruck drops the style entities, so a small scanner
+  of the DATA section follows STYLED_ITEM → … → COLOUR_RGB or
+  DRAUGHTING_PRE_DEFINED_COLOUR. On a face (FreeCAD: lensmount's green
+  face), a solid (most exporters), or a representation (1362-A), in that
+  order; faces are matched to the file's by position, and only when the
+  library dropped none. Test: `tests/data/colors.step`.
+- [ ] Light CAD colors on the light theme: BBVK004 and 1362-A
+  (0.79, 0.82, 0.93) and FreeCAD's 0.8 grey are barely darker than nord6
+  (seen 28/09). Undecided: darken them, or leave them as the file says.
 - [ ] Back in the package: `model/step` in the `.desktop`, the thumbnailer
   entry and the MIME package; tests on the cubes and on a B-spline part.
 - [ ] Which other CAD formats are worth it (IGES?), once STEP works.
