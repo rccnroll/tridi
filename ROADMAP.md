@@ -230,6 +230,9 @@ until step 8.
 
 ## After 2.0
 
+2.1 released 28/09/2026 (tag `v2.1.0`, private GitHub release with the
+package): the ticked items below.
+
 - [x] STL, OBJ, PLY and OFF still open with f3d on double click: the
   package can't set a user's default apps. Done 28/09: `pcdview theme` runs
   `xdg-mime default pcdview.desktop` for the desktop entry's types
@@ -239,7 +242,11 @@ until step 8.
   28/09, not the package: 1.0's `~/.local/share/icons/Papirus/icon-theme.cache`
   outlived the icons it lists, and GTK trusts it over /usr/share. Fix on
   Rocco's machine: `rm -r ~/.local/share/icons/Papirus`.
-- [ ] Rocco's notes on the viewer, from trying it (25/09).
+- [x] Rocco's notes on the viewer, from trying it (25/09). Done 28/09 from a
+  hand checklist: one color for every point kept alone and tinted with
+  several files; a non-mesh .obj is an error, not a panic; orbit 20%
+  slower; a normal window, not maximized; `*.pcd` claimed over Photo CD
+  (Zivid headers don't start with `# .PCD`).
 - [x] If the package's MIME list changes, users' copies of the thumbnailer
   entry go stale until they run `pcdview theme` again. Done 28/09: the
   viewer compares the copy with the package's and, if it differs, rewrites
@@ -249,7 +256,7 @@ until step 8.
   to implement one by one. Picked first: H help, P screenshot (the
   thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
   0-4, which clash with our 1-9 file toggles: Shift+0-4 or a C cycle),
-  [ ] field of view, Alt+Enter fullscreen. If meshes are opened often: W
+  `[`/`]` field of view, Alt+Enter fullscreen. If meshes are opened often: W
   wireframe, S flat/smooth, L lighting, B back faces. Harder: N normals
   (our scans have them), Ctrl+C/V copy the view. Clash: Open3D rolls on
   Shift+left, ours pans. Skipped: line width, depth capture, render
