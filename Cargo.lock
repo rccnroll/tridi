@@ -1371,6 +1371,7 @@ dependencies = [
  "glutin",
  "image",
  "libc",
+ "monstertruck-assembly",
  "monstertruck-io",
  "monstertruck-meshing",
  "three-d",

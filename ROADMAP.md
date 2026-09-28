@@ -319,8 +319,15 @@ What it means for pcdview:
   normals are kept, so the shading is clean. The binary goes from 4.1 to
   6.2 MB. Files load one after the other, so a hanging STEP holds the
   window for 15 s.
-- [ ] Assemblies placed by our own code (see the prototype), checked
-  against 01465622.stl.
+- [x] Assemblies placed by our own code (see the prototype), checked
+  against 01465622.stl. Done 28/09: monstertruck's `step_assy` already
+  reads the graph and the matrices; what it missed is that a product's
+  SHAPE_REPRESENTATION holds only a placement, with the brep behind a
+  SHAPE_REPRESENTATION_RELATIONSHIP, and we follow that link. 01465622 now
+  has its 9 instances of 4 parts, bbox −140..50 × ±1030 × ±125 as in the
+  STL. Each solid is tessellated once, however many times it is used.
+  Test: `tests/data/assembly.step`, the cube twice, one copy moved and
+  turned. Not handled: assemblies through MAPPED_ITEM (none seen yet).
 - [ ] Colors from `STYLED_ITEM`, else CAD_GREY like the other meshes.
 - [ ] Back in the package: `model/step` in the `.desktop`, the thumbnailer
   entry and the MIME package; tests on the cubes and on a B-spline part.

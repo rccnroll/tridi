@@ -9,6 +9,7 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 libc = "0.2"
 three-d = "0.19"
 three-d-asset = { version = "0.10", features = ["gltf", "obj", "stl", "data-url", "png", "jpeg"] }
+monstertruck-assembly = "0.4.1"
 monstertruck-io = "0.4.1"
 monstertruck-meshing = "0.4.1"
 winit = "0.28"
