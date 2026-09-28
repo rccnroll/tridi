@@ -3,7 +3,9 @@
   <mime-type type="application/x-pcd">
     <comment>Point Cloud Data</comment>
     <comment xml:lang="it">Nuvola di punti (PCD)</comment>
-    <glob pattern="*.pcd"/>
+    <!-- over image/x-photo-cd, which claims *.pcd too: PCD headers may
+         start with any comment, or none, so the magic alone misses some -->
+    <glob pattern="*.pcd" weight="60"/>
     <magic priority="60">
       <match type="string" value="# .PCD" offset="0"/>
     </magic>
