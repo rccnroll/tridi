@@ -12,7 +12,7 @@ Decided on 25 September 2026:
 - **Render with `three-d`**, 3D view only, no panel — confirmed by the
   prototype, see below.
 - **STEP out of 2.0**: Rust has no mature tessellator short of compiling
-  OpenCascade. It stays a future item (see Later), not to be reopened.
+  OpenCascade. Not reopened for 2.0; it is the next step after 2.1 (see Next).
 - **The repo stays private**: no license. Docs, code and commits are in
   English (switched from Italian on 25 September 2026).
 - Acceptance: the cases in `tests/test-pcdview.py` (except STEP), ported to
