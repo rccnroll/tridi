@@ -69,7 +69,7 @@ fn load_all(paths: &[String], theme: &theme::Theme) -> Option<(Vec<Input>, Vec<S
                 let tint = (paths.len() > 1).then(|| theme.palette[i % theme.palette.len()]);
                 let e = extent(c.points.iter().copied());
                 let tag = match tint {
-                    Some(t) if c.colors.is_none() => format!("  color [{:.2}, {:.2}, {:.2}]", t[0], t[1], t[2]),
+                    Some(t) if cloud::own_colors(&c, tint).is_none() => format!("  color [{:.2}, {:.2}, {:.2}]", t[0], t[1], t[2]),
                     _ => String::new(),
                 };
                 println!("{name}: {} points, extent [{:.3}, {:.3}, {:.3}]{tag}", c.points.len(), e.x, e.y, e.z);

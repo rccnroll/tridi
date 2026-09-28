@@ -38,18 +38,20 @@ pub fn load(path: &Path) -> Result<Cloud, String> {
     if c.points.is_empty() {
         return Err(format!("no points read from {}", path.display()));
     }
-    // one color for every point is a placeholder, not a color (our scan
-    // pipeline writes grey rgb): treat it as none
-    if c.colors.as_ref().is_some_and(|v| v.len() > 1 && v.windows(2).all(|w| w[0] == w[1])) {
-        c.colors = None;
-    }
     Ok(c)
 }
 
-/// The file's colors if it has them, else `tint` flat, else the Z ramp.
+/// The file's colors, if it has them and they're kept: with several files
+/// open (`tint` given) one color for every point (our scans' grey rgb) says
+/// nothing, and two of them overlapping would look like one cloud.
+pub fn own_colors(c: &Cloud, tint: Option<[f32; 3]>) -> Option<&[Vec3]> {
+    c.colors.as_deref().filter(|v| tint.is_none() || !(v.len() > 1 && v.windows(2).all(|w| w[0] == w[1])))
+}
+
+/// The file's colors if kept (see `own_colors`), else `tint` flat, else the Z ramp.
 pub fn colorize(c: &Cloud, tint: Option<[f32; 3]>, theme: &Theme) -> Vec<Vec3> {
-    if let Some(cols) = &c.colors {
-        return cols.clone();
+    if let Some(cols) = own_colors(c, tint) {
+        return cols.to_vec();
     }
     if let Some(t) = tint {
         return vec![Vec3::from(t); c.points.len()];
@@ -558,14 +560,15 @@ mod tests {
         }
     }
 
-    // 4b. one color for every point is a placeholder (the scan pipeline
-    //     writes grey rgb): height ramp, and tints with several files
+    // 4b. one color for every point (the scan pipeline's grey rgb): kept
+    //     with one file, a tint with several
     #[test]
-    fn placeholder_color_is_no_color() {
-        let c = load(&tmp("grey.xyzrgb", b"0 0 0 0.5 0.5 0.5\n0 0 1 0.5 0.5 0.5\n")).unwrap();
-        assert!(c.colors.is_none());
-        let c = load(&tmp("two.xyzrgb", b"0 0 0 0.5 0.5 0.5\n0 0 1 0.1 0.5 0.5\n")).unwrap();
-        assert!(c.colors.is_some());
+    fn single_color_tinted_only_with_several_files() {
+        let grey = load(&tmp("grey.xyzrgb", b"0 0 0 0.5 0.5 0.5\n0 0 1 0.5 0.5 0.5\n")).unwrap();
+        assert!(colorize(&grey, None, &LIGHT).iter().all(|&v| close(v, [0.5; 3])));
+        assert!(colorize(&grey, Some(LIGHT.palette[2]), &LIGHT).iter().all(|&v| close(v, LIGHT.palette[2])));
+        let two = load(&tmp("two.xyzrgb", b"0 0 0 0.5 0.5 0.5\n0 0 1 0.1 0.5 0.5\n")).unwrap();
+        assert!(close(colorize(&two, Some(LIGHT.palette[2]), &LIGHT)[1], [0.1, 0.5, 0.5]));
     }
 
     // 5. flat cloud -> no division by zero
