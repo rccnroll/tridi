@@ -245,6 +245,16 @@ until step 8.
   viewer compares the copy with the package's and, if it differs, rewrites
   it and sets the default apps again.
 
+- [ ] Keys from Open3D's viewer (its `PrintVisualizerHelp`, read 28/09),
+  to implement one by one. Picked first: H help, P screenshot (the
+  thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
+  0-4, which clash with our 1-9 file toggles: Shift+0-4 or a C cycle),
+  [ ] field of view, Alt+Enter fullscreen. If meshes are opened often: W
+  wireframe, S flat/smooth, L lighting, B back faces. Harder: N normals
+  (our scans have them), Ctrl+C/V copy the view. Clash: Open3D rolls on
+  Shift+left, ours pans. Skipped: line width, depth capture, render
+  options, image modes.
+
 ## Later
 
 - STEP, opening and thumbnails, in Rust (settled on 25/09: not in 2.0, no
