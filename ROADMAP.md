@@ -267,8 +267,13 @@ package): the ticked items below.
   fine for now). Maybe recognize Open3D's GLBs (its generator string) and
   treat them as Z-up.
 
-## Later
+## Next: STEP and CAD files
 
-- STEP, opening and thumbnails, in Rust (settled on 25/09: not in 2.0, no
-  third-party programs). Start with a throwaway prototype like the three-d
-  one, e.g. on `truck`'s STEP reader.
+The next step after 2.1 (decided 28/09): opening and thumbnails for CAD
+files, STEP (.step/.stp) first, in Rust and with no third-party programs
+(settled on 25/09). The open items above (Open3D keys, Open3D's Z-up GLBs)
+come after it.
+
+- [ ] Throwaway prototype, like the three-d one: read and tessellate a real
+  STEP, e.g. with `truck`'s STEP reader, and see what fails and how fast.
+- [ ] Which other CAD formats are worth it (IGES?), once STEP works.
