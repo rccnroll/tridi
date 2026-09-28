@@ -147,10 +147,9 @@ fn view(paths: &[String], theme: &'static theme::Theme) -> Result<(), String> {
         // the title is set once: three-d owns the window afterwards
         .with_title(format!("{APP_ID} — {}", names.join(", ")))
         .with_name(APP_ID, APP_ID)
-        .with_maximized(true)
         .build(&event_loop)
         .map_err(|e| e.to_string())?;
-    let window = render::quiet_stderr(|| Window::from_winit_window(ww, event_loop, SurfaceSettings::default(), true))
+    let window = render::quiet_stderr(|| Window::from_winit_window(ww, event_loop, SurfaceSettings::default(), false))
         .map_err(|e| e.to_string())?;
     let mut scene = render::Scene::new(&window.gl(), inputs, true, up)?;
     if std::env::var_os("PCDVIEW_DEBUG").is_some() {
