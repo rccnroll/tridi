@@ -115,7 +115,7 @@ fn navigate(cam: &mut Camera, events: &mut [Event], dpr: f32, min: f32, max: f32
                     cam.translate((up * delta.1 - right * delta.0) * k);
                 } else if *b == MouseButton::Left {
                     let t = cam.target();
-                    cam.rotate_around_with_fixed_up(t, 0.01 * delta.0, 0.01 * delta.1);
+                    cam.rotate_around_with_fixed_up(t, 0.008 * delta.0, 0.008 * delta.1);
                 }
                 *handled = true;
             }
