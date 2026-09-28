@@ -252,31 +252,15 @@ package): the ticked items below.
   viewer compares the copy with the package's and, if it differs, rewrites
   it and sets the default apps again.
 
-- [ ] Keys from Open3D's viewer (its `PrintVisualizerHelp`, read 28/09),
-  to implement one by one. Picked first: H help, P screenshot (the
-  thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
-  0-4, which clash with our 1-9 file toggles: Shift+0-4 or a C cycle),
-  `[`/`]` field of view, Alt+Enter fullscreen. If meshes are opened often: W
-  wireframe, S flat/smooth, L lighting, B back faces. Harder: N normals
-  (our scans have them), Ctrl+C/V copy the view. Clash: Open3D rolls on
-  Shift+left, ours pans. Skipped: line width, depth capture, render
-  options, image modes.
+## 2.2: STEP (released 28/09/2026, tag `v2.2.0`)
 
-- [ ] Open3D's scan GLBs are Z-up, and we follow glTF's Y-up (25/09): their
-  thumbnails and views come out on their side next to the .pcd (seen 28/09,
-  fine for now). Maybe recognize Open3D's GLBs (its generator string) and
-  treat them as Z-up.
+Private GitHub release with the package. Installed and checked by Rocco
+on 29/09: STEP opens, and the thumbnails and viewer follow the dark theme.
+The prototype branch is now the tag `proto-step`.
 
-## Next: STEP and CAD files
-
-2.2 released 28/09/2026 (tag `v2.2.0`, private GitHub release with the
-package): STEP, the ticked items below. The prototype branch is now the
-tag `proto-step`.
-
-The next step after 2.1 (decided 28/09): opening and thumbnails for CAD
-files, STEP (.step/.stp) first, in Rust and with no third-party programs
-(settled on 25/09). The open items above (Open3D keys, Open3D's Z-up GLBs)
-come after it.
+Decided 28/09 as the step after 2.1: opening and thumbnails for CAD files,
+STEP (.step/.stp) first, in Rust and with no third-party programs (settled
+on 25/09).
 
 - [x] Throwaway prototype, like the three-d one: read and tessellate a real
   STEP, e.g. with `truck`'s STEP reader, and see what fails and how fast.
@@ -302,13 +286,14 @@ What it means for pcdview:
 - **Speed is fine** for the viewer and thumbnails: half a second for the
   biggest part.
 - **A watchdog is required**: each library hangs on one real file out of
-  twelve. Tessellation runs on a thread with a deadline, and a file that
-  misses it is an error, like an unreadable one (a thumbnail isn't drawn).
+  twelve. Tessellation runs under a deadline, and a file that misses it is
+  an error, like an unreadable one (a thumbnail isn't drawn). A thread was
+  the plan; it became a process, see below.
 - **Assemblies are ours to place**: neither library places 01465622's
   parts. That means following `NEXT_ASSEMBLY_USAGE_OCCURRENCE` →
   `CONTEXT_DEPENDENT_SHAPE_REPRESENTATION` → `ITEM_DEFINED_TRANSFORMATION`.
   Check against 01465622.stl (bbox X −140..50, ours −75..75).
-- Colors (`STYLED_ITEM` → `COLOUR_RGB`) not tried.
+- Colors (`STYLED_ITEM` → `COLOUR_RGB`) not tried (done later, below).
 - **Library: monstertruck** (decided 28/09, Rocco looked at both contact
   sheets): the better meshes, and it is alive. The risk is that it is one
   person's fork. Either one is heavy: 114–122 crates in
@@ -356,4 +341,35 @@ What it means for pcdview:
   dark theme. Until the viewer's first start the user's copy lacked
   `model/step`, so the package's entry (light) drew them, and the rewrite
   left them cached. The rewrite now clears the cached thumbnails too.
-- [ ] Which other CAD formats are worth it (IGES?), once STEP works.
+
+## Open
+
+Nothing is decided on the order.
+
+- [ ] Keys from Open3D's viewer (its `PrintVisualizerHelp`, read 28/09),
+  to implement one by one. Picked first: H help, P screenshot (the
+  thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
+  0-4, which clash with our 1-9 file toggles: Shift+0-4 or a C cycle),
+  `[`/`]` field of view, Alt+Enter fullscreen. If meshes are opened often: W
+  wireframe, S flat/smooth, L lighting, B back faces. Harder: N normals
+  (our scans have them), Ctrl+C/V copy the view. Clash: Open3D rolls on
+  Shift+left, ours pans. Skipped: line width, depth capture, render
+  options, image modes.
+
+- [ ] Open3D's scan GLBs are Z-up, and we follow glTF's Y-up (25/09): their
+  thumbnails and views come out on their side next to the .pcd (seen 28/09,
+  fine for now). Maybe recognize Open3D's GLBs (its generator string) and
+  treat them as Z-up.
+
+- [ ] Which other CAD formats are worth it: IGES first. monstertruck-io
+  has IGES code (`src/iges.rs`, a `cadmpeg-codec-iges` feature), not
+  tried.
+
+- [ ] STEP files load one after the other in the viewer: a file that hangs
+  (the Voron pinion, of the twelve tried) keeps the window empty for the
+  whole 15 s. Loading them in parallel, or opening the window first, would
+  hide that.
+
+- Known, left as they are: thin spikes on some B-spline faces
+  (lensmount), from the library. Assemblies through MAPPED_ITEM aren't
+  placed (none seen yet); add it when a real file needs it.
