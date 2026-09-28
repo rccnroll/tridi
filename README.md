@@ -29,7 +29,10 @@ Then, once per user:
 clears the cached thumbnails of these formats so Nautilus redraws them. It
 also has to run once for the thumbnails to be ours: f3d, if installed, claims
 glb, stl and obj too, and `pcdview theme` writes our entry where it wins
-(`~/.local/share/thumbnailers/`). The second line lets Nautilus thumbnail
+(`~/.local/share/thumbnailers/`). It also makes pcdview the default app for
+these formats (`xdg-mime default`), which a package can't do for its users;
+if an upgrade adds a format, the next time the viewer opens it brings both
+up to date. The second line lets Nautilus thumbnail
 files up to 100 MB (the default stops at 50). The package clears every
 user's cached thumbnails of these formats on install and upgrade.
 

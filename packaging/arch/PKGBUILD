@@ -8,7 +8,7 @@ arch=('x86_64')
 url='https://github.com/rccnroll/pcdview'
 license=('LicenseRef-private')
 # GL/EGL, Wayland and xkbcommon are dlopened at runtime
-depends=('gcc-libs' 'glibc' 'libglvnd' 'mesa' 'wayland' 'libxkbcommon')
+depends=('gcc-libs' 'glibc' 'libglvnd' 'mesa' 'wayland' 'libxkbcommon' 'xdg-utils')
 makedepends=('cargo' 'git')
 install=pcdview.install
 source=("pcdview::git+file://$(realpath "$startdir/../..")")

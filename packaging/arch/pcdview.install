@@ -12,7 +12,7 @@ clear_thumbnails() {
 post_install() {
   clear_thumbnails
   cat <<'MSG'
-==> pcdview: pick the theme once per user (viewer and thumbnails):
+==> pcdview: pick the theme once per user (viewer, thumbnails, default app):
       pcdview theme light     or     pcdview theme dark
     Nautilus skips files over 50 MB; to get thumbnails up to 100 MB:
       gsettings set org.gnome.nautilus.preferences thumbnail-limit 100

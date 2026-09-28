@@ -230,16 +230,17 @@ until step 8.
 
 ## After 2.0
 
-- [ ] STL, OBJ, PLY and OFF still open with f3d on double click: the
-  package can't set a user's default apps, and `~/.config/mimeapps.list`
-  only names pcdview for pcd, xyz and glTF. Maybe `pcdview theme` (the
-  once-per-user step) also runs `xdg-mime default pcdview.desktop` for our
-  types.
+- [x] STL, OBJ, PLY and OFF still open with f3d on double click: the
+  package can't set a user's default apps. Done 28/09: `pcdview theme` runs
+  `xdg-mime default pcdview.desktop` for the desktop entry's types
+  (xdg-utils is now a dependency).
 - [ ] pcdview's icon doesn't show after the package install (seen 25/09):
   find out where it's missing (hicolor, Papirus, the icon caches).
 - [ ] Rocco's notes on the viewer, from trying it (25/09).
-- [ ] If the package's MIME list changes, users' copies of the thumbnailer
-  entry go stale until they run `pcdview theme` again.
+- [x] If the package's MIME list changes, users' copies of the thumbnailer
+  entry go stale until they run `pcdview theme` again. Done 28/09: the
+  viewer compares the copy with the package's and, if it differs, rewrites
+  it and sets the default apps again.
 
 ## Later
 

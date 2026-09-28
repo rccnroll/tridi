@@ -62,6 +62,8 @@ pub fn by_name(name: &str) -> Result<&'static Theme, String> {
 
 /// The package's thumbnailer entry, the one installed under /usr/share.
 const ENTRY: &str = include_str!("../share/thumbnailers/pcdview.thumbnailer");
+/// The package's desktop entry: its MimeType= line is what we open.
+const DESKTOP: &str = include_str!("../share/applications/pcdview.desktop");
 /// Extensions whose cached thumbnails a theme switch (or an install) throws
 /// away: everything we draw, plus STEP, whose 1.0 thumbnails would otherwise
 /// stay forever now that nothing redraws them.
@@ -99,15 +101,44 @@ pub fn command(name: Option<&str>) -> Result<(), String> {
         return Ok(());
     };
     let theme = by_name(name)?;
-    let (cfg, ovr) = (config_file().ok_or("no $HOME")?, override_file().ok_or("no $HOME")?);
+    let cfg = config_file().ok_or("no $HOME")?;
     std::fs::create_dir_all(cfg.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(&cfg, format!("{}\n", theme.name)).map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(ovr.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(&ovr, entry(theme)).map_err(|e| e.to_string())?;
+    install(theme)?;
     let cache = xdg("XDG_CACHE_HOME", ".cache").ok_or("no $HOME")?.join("thumbnails");
     let n = clear_thumbnails(&cache);
     println!("theme {}: viewer and thumbnails; {n} cached thumbnails cleared, Nautilus redraws them", theme.name);
     Ok(())
+}
+
+/// The per-user half of the install, which the package can't do: our copy of
+/// the thumbnailer entry, and pcdview as the default app for our types.
+fn install(theme: &Theme) -> Result<(), String> {
+    let ovr = override_file().ok_or("no $HOME")?;
+    std::fs::create_dir_all(ovr.parent().unwrap()).map_err(|e| e.to_string())?;
+    std::fs::write(&ovr, entry(theme)).map_err(|e| e.to_string())?;
+    let types = DESKTOP.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or("");
+    let ok = std::process::Command::new("xdg-mime")
+        .args(["default", "pcdview.desktop"])
+        .args(types.split(';').filter(|t| !t.is_empty()))
+        .status()
+        .is_ok_and(|s| s.success());
+    if !ok {
+        eprintln!("[pcdview] xdg-mime failed: pcdview isn't the default app for our types");
+    }
+    Ok(())
+}
+
+/// After a package upgrade that changed our types, the user's copy of the
+/// entry is stale: the viewer redoes the install when it sees that. Only for
+/// users who ran `pcdview theme`; errors are ignored, the viewer comes first.
+pub fn refresh() {
+    let theme = current();
+    if let Some(ovr) = override_file()
+        && std::fs::read_to_string(&ovr).is_ok_and(|s| s != entry(theme))
+    {
+        let _ = install(theme);
+    }
 }
 
 /// Deletes the cached thumbnails of our formats under `dir` (a

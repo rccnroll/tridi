@@ -242,7 +242,10 @@ fn main() {
             Ok(())
         }
         [] => Err(USAGE.into()),
-        files => view(files, t.unwrap_or_else(theme::current)),
+        files => {
+            theme::refresh();
+            view(files, t.unwrap_or_else(theme::current))
+        }
     });
     if let Err(e) = r {
         if !e.is_empty() {
