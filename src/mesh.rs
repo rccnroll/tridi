@@ -67,7 +67,14 @@ fn load_asset(path: &Path, ext: &str) -> Result<CpuModel, String> {
         let bytes = raw.remove(path).map_err(|e| e.to_string())?;
         raw.insert(&key, bytes);
     }
-    raw.deserialize::<CpuModel>(&key).map_err(|e| e.to_string())
+    // three-d-asset panics on some files (unwrap on a .obj that isn't UTF-8):
+    // make it an error, quietly, so the other files still open
+    // ponytail: the panic hook is global; fine single-threaded, parallel tests may lose a message
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| raw.deserialize::<CpuModel>(&key)));
+    std::panic::set_hook(hook);
+    r.map_err(|_| format!("not a valid .{ext} file"))?.map_err(|e| e.to_string())
 }
 
 fn from_faces(c: Cloud) -> CpuModel {
@@ -166,5 +173,7 @@ mod tests {
         assert!(load(&tmp("bad.glb", b"glTF garbage"), crate::theme::LIGHT.mesh).is_err());
         assert!(load(&tmp("bad.stl", b"solid x\nendsolid x\n"), crate::theme::LIGHT.mesh).is_err());
         assert!(load(&tmp("bad.off", b"OFF\n3 1 0\n0 0 0\n"), crate::theme::LIGHT.mesh).is_err());
+        // a Windows object file, not a mesh: three-d-asset panics on it
+        assert!(load(&tmp("coff.obj", b"d\x86\x07\x00\xff\xfe"), crate::theme::LIGHT.mesh).is_err());
     }
 }
