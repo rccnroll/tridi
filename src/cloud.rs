@@ -38,6 +38,11 @@ pub fn load(path: &Path) -> Result<Cloud, String> {
     if c.points.is_empty() {
         return Err(format!("no points read from {}", path.display()));
     }
+    // one color for every point is a placeholder, not a color (our scan
+    // pipeline writes grey rgb): treat it as none
+    if c.colors.as_ref().is_some_and(|v| v.len() > 1 && v.windows(2).all(|w| w[0] == w[1])) {
+        c.colors = None;
+    }
     Ok(c)
 }
 
@@ -551,6 +556,16 @@ mod tests {
             let col = colorize(&c, Some(LIGHT.palette[0]), &LIGHT);
             assert!(close(col[0], [0.0, 1.0, 0.2]) && close(col[39], [1.0, 0.0, 0.2]), "{f}: {:?}", col[0]);
         }
+    }
+
+    // 4b. one color for every point is a placeholder (the scan pipeline
+    //     writes grey rgb): height ramp, and tints with several files
+    #[test]
+    fn placeholder_color_is_no_color() {
+        let c = load(&tmp("grey.xyzrgb", b"0 0 0 0.5 0.5 0.5\n0 0 1 0.5 0.5 0.5\n")).unwrap();
+        assert!(c.colors.is_none());
+        let c = load(&tmp("two.xyzrgb", b"0 0 0 0.5 0.5 0.5\n0 0 1 0.1 0.5 0.5\n")).unwrap();
+        assert!(c.colors.is_some());
     }
 
     // 5. flat cloud -> no division by zero
