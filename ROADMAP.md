@@ -255,6 +255,11 @@ until step 8.
   Shift+left, ours pans. Skipped: line width, depth capture, render
   options, image modes.
 
+- [ ] Open3D's scan GLBs are Z-up, and we follow glTF's Y-up (25/09): their
+  thumbnails and views come out on their side next to the .pcd (seen 28/09,
+  fine for now). Maybe recognize Open3D's GLBs (its generator string) and
+  treat them as Z-up.
+
 ## Later
 
 - STEP, opening and thumbnails, in Rust (settled on 25/09: not in 2.0, no
