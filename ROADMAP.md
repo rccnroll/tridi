@@ -341,6 +341,11 @@ What it means for pcdview:
   dark). What made them flat was the light: the key light came straight
   from the eye at 2.2, so every face turned to us was the same white. It
   now comes from above-left of the camera at 1.6, for every mesh.
-- [ ] Back in the package: `model/step` in the `.desktop`, the thumbnailer
+- [x] Back in the package: `model/step` in the `.desktop`, the thumbnailer
   entry and the MIME package; tests on the cubes and on a B-spline part.
+  Done 28/09: shared-mime-info already knows `model/step` (`.STP` too), so
+  the MIME package is unchanged; the viewer rewrites the user's
+  thumbnailer copy and the default apps on its next start (f3d's OCCT
+  entry claims `model/step` too). Tests: cube, assembly, colors; the
+  B-spline parts are checked by hand, their files aren't ours to commit.
 - [ ] Which other CAD formats are worth it (IGES?), once STEP works.

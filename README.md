@@ -8,10 +8,12 @@ which Nautilus calls to draw their previews without a window or a GPU.
   Open3D), `.ply` without faces, `.xyz`, `.xyzrgb`, `.pts`.
 - Meshes: `.glb`/`.gltf` (materials and textures), `.obj`, `.stl`, `.off`,
   `.ply` with faces.
+- CAD: `.step`/`.stp` (assemblies and colors), tessellated in Rust with
+  monstertruck. A file the library can't finish in 15 s is an error.
 
 1.0 (tag `v1.0.0`) was Python + Open3D launched by `uv`, with an f3d-drawn
-thumbnailer; 2.0 replaces it and drops STEP. Why and how is in
-[ROADMAP.md](ROADMAP.md).
+thumbnailer; 2.0 replaces it and dropped STEP, which came back in Rust
+after 2.1. Why and how is in [ROADMAP.md](ROADMAP.md).
 
 ## Install (Arch)
 

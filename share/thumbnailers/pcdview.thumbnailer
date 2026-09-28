@@ -1,4 +1,4 @@
 [Thumbnailer Entry]
 TryExec=/usr/bin/pcdview
 Exec=/usr/bin/pcdview thumb %i %o %s
-MimeType=application/x-pcd;application/vnd.ply;application/x-xyz-pointcloud;application/vnd.pts;model/gltf-binary;model/gltf+json;model/obj;model/stl;application/vnd.off;
+MimeType=application/x-pcd;application/vnd.ply;application/x-xyz-pointcloud;application/vnd.pts;model/gltf-binary;model/gltf+json;model/obj;model/stl;application/vnd.off;model/step;

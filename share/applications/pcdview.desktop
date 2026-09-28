@@ -9,4 +9,4 @@ Terminal=false
 NoDisplay=false
 StartupWMClass=pcdview
 Categories=Graphics;Viewer;Science;
-MimeType=application/x-pcd;application/vnd.ply;application/x-xyz-pointcloud;application/vnd.pts;model/gltf-binary;model/gltf+json;model/obj;model/stl;application/vnd.off;
+MimeType=application/x-pcd;application/vnd.ply;application/x-xyz-pointcloud;application/vnd.pts;model/gltf-binary;model/gltf+json;model/obj;model/stl;application/vnd.off;model/step;
