@@ -1,7 +1,7 @@
 # Builds the committed HEAD of this repo (not the working tree):
 #   cd packaging/arch && makepkg -si
 pkgname=pcdview
-pkgver=2.1.0
+pkgver=2.1.0.r11.g950c217
 pkgrel=1
 pkgdesc='Point cloud and mesh viewer, with Nautilus thumbnails'
 arch=('x86_64')

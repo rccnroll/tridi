@@ -132,12 +132,17 @@ fn install(theme: &Theme) -> Result<(), String> {
 /// After a package upgrade that changed our types, the user's copy of the
 /// entry is stale: the viewer redoes the install when it sees that. Only for
 /// users who ran `pcdview theme`; errors are ignored, the viewer comes first.
+/// The cached thumbnails go too: until now the new types were drawn by the
+/// package's entry, which is the light theme.
 pub fn refresh() {
     let theme = current();
     if let Some(ovr) = override_file()
         && std::fs::read_to_string(&ovr).is_ok_and(|s| s != entry(theme))
     {
         let _ = install(theme);
+        if let Some(cache) = xdg("XDG_CACHE_HOME", ".cache") {
+            clear_thumbnails(&cache.join("thumbnails"));
+        }
     }
 }
 

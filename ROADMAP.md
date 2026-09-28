@@ -348,4 +348,8 @@ What it means for pcdview:
   thumbnailer copy and the default apps on its next start (f3d's OCCT
   entry claims `model/step` too). Tests: cube, assembly, colors; the
   B-spline parts are checked by hand, their files aren't ours to commit.
+  Seen installing it (28/09): the STEP thumbnails came out light on the
+  dark theme. Until the viewer's first start the user's copy lacked
+  `model/step`, so the package's entry (light) drew them, and the rewrite
+  left them cached. The rewrite now clears the cached thumbnails too.
 - [ ] Which other CAD formats are worth it (IGES?), once STEP works.
