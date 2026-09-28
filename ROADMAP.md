@@ -234,8 +234,11 @@ until step 8.
   package can't set a user's default apps. Done 28/09: `pcdview theme` runs
   `xdg-mime default pcdview.desktop` for the desktop entry's types
   (xdg-utils is now a dependency).
-- [ ] pcdview's icon doesn't show after the package install (seen 25/09):
-  find out where it's missing (hicolor, Papirus, the icon caches).
+- [x] pcdview's icon doesn't show after the package install (seen 25/09):
+  find out where it's missing (hicolor, Papirus, the icon caches). Found
+  28/09, not the package: 1.0's `~/.local/share/icons/Papirus/icon-theme.cache`
+  outlived the icons it lists, and GTK trusts it over /usr/share. Fix on
+  Rocco's machine: `rm -r ~/.local/share/icons/Papirus`.
 - [ ] Rocco's notes on the viewer, from trying it (25/09).
 - [x] If the package's MIME list changes, users' copies of the thumbnailer
   entry go stale until they run `pcdview theme` again. Done 28/09: the
