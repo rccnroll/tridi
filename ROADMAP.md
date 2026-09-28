@@ -274,6 +274,37 @@ files, STEP (.step/.stp) first, in Rust and with no third-party programs
 (settled on 25/09). The open items above (Open3D keys, Open3D's Z-up GLBs)
 come after it.
 
-- [ ] Throwaway prototype, like the three-d one: read and tessellate a real
+- [x] Throwaway prototype, like the three-d one: read and tessellate a real
   STEP, e.g. with `truck`'s STEP reader, and see what fails and how fast.
+  Done 28/09 on the branch `proto-step`, see below.
+
+### STEP prototype (28/09): usable, with a watchdog and our own assemblies
+
+Two variants on twelve files: Rocco's four (two cubes, the 01465622
+assembly, BBVK004 with 476 faces of planes, cylinders, cones and tori) and
+eight with B-spline surfaces from GitHub (lensmount, Pinion, camsense, …,
+80–220 kB). Tolerance 0.1% of the bbox diagonal, output as STL and
+looked at through `pcdview thumb`.
+
+| | `truck-stepio` 0.3 (ricosjp) | `monstertruck-io` 0.4.1 (virtualritz's fork) |
+|---|---|---|
+| opens | 11/12; camsense hangs (> 120 s, eats memory) | 11/12; Pinion hangs (> 120 s) |
+| quality | 1976-D twisted, spikes on lensmount, 5 Pinion faces missing | 1976-D and 1362-A clean and `Closed`, lensmount still has thin spikes |
+| time | 10–350 ms, BBVK004 1.3 s | 20–340 ms, BBVK004 0.5 s |
+| assemblies | ignored: 01465622's parts all at the origin | has the placement code, but finds no shapes in any of these files; unplaced solids as a fallback |
+| project | slow releases | pushed 19/09/2026, 30 stars, one maintainer, also reads IGES |
+
+What it means for pcdview:
+- **Speed is fine** for the viewer and thumbnails: half a second for the
+  biggest part.
+- **A watchdog is required**: each library hangs on one real file out of
+  twelve. Tessellation runs on a thread with a deadline, and a file that
+  misses it is an error, like an unreadable one (a thumbnail isn't drawn).
+- **Assemblies are ours to place**: neither library places 01465622's
+  parts. That means following `NEXT_ASSEMBLY_USAGE_OCCURRENCE` →
+  `CONTEXT_DEPENDENT_SHAPE_REPRESENTATION` → `ITEM_DEFINED_TRANSFORMATION`.
+  Check against 01465622.stl (bbox X −140..50, ours −75..75).
+- Colors (`STYLED_ITEM` → `COLOUR_RGB`) not tried.
+- Open: which library. monstertruck gives the better meshes and is alive,
+  but it is one person's fork; both would add ~10 crates to the binary.
 - [ ] Which other CAD formats are worth it (IGES?), once STEP works.
