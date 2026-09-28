@@ -306,5 +306,7 @@ What it means for pcdview:
   Check against 01465622.stl (bbox X −140..50, ours −75..75).
 - Colors (`STYLED_ITEM` → `COLOUR_RGB`) not tried.
 - Open: which library. monstertruck gives the better meshes and is alive,
-  but it is one person's fork; both would add ~10 crates to the binary.
+  but it is one person's fork. Either one is heavy: 114–122 crates in
+  the tree, and a 3.4–4.8 MB prototype binary (not stripped, no LTO)
+  against our 1.6 MB package.
 - [ ] Which other CAD formats are worth it (IGES?), once STEP works.
