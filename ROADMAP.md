@@ -305,8 +305,17 @@ What it means for pcdview:
   `CONTEXT_DEPENDENT_SHAPE_REPRESENTATION` → `ITEM_DEFINED_TRANSFORMATION`.
   Check against 01465622.stl (bbox X −140..50, ours −75..75).
 - Colors (`STYLED_ITEM` → `COLOUR_RGB`) not tried.
-- Open: which library. monstertruck gives the better meshes and is alive,
-  but it is one person's fork. Either one is heavy: 114–122 crates in
+- **Library: monstertruck** (decided 28/09, Rocco looked at both contact
+  sheets): the better meshes, and it is alive. The risk is that it is one
+  person's fork. Either one is heavy: 114–122 crates in
   the tree, and a 3.4–4.8 MB prototype binary (not stripped, no LTO)
   against our 1.6 MB package.
+- [ ] STEP in pcdview with `monstertruck-io`: `.step`/`.stp` (any case)
+  as a mesh layer, tessellated on a thread with a deadline (a miss is an
+  error), in the viewer and the thumbnailer.
+- [ ] Assemblies placed by our own code (see the prototype), checked
+  against 01465622.stl.
+- [ ] Colors from `STYLED_ITEM`, else CAD_GREY like the other meshes.
+- [ ] Back in the package: `model/step` in the `.desktop`, the thumbnailer
+  entry and the MIME package; tests on the cubes and on a B-spline part.
 - [ ] Which other CAD formats are worth it (IGES?), once STEP works.
