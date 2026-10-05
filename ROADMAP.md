@@ -354,6 +354,15 @@ history above keep the old name.
 
 Nothing is decided on the order.
 
+- [ ] One release pipeline (05/10): GitHub Actions on a `v*` tag builds and
+  publishes the AUR package, the `.deb` (Ubuntu 24.04, today
+  `packaging/deb/build.sh`) and a Nix flake, with the changelog generated
+  from the Conventional Commits. Today a release is by hand: `makepkg`,
+  `build.sh`, `gh release`.
+
+- [ ] Thumbnails in yazi too (05/10): a previewer plugin that runs
+  `tridi thumb` for our formats, set up alongside the Nautilus entry.
+
 - [ ] Keys from Open3D's viewer (its `PrintVisualizerHelp`, read 28/09),
   to implement one by one. Picked first: H help, P screenshot (the
   thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
