@@ -23,6 +23,13 @@ From the repo (builds the committed HEAD):
 
     cd packaging/arch && makepkg -si
 
+## Install (Ubuntu 24.04, Debian 12+)
+
+From a release: download `tridi_*.deb` and `sudo apt install ./tridi_*.deb`.
+From the repo (builds the committed HEAD in a Debian 12 container, podman):
+
+    packaging/deb/build.sh
+
 Then, once per user:
 
     tridi theme dark         # or: tridi theme light (both Nord)
@@ -75,6 +82,7 @@ prints which device is used.
 - `share/` — thumbnailer entry, MIME types, `.desktop`, icons (one SVG, the
   rest symlinks to it).
 - `packaging/arch/` — PKGBUILD and install script.
+- `packaging/deb/` — `.deb` build (cargo-deb, metadata in `Cargo.toml`) and `postinst`.
 - `tests/data/` — small fixtures written by Open3D.
 
 ## Develop
