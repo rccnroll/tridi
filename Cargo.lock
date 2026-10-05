@@ -1365,21 +1365,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pcdview"
-version = "2.2.0"
-dependencies = [
- "glutin",
- "image",
- "libc",
- "monstertruck-assembly",
- "monstertruck-io",
- "monstertruck-meshing",
- "three-d",
- "three-d-asset",
- "winit",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2032,6 +2017,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d38ac1cf9b95face32296c0a3ede1fdc270627c9d9c02a7274dd6d960dc4d56"
 dependencies = [
  "winnow 1.0.4",
+]
+
+[[package]]
+name = "tridi"
+version = "2.2.0"
+dependencies = [
+ "glutin",
+ "image",
+ "libc",
+ "monstertruck-assembly",
+ "monstertruck-io",
+ "monstertruck-meshing",
+ "three-d",
+ "three-d-asset",
+ "winit",
 ]
 
 [[package]]

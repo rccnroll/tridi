@@ -1,5 +1,5 @@
 [package]
-name = "pcdview"
+name = "tridi"
 version = "2.2.0"
 edition = "2024"
 

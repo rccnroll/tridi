@@ -1,5 +1,5 @@
 //! STEP (.step/.stp) through monstertruck. Tessellation runs in a child
-//! process, `pcdview step-mesh IN`, killed at DEADLINE: on some real files
+//! process, `tridi step-mesh IN`, killed at DEADLINE: on some real files
 //! the library never finishes and its memory grows ~20 MB/s while it tries
 //! (a thread can't be stopped, a process can). A panic stays in the child too.
 
@@ -57,7 +57,7 @@ pub fn load(path: &Path, grey: [f32; 3]) -> Result<TriMesh, String> {
     Ok(decode(&bytes, grey))
 }
 
-/// Child side: `pcdview step-mesh IN`.
+/// Child side: `tridi step-mesh IN`.
 pub fn mesh_to_stdout(path: &str) -> Result<(), String> {
     // die with the parent: a viewer killed while waiting must not leave us running
     unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn not_step_is_error() {
-        let f = std::env::temp_dir().join(format!("pcdview-bad-{}.step", std::process::id()));
+        let f = std::env::temp_dir().join(format!("tridi-bad-{}.step", std::process::id()));
         std::fs::write(&f, b"ISO-10303-21;\ngarbage").unwrap();
         assert!(tessellate(&f).is_err());
     }

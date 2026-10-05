@@ -1,12 +1,12 @@
 [Desktop Entry]
 Type=Application
-Name=pcdview
+Name=tridi
 GenericName=Point Cloud & Mesh Viewer
 Comment=Open point clouds and meshes
-Exec=pcdview %F
-Icon=pcdview
+Exec=tridi %F
+Icon=tridi
 Terminal=false
 NoDisplay=false
-StartupWMClass=pcdview
+StartupWMClass=tridi
 Categories=Graphics;Viewer;Science;
 MimeType=application/x-pcd;application/vnd.ply;application/x-xyz-pointcloud;application/vnd.pts;model/gltf-binary;model/gltf+json;model/obj;model/stl;application/vnd.off;model/step;

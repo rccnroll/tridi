@@ -1,4 +1,4 @@
 target/
 packaging/arch/*
 !packaging/arch/PKGBUILD
-!packaging/arch/pcdview.install
+!packaging/arch/tridi.install

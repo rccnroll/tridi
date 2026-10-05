@@ -486,7 +486,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn tmp(name: &str, data: &[u8]) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pcdview-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tridi-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join(name);
         std::fs::write(&p, data).unwrap();

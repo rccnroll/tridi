@@ -1,7 +1,7 @@
-# pcdview
+# tridi
 
 Viewer for point clouds and meshes, with thumbnails in Nautilus. One Rust
-binary does both: a window for looking at the files, and `pcdview thumb`,
+binary does both: a window for looking at the files, and `tridi thumb`,
 which Nautilus calls to draw their previews without a window or a GPU.
 
 - Point clouds: `.pcd` (ascii, binary, binary_compressed; rgb from PCL or
@@ -13,25 +13,26 @@ which Nautilus calls to draw their previews without a window or a GPU.
 
 1.0 (tag `v1.0.0`) was Python + Open3D launched by `uv`, with an f3d-drawn
 thumbnailer; 2.0 replaces it and dropped STEP, which came back in Rust
-after 2.1. Why and how is in [ROADMAP.md](ROADMAP.md).
+after 2.1. Up to 2.2.0 it was called pcdview (same tags, same history).
+Why and how is in [ROADMAP.md](ROADMAP.md).
 
 ## Install (Arch)
 
-From a release: download `pcdview-*.pkg.tar.zst` and `sudo pacman -U` it.
+From a release: download `tridi-*.pkg.tar.zst` and `sudo pacman -U` it.
 From the repo (builds the committed HEAD):
 
     cd packaging/arch && makepkg -si
 
 Then, once per user:
 
-    pcdview theme dark         # or: pcdview theme light (both Nord)
+    tridi theme dark         # or: tridi theme light (both Nord)
     gsettings set org.gnome.nautilus.preferences thumbnail-limit 100
 
-`pcdview theme` picks the look of both the viewer and the thumbnails, and
+`tridi theme` picks the look of both the viewer and the thumbnails, and
 clears the cached thumbnails of these formats so Nautilus redraws them. It
 also has to run once for the thumbnails to be ours: f3d, if installed, claims
-glb, stl and obj too, and `pcdview theme` writes our entry where it wins
-(`~/.local/share/thumbnailers/`). It also makes pcdview the default app for
+glb, stl and obj too, and `tridi theme` writes our entry where it wins
+(`~/.local/share/thumbnailers/`). It also makes tridi the default app for
 these formats (`xdg-mime default`), which a package can't do for its users;
 if an upgrade adds a format, the next time the viewer opens it brings both
 up to date. The second line lets Nautilus thumbnail
@@ -40,10 +41,10 @@ user's cached thumbnails of these formats on install and upgrade.
 
 ## Use
 
-    pcdview FILE [FILE ...]              # open files together
-    pcdview thumb IN OUT SIZE            # what Nautilus runs
-    pcdview theme [light|dark]           # show or switch the theme
-    pcdview clear-thumbnails [DIR ...]   # drop cached thumbnails of these formats
+    tridi FILE [FILE ...]              # open files together
+    tridi thumb IN OUT SIZE            # what Nautilus runs
+    tridi theme [light|dark]           # show or switch the theme
+    tridi clear-thumbnails [DIR ...]   # drop cached thumbnails of these formats
 
 `--theme light|dark` overrides the saved theme for one run.
 
@@ -58,7 +59,7 @@ Point clouds get eye-dome lighting, which gives them depth.
 
 The window and the thumbnails always render on the integrated GPU (never
 the NVIDIA one: waking it costs seconds), and thumbnails fall back to
-llvmpipe inside Nautilus's sandbox, which has no GPU. `PCDVIEW_DEBUG=1`
+llvmpipe inside Nautilus's sandbox, which has no GPU. `TRIDI_DEBUG=1`
 prints which device is used.
 
 ## What's here
@@ -70,7 +71,7 @@ prints which device is used.
   which files are clouds and which meshes.
 - `src/render.rs` — the scene, eye-dome lighting, the headless EGL context
   and the offscreen thumbnail.
-- `src/theme.rs` — the two themes, `pcdview theme` and the thumbnail cache.
+- `src/theme.rs` — the two themes, `tridi theme` and the thumbnail cache.
 - `share/` — thumbnailer entry, MIME types, `.desktop`, icons (one SVG, the
   rest symlinks to it).
 - `packaging/arch/` — PKGBUILD and install script.

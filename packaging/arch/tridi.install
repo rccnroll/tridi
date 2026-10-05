@@ -4,7 +4,7 @@
 clear_thumbnails() {
   local d
   for d in /home/*/.cache/thumbnails /root/.cache/thumbnails; do
-    [ -d "$d" ] && pcdview clear-thumbnails "$d" >/dev/null
+    [ -d "$d" ] && tridi clear-thumbnails "$d" >/dev/null
   done
   return 0
 }
@@ -12,8 +12,8 @@ clear_thumbnails() {
 post_install() {
   clear_thumbnails
   cat <<'MSG'
-==> pcdview: pick the theme once per user (viewer, thumbnails, default app):
-      pcdview theme light     or     pcdview theme dark
+==> tridi: pick the theme once per user (viewer, thumbnails, default app):
+      tridi theme light     or     tridi theme dark
     Nautilus skips files over 50 MB; to get thumbnails up to 100 MB:
       gsettings set org.gnome.nautilus.preferences thumbnail-limit 100
 MSG

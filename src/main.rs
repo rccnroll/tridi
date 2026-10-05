@@ -1,12 +1,12 @@
-//! pcdview - minimal viewer for point clouds (pcd, ply, xyz, xyzrgb, pts) and
+//! tridi - minimal viewer for point clouds (pcd, ply, xyz, xyzrgb, pts) and
 //! meshes (glb, gltf, obj, stl, off, ply with faces, step/stp).
 //!
-//!     pcdview [--theme T] FILE [FILE ...]        window
-//!     pcdview thumb [--theme T] IN OUT SIZE      PNG thumbnail, no window (for Nautilus)
-//!     pcdview theme [light|dark]                 show or switch the theme (viewer and thumbnails)
-//!     pcdview clear-thumbnails [DIR ...]         drop cached thumbnails of our formats
+//!     tridi [--theme T] FILE [FILE ...]        window
+//!     tridi thumb [--theme T] IN OUT SIZE      PNG thumbnail, no window (for Nautilus)
+//!     tridi theme [light|dark]                 show or switch the theme (viewer and thumbnails)
+//!     tridi clear-thumbnails [DIR ...]         drop cached thumbnails of our formats
 //!
-//! T is `light` or `dark`, both Nord. The viewer uses the one `pcdview theme`
+//! T is `light` or `dark`, both Nord. The viewer uses the one `tridi theme`
 //! saved (light if none); thumbnails get theirs from the thumbnailer entry.
 //!
 //! In the window: left drag orbits, right or middle drag (or shift + left)
@@ -31,11 +31,11 @@ use std::time::Instant;
 use three_d::*;
 
 /// The Wayland app_id the dock groups the window by, matching the .desktop.
-const APP_ID: &str = "pcdview";
-const USAGE: &str = "usage: pcdview [--theme light|dark] FILE [FILE ...]
-       pcdview thumb [--theme light|dark] IN OUT SIZE
-       pcdview theme [light|dark]
-       pcdview clear-thumbnails [DIR ...]";
+const APP_ID: &str = "tridi";
+const USAGE: &str = "usage: tridi [--theme light|dark] FILE [FILE ...]
+       tridi thumb [--theme light|dark] IN OUT SIZE
+       tridi theme [light|dark]
+       tridi clear-thumbnails [DIR ...]";
 
 fn is_gltf(p: &str) -> bool {
     let ext = Path::new(p).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
@@ -59,7 +59,7 @@ fn load_all(paths: &[String], theme: &theme::Theme) -> Option<(Vec<Input>, Vec<S
         let item = match mesh::load(path, theme.mesh) {
             Ok(it) => it,
             Err(e) => {
-                eprintln!("[pcdview] {name}: {e}");
+                eprintln!("[tridi] {name}: {e}");
                 continue;
             }
         };
@@ -153,7 +153,7 @@ fn view(paths: &[String], theme: &'static theme::Theme) -> Result<(), String> {
     let window = render::quiet_stderr(|| Window::from_winit_window(ww, event_loop, SurfaceSettings::default(), false))
         .map_err(|e| e.to_string())?;
     let mut scene = render::Scene::new(&window.gl(), inputs, true, up)?;
-    if std::env::var_os("PCDVIEW_DEBUG").is_some() {
+    if std::env::var_os("TRIDI_DEBUG").is_some() {
         eprintln!("GL: {}", unsafe { window.gl().get_parameter_string(context::RENDERER) });
     }
     let mut cam = scene.camera(window.viewport());
@@ -212,7 +212,7 @@ fn thumb(inp: &str, out: &str, size: &str, theme: &theme::Theme) -> Result<(), S
     let scene = render::Scene::new(&ctx, vec![input], false, up_for(is_gltf(inp)))?;
     let img = render::offscreen(&ctx, &scene, size, theme.bg)?;
     image::save_buffer(out, &img, size, size, image::ExtendedColorType::Rgba8).map_err(|e| e.to_string())?;
-    if std::env::var_os("PCDVIEW_TIMING").is_some() {
+    if std::env::var_os("TRIDI_TIMING").is_some() {
         eprintln!("thumb {:?}", t0.elapsed());
     }
     Ok(())
@@ -251,7 +251,7 @@ fn main() {
     });
     if let Err(e) = r {
         if !e.is_empty() {
-            eprintln!("[pcdview] {e}");
+            eprintln!("[tridi] {e}");
         }
         std::process::exit(1);
     }
@@ -289,7 +289,7 @@ mod tests {
     //    name, the dock goes back to "unknown"
     #[test]
     fn app_id_is_fixed() {
-        assert_eq!(super::APP_ID, "pcdview");
+        assert_eq!(super::APP_ID, "tridi");
         assert!(include_str!("main.rs").contains(".with_name(APP_ID, APP_ID)"));
     }
 }

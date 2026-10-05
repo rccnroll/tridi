@@ -262,7 +262,7 @@ impl Scene {
 /// EGL starts, before any of its log settings apply. Real failures still come
 /// back through `f`'s result.
 pub fn quiet_stderr<T>(f: impl FnOnce() -> T) -> T {
-    if std::env::var_os("PCDVIEW_DEBUG").is_some() {
+    if std::env::var_os("TRIDI_DEBUG").is_some() {
         return f();
     }
     // SAFETY: plain fd juggling on 2; the saved copy is restored and closed
@@ -299,12 +299,12 @@ fn open_headless() -> Result<(Context, impl Sized), String> {
     let gpu = |d: &Device| {
         d.vendor().is_some_and(|v| !v.to_ascii_lowercase().contains("nvidia")) && !software(d) && !d.extensions().contains("EGL_NV_device_cuda")
     };
-    let dev = match std::env::var("PCDVIEW_EGL_DEVICE").ok().and_then(|s| s.parse::<usize>().ok()) {
+    let dev = match std::env::var("TRIDI_EGL_DEVICE").ok().and_then(|s| s.parse::<usize>().ok()) {
         Some(i) => devs.get(i),
         None => devs.iter().find(|d| gpu(d)).or(devs.iter().find(|d| software(d))),
     }
     .ok_or("no usable EGL device")?;
-    if std::env::var_os("PCDVIEW_DEBUG").is_some() {
+    if std::env::var_os("TRIDI_DEBUG").is_some() {
         for (i, d) in devs.iter().enumerate() {
             let tag = if std::ptr::eq(d, dev) { "  <- used" } else { "" };
             eprintln!("egl device {i}: {:?} {:?} software={}{tag}", d.vendor(), d.name(), software(d));
@@ -361,7 +361,7 @@ mod tests {
     #[test]
     fn thumbnail_llvmpipe() {
         // SAFETY: tests in this binary don't read this variable concurrently
-        unsafe { std::env::set_var("PCDVIEW_EGL_DEVICE", software_device().to_string()) };
+        unsafe { std::env::set_var("TRIDI_EGL_DEVICE", software_device().to_string()) };
         let (ctx, _keep) = headless().unwrap();
         let mut pts: Vec<Vec3> = (0..2000).map(|i| vec3((i % 40) as f32 / 40.0 - 0.5, (i / 40) as f32 / 50.0 - 0.5, 1.0)).collect();
         pts.extend((0..20).map(|i| vec3(0.0, 0.0, i as f32 / 20.0)));

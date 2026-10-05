@@ -342,6 +342,14 @@ What it means for pcdview:
   `model/step`, so the package's entry (light) drew them, and the rewrite
   left them cached. The rewrite now clears the cached thumbnails too.
 
+## Renamed to tridi (05/10/2026)
+
+pcdview became tridi after 2.2.0: the name was free on the AUR, in the Arch
+repos and on crates.io. Binary, package, `.desktop`, thumbnailer entry,
+config dir (`~/.config/tridi/`) and env vars (`TRIDI_DEBUG`, …) follow; the
+package `replaces` pcdview. The repo is `rccnroll/tridi`. Tags and the
+history above keep the old name.
+
 ## Open
 
 Nothing is decided on the order.

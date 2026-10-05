@@ -1,4 +1,4 @@
-//! Themes (Nord light and Nord dark) and `pcdview theme`, which switches the
+//! Themes (Nord light and Nord dark) and `tridi theme`, which switches the
 //! viewer and the thumbnails together.
 //!
 //! The thumbnailer runs in Nautilus's sandbox, which sees neither `$HOME` nor
@@ -61,9 +61,9 @@ pub fn by_name(name: &str) -> Result<&'static Theme, String> {
 }
 
 /// The package's thumbnailer entry, the one installed under /usr/share.
-const ENTRY: &str = include_str!("../share/thumbnailers/pcdview.thumbnailer");
+const ENTRY: &str = include_str!("../share/thumbnailers/tridi.thumbnailer");
 /// The package's desktop entry: its MimeType= line is what we open.
-const DESKTOP: &str = include_str!("../share/applications/pcdview.desktop");
+const DESKTOP: &str = include_str!("../share/applications/tridi.desktop");
 /// Extensions whose cached thumbnails a theme switch (or an install) throws
 /// away: everything we draw, plus STEP, whose 1.0 thumbnails would otherwise
 /// stay forever now that nothing redraws them.
@@ -74,14 +74,14 @@ fn xdg(var: &str, fallback: &str) -> Option<PathBuf> {
 }
 
 fn config_file() -> Option<PathBuf> {
-    Some(xdg("XDG_CONFIG_HOME", ".config")?.join("pcdview/theme"))
+    Some(xdg("XDG_CONFIG_HOME", ".config")?.join("tridi/theme"))
 }
 
 fn override_file() -> Option<PathBuf> {
-    Some(xdg("XDG_DATA_HOME", ".local/share")?.join("thumbnailers/pcdview.thumbnailer"))
+    Some(xdg("XDG_DATA_HOME", ".local/share")?.join("thumbnailers/tridi.thumbnailer"))
 }
 
-/// The viewer's theme: the one `pcdview theme` saved, else light.
+/// The viewer's theme: the one `tridi theme` saved, else light.
 pub fn current() -> &'static Theme {
     config_file()
         .and_then(|p| std::fs::read_to_string(p).ok())
@@ -94,7 +94,7 @@ fn entry(theme: &Theme) -> String {
     if theme.name == "dark" { ENTRY.replace(" thumb %i", " thumb --theme dark %i") } else { ENTRY.to_owned() }
 }
 
-/// `pcdview theme [light|dark]`: without a name, prints the current one.
+/// `tridi theme [light|dark]`: without a name, prints the current one.
 pub fn command(name: Option<&str>) -> Result<(), String> {
     let Some(name) = name else {
         println!("{}", current().name);
@@ -112,26 +112,26 @@ pub fn command(name: Option<&str>) -> Result<(), String> {
 }
 
 /// The per-user half of the install, which the package can't do: our copy of
-/// the thumbnailer entry, and pcdview as the default app for our types.
+/// the thumbnailer entry, and tridi as the default app for our types.
 fn install(theme: &Theme) -> Result<(), String> {
     let ovr = override_file().ok_or("no $HOME")?;
     std::fs::create_dir_all(ovr.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::write(&ovr, entry(theme)).map_err(|e| e.to_string())?;
     let types = DESKTOP.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or("");
     let ok = std::process::Command::new("xdg-mime")
-        .args(["default", "pcdview.desktop"])
+        .args(["default", "tridi.desktop"])
         .args(types.split(';').filter(|t| !t.is_empty()))
         .status()
         .is_ok_and(|s| s.success());
     if !ok {
-        eprintln!("[pcdview] xdg-mime failed: pcdview isn't the default app for our types");
+        eprintln!("[tridi] xdg-mime failed: tridi isn't the default app for our types");
     }
     Ok(())
 }
 
 /// After a package upgrade that changed our types, the user's copy of the
 /// entry is stale: the viewer redoes the install when it sees that. Only for
-/// users who ran `pcdview theme`; errors are ignored, the viewer comes first.
+/// users who ran `tridi theme`; errors are ignored, the viewer comes first.
 /// The cached thumbnails go too: until now the new types were drawn by the
 /// package's entry, which is the light theme.
 pub fn refresh() {
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn clears_only_our_thumbnails() {
-        let dir = std::env::temp_dir().join(format!("pcdview-thumbs-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tridi-thumbs-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         for (sub, name, uri) in [
             ("normal", "a.png", "file:///home/x/scan.pcd"),
@@ -231,7 +231,7 @@ mod tests {
     fn dark_entry_only_adds_the_theme() {
         assert_eq!(entry(&LIGHT), ENTRY);
         let d = entry(&DARK);
-        assert!(d.contains("Exec=/usr/bin/pcdview thumb --theme dark %i %o %s"), "{d}");
+        assert!(d.contains("Exec=/usr/bin/tridi thumb --theme dark %i %o %s"), "{d}");
         let mime = |s: &str| s.lines().find(|l| l.starts_with("MimeType=")).map(str::to_owned);
         assert_eq!(mime(&d), mime(ENTRY));
     }

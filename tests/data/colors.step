@@ -1,6 +1,6 @@
 ISO-10303-21;
 HEADER;
-FILE_DESCRIPTION(('pcdview test: cube.step, the solid red, one face green'), '2;1');
+FILE_DESCRIPTION(('tridi test: cube.step, the solid red, one face green'), '2;1');
 FILE_NAME('', '2026-09-28 20:37:10.705451403', (''), (''), 'monstertruck', '', '');
 FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));
 ENDSEC;
