@@ -1,7 +1,7 @@
 # Builds the committed HEAD of this repo (not the working tree):
 #   cd packaging/arch && makepkg -si
 pkgname=tridi
-pkgver=2.2.0
+pkgver=2.2.0.r3.g8ce0e09
 pkgrel=1
 pkgdesc='Point cloud and mesh viewer, with Nautilus thumbnails'
 arch=('x86_64')

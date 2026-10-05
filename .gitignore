@@ -2,3 +2,4 @@ target/
 packaging/arch/*
 !packaging/arch/PKGBUILD
 !packaging/arch/tridi.install
+packaging/deb/*.deb

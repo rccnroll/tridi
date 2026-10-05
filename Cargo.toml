@@ -18,3 +18,19 @@ winit = "0.28"
 strip = true
 lto = true
 codegen-units = 1
+
+# `packaging/deb/build.sh`; same files as the PKGBUILD's package()
+[package.metadata.deb]
+maintainer = "Rocco Caccioppoli <caccioppolirocco@gmail.com>"
+extended-description = "Point cloud and mesh viewer, with Nautilus thumbnails."
+section = "graphics"
+# GL/EGL, Wayland and xkbcommon are dlopened at runtime: no shlibdeps
+depends = "libc6 (>= 2.34), libgcc-s1, libegl1, libgl1-mesa-dri, libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, xdg-utils"
+maintainer-scripts = "packaging/deb/"
+assets = [
+    ["target/release/tridi", "usr/bin/", "755"],
+    ["share/thumbnailers/tridi.thumbnailer", "usr/share/thumbnailers/", "644"],
+    ["share/mime/packages/pointcloud.xml", "usr/share/mime/packages/", "644"],
+    ["share/applications/tridi.desktop", "usr/share/applications/", "644"],
+    ["share/icons/**/*", "usr/share/icons/", "644"],
+]
