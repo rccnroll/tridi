@@ -2403,7 +2403,7 @@ checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 
 [[package]]
 name = "tridi"
-version = "2.3.0"
+version = "2.3.1"
 dependencies = [
  "glutin",
  "glutin-winit",
