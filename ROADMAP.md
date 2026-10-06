@@ -353,6 +353,11 @@ history above keep the old name.
 2.3 released 06/10/2026 (tag `v2.3.0`, private GitHub release with the
 Arch package and the `.deb`): the rename and the `.deb`, nothing else.
 
+2.3.1 released 06/10/2026 (tag `v2.3.1`, both packages): the window is
+ours (winit 0.30 + glutin 0.32), three-d's pinned winit 0.28, whose title
+bar GNOME at scale 2 rejected (`Buffer size (820x45) must be an integer
+multiple of the buffer_scale (2)`, seen on Ubuntu 24.04).
+
 ## Open
 
 Nothing is decided on the order.
