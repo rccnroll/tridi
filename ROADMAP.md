@@ -350,6 +350,9 @@ config dir (`~/.config/tridi/`) and env vars (`TRIDI_DEBUG`, …) follow; the
 package `replaces` pcdview. The repo is `rccnroll/tridi`. Tags and the
 history above keep the old name.
 
+2.3 released 06/10/2026 (tag `v2.3.0`, private GitHub release with the
+Arch package and the `.deb`): the rename and the `.deb`, nothing else.
+
 ## Open
 
 Nothing is decided on the order.
