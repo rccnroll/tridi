@@ -107,20 +107,9 @@ prints which device is used.
     cargo test                   # one test renders on llvmpipe (Mesa, no GPU)
     cargo run --release -- FILE
 
-CI runs `cargo fmt --check`, clippy with `-D warnings` and the tests on
-every push, and checks the build on the oldest Rust supported (1.88).
-
-The point cloud parsers are fuzzed (they read whatever file Nautilus
-lists): `cargo install cargo-fuzz`, then from `fuzz/`,
-`cargo +nightly fuzz run -O pcd` (or `ply`, `off`, `text`), seeded from
-`fuzz/seeds/`. A crash lands in `fuzz/artifacts/`; it becomes a test.
-
-A release: set the version in `Cargo.toml` and the PKGBUILD's `pkgver`,
-`cargo check` (for `Cargo.lock`), commit `chore(release): X.Y.Z`, then
-`git tag vX.Y.Z && git push origin main vX.Y.Z`. The Release workflow
-builds both packages and opens a draft release with them and the commits
-since the last tag; edit the notes and publish it. The
-screenshots come from synthetic files: `python3 docs/samples.py`.
+What CI checks, fuzzing, the commit style and how a release is cut are in
+[CONTRIBUTING.md](CONTRIBUTING.md); what changed in each release in
+[CHANGELOG.md](CHANGELOG.md).
 
 ## History
 
