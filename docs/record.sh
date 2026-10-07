@@ -4,8 +4,8 @@
 # typed with wtype. Needs gpu-screen-recorder, wtype, ffmpeg. Run it in the
 # samples dir of docs/samples.py; the GIF lands next to this script:
 #   docs/record.sh files "0.8 1 0.7 2 0.7 3 0.7 4 1.2 4 0.6 3 0.6 2 0.6 1 1.0" tile_*.pcd
-#   CURSOR=yes docs/record.sh navigate "15.0" tile_*.pcd   (someone drags meanwhile;
-#     then trimmed to 13.5 s, 8 fps, 640 px, no dither: 4 MB)
+#   docs/record.sh navigate "15.0" tile_*.pcd   (someone drags meanwhile; then
+#     trimmed to 16.5 s, 8 fps, 560 px, no dither: 4.6 MB; CURSOR=yes shows it)
 #   CROP=0.6 docs/record.sh points "0.8 + 0.35 + 0.35 ... 1.2 - 0.35 - ... 1.0" knot.pcd
 # wtype keys only after the floating toggle and resize below: on a window
 # that hasn't changed, niri doesn't pass wtype's keymap, its keycode 1 reads
