@@ -36,6 +36,7 @@ const APP_ID: &str = "tridi";
 #[derive(clap::Parser)]
 #[command(
     version,
+    disable_help_subcommand = true,
     override_usage = "tridi [OPTIONS] FILE...\n       tridi [OPTIONS] <COMMAND>",
     about = "Viewer for point clouds and meshes, and their thumbnails in Nautilus",
     after_help = AFTER_HELP
@@ -55,8 +56,10 @@ struct Cli {
 enum Cmd {
     /// Write a PNG thumbnail of IN to OUT, without a window (what Nautilus runs)
     Thumb {
+        /// The file to draw
         #[arg(value_name = "IN")]
         input: String,
+        /// The PNG to write
         #[arg(value_name = "OUT")]
         output: String,
         /// Width and height in pixels
@@ -65,14 +68,21 @@ enum Cmd {
     },
     /// Show the theme, or switch viewer and thumbnails to another one
     Theme {
+        /// The theme to switch to; without it, prints the current one
         #[arg(value_parser = ["light", "dark"])]
         name: Option<String>,
     },
     /// Drop the cached thumbnails of our formats (default ~/.cache/thumbnails)
-    ClearThumbnails { dirs: Vec<std::path::PathBuf> },
+    ClearThumbnails {
+        /// Thumbnail cache directories
+        dirs: Vec<std::path::PathBuf>,
+    },
     /// Internal: step.rs runs itself as a child to tessellate
     #[command(hide = true)]
     StepMesh { input: String },
+    /// Packaging: write the man page and the bash, zsh and fish completions to DIR
+    #[command(hide = true)]
+    Generate { dir: std::path::PathBuf },
 }
 
 const AFTER_HELP: &str = "\
@@ -94,6 +104,12 @@ Window:
 
 Environment:
   TRIDI_DEBUG=1    print which GPU renders
+
+Files:
+  ~/.config/tridi/theme
+      the theme `tridi theme` saved
+  ~/.local/share/thumbnailers/tridi.thumbnailer
+      our thumbnailer entry, which wins over f3d's
 
 Bugs: https://github.com/rccnroll/tridi/issues";
 
@@ -464,11 +480,25 @@ fn thumb(inp: &str, out: &str, size: u32, theme: &theme::Theme) -> Result<(), St
     Ok(())
 }
 
+/// `tridi generate DIR`: the man pages (tridi.1, one per subcommand), and
+/// tridi.bash, _tridi and tridi.fish, which the packages install.
+fn generate(dir: &Path) -> std::io::Result<()> {
+    use clap_complete::Shell;
+    let mut cmd = <Cli as clap::CommandFactory>::command();
+    std::fs::create_dir_all(dir)?;
+    clap_mangen::generate_to(cmd.clone(), dir)?;
+    for sh in [Shell::Bash, Shell::Zsh, Shell::Fish] {
+        clap_complete::generate_to(sh, &mut cmd, "tridi", dir)?;
+    }
+    Ok(())
+}
+
 fn main() {
     let cli = <Cli as clap::Parser>::parse();
     let t = cli.theme.as_deref().map(|n| theme::by_name(n).expect("clap checked the name"));
     let r = match cli.cmd {
         Some(Cmd::StepMesh { input }) => step::mesh_to_stdout(&input),
+        Some(Cmd::Generate { dir }) => generate(&dir).map_err(|e| e.to_string()),
         // thumbnails can't read the saved theme (sandbox): light unless told
         Some(Cmd::Thumb { input, output, size }) => thumb(&input, &output, size, t.unwrap_or(&theme::LIGHT)),
         Some(Cmd::Theme { name }) => theme::command(name.as_deref()),
@@ -515,6 +545,24 @@ mod tests {
         assert_eq!((c.files.len(), c.theme.as_deref()), (2, Some("dark")));
         assert!(Cli::try_parse_from(["tridi", "--help"]).is_err_and(|e| e.exit_code() == 0));
         assert!(Cli::try_parse_from(["tridi", "-x"]).is_err_and(|e| e.exit_code() == 2));
+    }
+
+    #[test]
+    fn generate_writes_what_the_packages_install() {
+        let dir = std::env::temp_dir().join(format!("tridi-generate-{}", std::process::id()));
+        generate(&dir).unwrap();
+        for f in [
+            "tridi.1",
+            "tridi-thumb.1",
+            "tridi-theme.1",
+            "tridi-clear-thumbnails.1",
+            "tridi.bash",
+            "_tridi",
+            "tridi.fish",
+        ] {
+            assert!(dir.join(f).is_file(), "{f}");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     fn motion(button: MouseButton, delta: (f32, f32)) -> Event {

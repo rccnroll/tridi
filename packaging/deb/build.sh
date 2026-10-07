@@ -11,4 +11,6 @@ git -C "$repo" archive HEAD | tar -x -C "$src"
 podman run --rm -v "$src:/src" -v "$out:/out" -v tridi-cargo:/usr/local/cargo/registry \
   -w /src docker.io/library/rust:1-bookworm sh -ec '
     cargo install --locked cargo-deb --root /tmp/cd -q
-    /tmp/cd/bin/cargo-deb --locked --output /out/'
+    cargo build --locked --release
+    target/release/tridi generate target/assets
+    /tmp/cd/bin/cargo-deb --no-build --output /out/'

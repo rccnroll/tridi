@@ -17,13 +17,16 @@ monstertruck-io = "0.4.1"
 monstertruck-meshing = "0.4.1"
 winit = "0.30"
 clap = { version = "4.6.7", features = ["derive"] }
+clap_mangen = "0.3.3"
+clap_complete = "4.6.11"
 
 [profile.release]
 strip = true
 lto = true
 codegen-units = 1
 
-# `packaging/deb/build.sh`; same files as the PKGBUILD's package()
+# `packaging/deb/build.sh`; same files as the PKGBUILD's package(). target/assets
+# is `tridi generate`'s output: man pages and completions
 [package.metadata.deb]
 maintainer = "Rocco Caccioppoli <caccioppolirocco@gmail.com>"
 extended-description = "Point cloud and mesh viewer, with Nautilus thumbnails."
@@ -39,4 +42,8 @@ assets = [
     ["share/icons/**/*", "usr/share/icons/", "644"],
     ["LICENSE-MIT", "usr/share/doc/tridi/", "644"],
     ["LICENSE-APACHE", "usr/share/doc/tridi/", "644"],
+    ["target/assets/*.1", "usr/share/man/man1/", "644"],
+    ["target/assets/tridi.bash", "usr/share/bash-completion/completions/tridi", "644"],
+    ["target/assets/_tridi", "usr/share/zsh/vendor-completions/", "644"],
+    ["target/assets/tridi.fish", "usr/share/fish/vendor_completions.d/", "644"],
 ]

@@ -36,6 +36,7 @@ build() {
   # no build paths in the binary (panic messages carry source paths)
   export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/build --remap-path-prefix=$HOME/.cargo=/cargo"
   cargo build --frozen --release
+  target/release/tridi generate target/assets
 }
 
 check() {
@@ -54,4 +55,8 @@ package() {
   # one SVG, the rest are relative symlinks to it
   cp -a share/icons "$pkgdir/usr/share/"
   install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/tridi"
+  install -Dm644 target/assets/*.1 -t "$pkgdir/usr/share/man/man1"
+  install -Dm644 target/assets/tridi.bash "$pkgdir/usr/share/bash-completion/completions/tridi"
+  install -Dm644 target/assets/_tridi -t "$pkgdir/usr/share/zsh/site-functions"
+  install -Dm644 target/assets/tridi.fish -t "$pkgdir/usr/share/fish/vendor_completions.d"
 }

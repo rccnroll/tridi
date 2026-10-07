@@ -54,7 +54,8 @@ user's cached thumbnails of these formats on install and upgrade.
     tridi clear-thumbnails [DIR ...]   # drop cached thumbnails of these formats
 
 `--theme light|dark` overrides the saved theme for one run. `tridi --help`
-(or `tridi help thumb`, …) has the examples, formats and keys.
+(or `tridi thumb --help`, …) and `man tridi` have the examples, formats
+and keys.
 
 In the window: left drag orbits, right or middle drag (or shift + left drag)
 pans, the wheel zooms; `R` resets the view, `+`/`-` change the point size,
