@@ -73,19 +73,36 @@ fn load_all(paths: &[String], theme: &theme::Theme) -> Option<(Vec<Input>, Vec<S
                     Some(t) if cloud::own_colors(&c, tint).is_none() => format!("  color [{:.2}, {:.2}, {:.2}]", t[0], t[1], t[2]),
                     _ => String::new(),
                 };
-                println!("{name}: {} points, extent [{:.3}, {:.3}, {:.3}]{tag}", c.points.len(), e.x, e.y, e.z);
+                println!(
+                    "{name}: {} points, extent [{:.3}, {:.3}, {:.3}]{tag}",
+                    c.points.len(),
+                    e.x,
+                    e.y,
+                    e.z
+                );
                 let colors = cloud::colorize(&c, tint, theme);
                 inputs.push(Input::Points(c.points, colors));
             }
             Item::Mesh(m) => {
                 // ponytail: no per-file tint on meshes (1.0 didn't have one either)
-                let e = extent(m.geometries.iter().flat_map(|g| match &g.geometry {
-                    three_d_asset::Geometry::Triangles(t) => {
-                        t.positions.to_f32().into_iter().map(|v| (g.transformation * v.extend(1.0)).truncate()).collect()
+                let e = extent(m.geometries.iter().flat_map(|g| {
+                    match &g.geometry {
+                        three_d_asset::Geometry::Triangles(t) => t
+                            .positions
+                            .to_f32()
+                            .into_iter()
+                            .map(|v| (g.transformation * v.extend(1.0)).truncate())
+                            .collect(),
+                        _ => vec![],
                     }
-                    _ => vec![],
                 }));
-                println!("{name}: {} triangles, extent [{:.3}, {:.3}, {:.3}]", mesh::triangles(&m), e.x, e.y, e.z);
+                println!(
+                    "{name}: {} triangles, extent [{:.3}, {:.3}, {:.3}]",
+                    mesh::triangles(&m),
+                    e.x,
+                    e.y,
+                    e.z
+                );
                 inputs.push(Input::Mesh(m));
             }
         }
@@ -105,7 +122,13 @@ fn up_for(gltf: bool) -> Vec3 {
 fn navigate(cam: &mut Camera, events: &mut [Event], dpr: f32, min: f32, max: f32) {
     for e in events.iter_mut() {
         match e {
-            Event::MouseMotion { button: Some(b), delta, modifiers, handled, .. } if !*handled => {
+            Event::MouseMotion {
+                button: Some(b),
+                delta,
+                modifiers,
+                handled,
+                ..
+            } if !*handled => {
                 let pan = matches!(b, MouseButton::Right | MouseButton::Middle) || modifiers.shift;
                 if pan {
                     // world units per logical pixel at the target's depth
@@ -137,7 +160,18 @@ fn view(paths: &[String], theme: &'static theme::Theme) -> Result<(), String> {
         println!("keys: {}", keys.join(", "));
     }
     let event_loop = winit::event_loop::EventLoop::new().map_err(|e| format!("no display: {e}"))?;
-    let mut v = Viewer { names, theme, inputs: Some(inputs), up, gl: None, err: None, psize: 2.0, cursor: None, button: None, mods: Modifiers::default() };
+    let mut v = Viewer {
+        names,
+        theme,
+        inputs: Some(inputs),
+        up,
+        gl: None,
+        err: None,
+        psize: 2.0,
+        cursor: None,
+        button: None,
+        mods: Modifiers::default(),
+    };
     event_loop.run_app(&mut v).map_err(|e| e.to_string())?;
     v.err.map_or(Ok(()), Err)
 }
@@ -214,7 +248,16 @@ impl Viewer {
         let cam = scene.camera(viewport(&window));
         // min above the near plane (radius * 0.01), or zooming in clips everything
         let (min, max) = (scene.radius * 0.05, scene.radius * 15.0);
-        Ok(Gl { scene, cam, min, max, context, ctx, surface, window })
+        Ok(Gl {
+            scene,
+            cam,
+            min,
+            max,
+            context,
+            ctx,
+            surface,
+            window,
+        })
     }
 }
 
@@ -250,7 +293,12 @@ impl winit::application::ApplicationHandler for Viewer {
             WindowEvent::Resized(_) => gl.window.resize_surface(&gl.surface, &gl.ctx),
             WindowEvent::ModifiersChanged(m) => {
                 let m = m.state();
-                self.mods = Modifiers { alt: m.alt_key(), ctrl: m.control_key(), shift: m.shift_key(), command: m.control_key() };
+                self.mods = Modifiers {
+                    alt: m.alt_key(),
+                    ctrl: m.control_key(),
+                    shift: m.shift_key(),
+                    command: m.control_key(),
+                };
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 self.button = (state == ElementState::Pressed)
@@ -265,8 +313,17 @@ impl winit::application::ApplicationHandler for Viewer {
             WindowEvent::CursorMoved { position, .. } => {
                 let p = position.to_logical::<f32>(dpr as f64);
                 if let (Some((x, y)), Some(b)) = (self.cursor, self.button) {
-                    let position = PhysicalPoint { x: position.x as f32, y: position.y as f32 };
-                    events.push(Event::MouseMotion { button: Some(b), delta: (p.x - x, p.y - y), position, modifiers: self.mods, handled: false });
+                    let position = PhysicalPoint {
+                        x: position.x as f32,
+                        y: position.y as f32,
+                    };
+                    events.push(Event::MouseMotion {
+                        button: Some(b),
+                        delta: (p.x - x, p.y - y),
+                        position,
+                        modifiers: self.mods,
+                        handled: false,
+                    });
                 }
                 self.cursor = Some((p.x, p.y));
             }
@@ -276,7 +333,12 @@ impl winit::application::ApplicationHandler for Viewer {
                     MouseScrollDelta::LineDelta(_, y) => y * 24.0,
                     MouseScrollDelta::PixelDelta(d) => d.to_logical::<f32>(dpr as f64).y * 0.24,
                 };
-                events.push(Event::MouseWheel { delta: (0.0, y), position: PhysicalPoint { x: 0.0, y: 0.0 }, modifiers: self.mods, handled: false });
+                events.push(Event::MouseWheel {
+                    delta: (0.0, y),
+                    position: PhysicalPoint { x: 0.0, y: 0.0 },
+                    modifiers: self.mods,
+                    handled: false,
+                });
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => match event.logical_key.as_ref() {
                 K::Named(NamedKey::Escape) => el.exit(),
@@ -345,7 +407,9 @@ fn thumb(inp: &str, out: &str, size: &str, theme: &theme::Theme) -> Result<(), S
 
 /// Takes `--theme NAME` out of the arguments, if it's there.
 fn take_theme(a: &mut Vec<String>) -> Result<Option<&'static theme::Theme>, String> {
-    let Some(i) = a.iter().position(|s| s == "--theme") else { return Ok(None) };
+    let Some(i) = a.iter().position(|s| s == "--theme") else {
+        return Ok(None);
+    };
     let name = a.get(i + 1).cloned().ok_or(USAGE)?;
     a.drain(i..i + 2);
     theme::by_name(&name).map(Some)
@@ -363,7 +427,11 @@ fn main() {
         [cmd, name] if cmd == "theme" => theme::command(Some(name)),
         [cmd, dirs @ ..] if cmd == "clear-thumbnails" => {
             let home = std::env::var_os("HOME").map(|h| Path::new(&h).join(".cache/thumbnails"));
-            let dirs: Vec<std::path::PathBuf> = if dirs.is_empty() { home.into_iter().collect() } else { dirs.iter().map(Into::into).collect() };
+            let dirs: Vec<std::path::PathBuf> = if dirs.is_empty() {
+                home.into_iter().collect()
+            } else {
+                dirs.iter().map(Into::into).collect()
+            };
             let n: usize = dirs.iter().map(|d| theme::clear_thumbnails(d)).sum();
             println!("{n} cached thumbnails cleared");
             Ok(())
@@ -387,13 +455,27 @@ mod tests {
     use super::*;
 
     fn motion(button: MouseButton, delta: (f32, f32)) -> Event {
-        Event::MouseMotion { button: Some(button), delta, position: PhysicalPoint { x: 0.0, y: 0.0 }, modifiers: Modifiers::default(), handled: false }
+        Event::MouseMotion {
+            button: Some(button),
+            delta,
+            position: PhysicalPoint { x: 0.0, y: 0.0 },
+            modifiers: Modifiers::default(),
+            handled: false,
+        }
     }
 
     #[test]
     fn pan_orbit_zoom() {
         let vp = Viewport::new_at_origo(800, 600);
-        let mut cam = Camera::new_perspective(vp, vec3(0.0, -10.0, 0.0), Vec3::zero(), Vec3::unit_z(), degrees(render::FOV), 0.1, 100.0);
+        let mut cam = Camera::new_perspective(
+            vp,
+            vec3(0.0, -10.0, 0.0),
+            Vec3::zero(),
+            Vec3::unit_z(),
+            degrees(render::FOV),
+            0.1,
+            100.0,
+        );
         // pan: target and camera move together, the distance stays
         navigate(&mut cam, &mut [motion(MouseButton::Right, (100.0, 0.0))], 1.0, 1.0, 50.0);
         assert!(cam.target().x < -0.5, "right drag moves the view: target {:?}", cam.target());
@@ -404,7 +486,12 @@ mod tests {
         assert!((cam.target() - t).magnitude() < 1e-4 && (cam.position().distance(t) - 10.0).abs() < 1e-3);
         // zoom: never closer than min
         for _ in 0..50 {
-            let wheel = Event::MouseWheel { delta: (0.0, 500.0), position: PhysicalPoint { x: 0.0, y: 0.0 }, modifiers: Modifiers::default(), handled: false };
+            let wheel = Event::MouseWheel {
+                delta: (0.0, 500.0),
+                position: PhysicalPoint { x: 0.0, y: 0.0 },
+                modifiers: Modifiers::default(),
+                handled: false,
+            };
             navigate(&mut cam, &mut [wheel], 1.0, 1.0, 50.0);
         }
         assert!(cam.position().distance(cam.target()) >= 1.0 - 1e-3);

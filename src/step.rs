@@ -52,7 +52,11 @@ pub fn load(path: &Path, grey: [f32; 3]) -> Result<TriMesh, String> {
     let status = child.wait().map_err(|e| e.to_string())?;
     if !status.success() {
         let msg = msg.trim();
-        return Err(if msg.is_empty() { format!("tessellation failed ({status})") } else { msg.to_string() });
+        return Err(if msg.is_empty() {
+            format!("tessellation failed ({status})")
+        } else {
+            msg.to_string()
+        });
     }
     Ok(decode(&bytes, grey))
 }
@@ -99,8 +103,14 @@ fn tessellate(path: &Path) -> Result<Vec<f32>, String> {
     let mut cache = HashMap::<u64, Vec<f32>>::new();
     if let Ok(assy) = table.step_assy() {
         let assy = assy.map(
-            |n| NodeEntity { shape: n.attrs.shape_representation, attrs: () },
-            |e| EdgeEntity { matrix: Matrix4::try_from(&e.matrix).unwrap_or(Matrix4::identity()), attrs: () },
+            |n| NodeEntity {
+                shape: n.attrs.shape_representation,
+                attrs: (),
+            },
+            |e| EdgeEntity {
+                matrix: Matrix4::try_from(&e.matrix).unwrap_or(Matrix4::identity()),
+                attrs: (),
+            },
         );
         for top in assy.top_nodes() {
             for p in assy.paths_iter(top.index()) {
@@ -147,8 +157,16 @@ fn solids_of(table: &Table, rep: u64) -> Vec<u64> {
             }
         }
         for srr in table.shape_representation_relationship.values() {
-            let (PlaceHolder::Ref(Name::Entity(a)), PlaceHolder::Ref(Name::Entity(b))) = (&srr.rep_1, &srr.rep_2) else { continue };
-            let other = if *a == r { *b } else if *b == r { *a } else { continue };
+            let (PlaceHolder::Ref(Name::Entity(a)), PlaceHolder::Ref(Name::Entity(b))) = (&srr.rep_1, &srr.rep_2) else {
+                continue;
+            };
+            let other = if *a == r {
+                *b
+            } else if *b == r {
+                *a
+            } else {
+                continue;
+            };
             if !seen.contains(&other) {
                 seen.push(other);
                 todo.push(other);
@@ -214,8 +232,12 @@ fn entities(text: &str) -> Ents<'_> {
             ';' if !quoted => {
                 let stmt = data[start..i].trim();
                 start = i + 1;
-                let Some((id, rest)) = stmt.strip_prefix('#').and_then(|s| s.split_once('=')) else { continue };
-                let (Ok(id), Some((name, args))) = (id.trim().parse(), rest.split_once('(')) else { continue };
+                let Some((id, rest)) = stmt.strip_prefix('#').and_then(|s| s.split_once('=')) else {
+                    continue;
+                };
+                let (Ok(id), Some((name, args))) = (id.trim().parse(), rest.split_once('(')) else {
+                    continue;
+                };
                 let name = name.trim();
                 if !name.is_empty() {
                     out.insert(id, (name, args.trim_end().strip_suffix(')').unwrap_or(args)));
@@ -303,7 +325,9 @@ fn colour(ents: &Ents, id: u64, depth: u8) -> Option<[f32; 3]> {
 fn outer_faces(ents: &Ents, solid: u64) -> Vec<u64> {
     let Some((_, args)) = ents.get(&solid) else { return Vec::new() };
     let Some(&shell) = refs(args).first() else { return Vec::new() };
-    let Some((_, shell_args)) = ents.get(&shell) else { return Vec::new() };
+    let Some((_, shell_args)) = ents.get(&shell) else {
+        return Vec::new();
+    };
     refs(shell_args)
         .into_iter()
         .map(|f| match ents.get(&f) {
@@ -327,7 +351,10 @@ mod tests {
     fn bbox(m: &TriMesh) -> ([f32; 3], [f32; 3]) {
         let Positions::F32(p) = &m.positions else { unreachable!() };
         p.iter().fold(([f32::MAX; 3], [f32::MIN; 3]), |(l, h), q| {
-            ([l[0].min(q.x), l[1].min(q.y), l[2].min(q.z)], [h[0].max(q.x), h[1].max(q.y), h[2].max(q.z)])
+            (
+                [l[0].min(q.x), l[1].min(q.y), l[2].min(q.z)],
+                [h[0].max(q.x), h[1].max(q.y), h[2].max(q.z)],
+            )
         })
     }
 
@@ -337,7 +364,12 @@ mod tests {
         assert_eq!(m.triangle_count(), 12);
         assert_eq!(bbox(&m), ([0.0; 3], [1.0; 3]));
         // flat faces: every normal is an axis
-        assert!(m.normals.unwrap().iter().all(|n| (n.x.abs() + n.y.abs() + n.z.abs() - 1.0).abs() < 1e-4));
+        assert!(
+            m.normals
+                .unwrap()
+                .iter()
+                .all(|n| (n.x.abs() + n.y.abs() + n.z.abs() - 1.0).abs() < 1e-4)
+        );
     }
 
     // the cube as a part used twice, laid out like exporters do: the part's

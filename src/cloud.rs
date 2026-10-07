@@ -26,7 +26,11 @@ pub fn load(path: &Path) -> Result<Cloud, String> {
     };
     // NaNs: PCL organized clouds mark missing points that way (a mesh keeps
     // them, or its indices would shift)
-    let keep: Vec<bool> = c.points.iter().map(|p| p.x.is_finite() && p.y.is_finite() && p.z.is_finite()).collect();
+    let keep: Vec<bool> = c
+        .points
+        .iter()
+        .map(|p| p.x.is_finite() && p.y.is_finite() && p.z.is_finite())
+        .collect();
     if c.faces.is_none() && keep.contains(&false) {
         let mut k = keep.iter();
         c.points.retain(|_| *k.next().unwrap());
@@ -45,7 +49,9 @@ pub fn load(path: &Path) -> Result<Cloud, String> {
 /// open (`tint` given) one color for every point (our scans' grey rgb) says
 /// nothing, and two of them overlapping would look like one cloud.
 pub fn own_colors(c: &Cloud, tint: Option<[f32; 3]>) -> Option<&[Vec3]> {
-    c.colors.as_deref().filter(|v| tint.is_none() || !(v.len() > 1 && v.windows(2).all(|w| w[0] == w[1])))
+    c.colors
+        .as_deref()
+        .filter(|v| tint.is_none() || !(v.len() > 1 && v.windows(2).all(|w| w[0] == w[1])))
 }
 
 /// The file's colors if kept (see `own_colors`), else `tint` flat, else the Z ramp.
@@ -148,7 +154,14 @@ fn read_pcd(raw: &[u8]) -> Result<Cloud, String> {
         if !valid_type(ty, size) {
             return Err(format!("unsupported TYPE {} SIZE {size}", types[i]));
         }
-        fields.push(Field { name: names[i].clone(), ty, size, count, off, col });
+        fields.push(Field {
+            name: names[i].clone(),
+            ty,
+            size,
+            count,
+            off,
+            col,
+        });
         off += size * count;
         col += count;
     }
@@ -208,7 +221,11 @@ fn read_pcd(raw: &[u8]) -> Result<Cloud, String> {
             // binary is one point after the other; binary_compressed is one
             // field after the other (all x, then all y, ...)
             let at = |i: usize, f: &Field| -> &[u8] {
-                let o = if mode == "binary" { i * stride + f.off } else { n * f.off + i * f.size * f.count };
+                let o = if mode == "binary" {
+                    i * stride + f.off
+                } else {
+                    n * f.off + i * f.size * f.count
+                };
                 &data[o..o + f.size]
             };
             for i in 0..n {
@@ -216,14 +233,22 @@ fn read_pcd(raw: &[u8]) -> Result<Cloud, String> {
                 points.push(vec3(v(fx), v(fy), v(fz)));
                 if let (Some(f), Some(cols)) = (frgb, &mut colors) {
                     let b = at(i, f);
-                    let bits = if f.size == 4 { u32::from_le_bytes(b.try_into().unwrap()) } else { scalar(f.ty, b, false) as u32 };
+                    let bits = if f.size == 4 {
+                        u32::from_le_bytes(b.try_into().unwrap())
+                    } else {
+                        scalar(f.ty, b, false) as u32
+                    };
                     cols.push(unpack_rgb(bits));
                 }
             }
         }
         _ => return Err(format!("unsupported DATA {mode}")),
     }
-    Ok(Cloud { points, colors, faces: None })
+    Ok(Cloud {
+        points,
+        colors,
+        faces: None,
+    })
 }
 
 /// LZF, as PCL uses it for binary_compressed.
@@ -267,7 +292,11 @@ fn read_ply(raw: &[u8]) -> Result<Cloud, String> {
         return Err("not a PLY file".into());
     }
     let (head, body) = split_header(raw, "end_header")?;
-    let format = head.iter().find(|l| l[0] == "format").and_then(|l| l.get(1)).ok_or("PLY without format")?;
+    let format = head
+        .iter()
+        .find(|l| l[0] == "format")
+        .and_then(|l| l.get(1))
+        .ok_or("PLY without format")?;
     let (ascii, big) = match format.as_str() {
         "ascii" => (true, false),
         "binary_little_endian" => (false, false),
@@ -289,7 +318,14 @@ fn read_ply(raw: &[u8]) -> Result<Cloud, String> {
         }
         let (ty, size) = ply_type(l.get(1).map_or("", String::as_str))?;
         let name = l.get(2).cloned().unwrap_or_default();
-        fields.push(Field { name, ty, size, count: 1, off, col });
+        fields.push(Field {
+            name,
+            ty,
+            size,
+            count: 1,
+            off,
+            col,
+        });
         off += size;
         col += 1;
     }
@@ -298,7 +334,11 @@ fn read_ply(raw: &[u8]) -> Result<Cloud, String> {
         (Some(x), Some(y), Some(z)) => (x, y, z),
         _ => return Err("PLY without x y z".into()),
     };
-    let rgb = match (field(&["red", "r", "diffuse_red"]), field(&["green", "g", "diffuse_green"]), field(&["blue", "b", "diffuse_blue"])) {
+    let rgb = match (
+        field(&["red", "r", "diffuse_red"]),
+        field(&["green", "g", "diffuse_green"]),
+        field(&["blue", "b", "diffuse_blue"]),
+    ) {
         (Some(r), Some(g), Some(b)) => Some([r, g, b]),
         _ => None,
     };
@@ -323,9 +363,7 @@ fn read_ply(raw: &[u8]) -> Result<Cloud, String> {
         _ => 0,
     };
     let list = match head.get(fel + 1) {
-        Some(l) if m > 0 && l.get(1).map(String::as_str) == Some("list") && l.len() >= 5 => {
-            Some((ply_type(&l[2])?, ply_type(&l[3])?))
-        }
+        Some(l) if m > 0 && l.get(1).map(String::as_str) == Some("list") && l.len() >= 5 => Some((ply_type(&l[2])?, ply_type(&l[3])?)),
         _ if m > 0 => return Err("PLY face element without an index list".into()),
         _ => None,
     };
@@ -405,7 +443,10 @@ fn ply_type(t: &str) -> Result<(u8, usize), String> {
 /// then faces as `k i0 i1 ...`.
 fn read_off(raw: &[u8]) -> Result<Cloud, String> {
     let text = String::from_utf8_lossy(raw);
-    let mut lines = text.lines().map(|l| l.split('#').next().unwrap_or("").trim()).filter(|l| !l.is_empty());
+    let mut lines = text
+        .lines()
+        .map(|l| l.split('#').next().unwrap_or("").trim())
+        .filter(|l| !l.is_empty());
     let first = lines.next().ok_or("empty OFF")?;
     let kw = first.split_whitespace().next().unwrap_or("");
     if !kw.ends_with("OFF") {
@@ -414,8 +455,15 @@ fn read_off(raw: &[u8]) -> Result<Cloud, String> {
     let colored = kw.starts_with('C');
     // the counts can be on the OFF line itself
     let rest: String = first[kw.len()..].trim().to_owned();
-    let counts = if rest.is_empty() { lines.next().ok_or("OFF without counts")?.to_owned() } else { rest };
-    let c: Vec<usize> = counts.split_whitespace().map(|s| s.parse().map_err(|_| "bad OFF counts")).collect::<Result<_, _>>()?;
+    let counts = if rest.is_empty() {
+        lines.next().ok_or("OFF without counts")?.to_owned()
+    } else {
+        rest
+    };
+    let c: Vec<usize> = counts
+        .split_whitespace()
+        .map(|s| s.parse().map_err(|_| "bad OFF counts"))
+        .collect::<Result<_, _>>()?;
     let (n, m) = (*c.first().ok_or("bad OFF counts")?, *c.get(1).ok_or("bad OFF counts")?);
     let mut points = Vec::with_capacity(n);
     let mut colors = colored.then(|| Vec::with_capacity(n));
@@ -446,7 +494,11 @@ fn read_off(raw: &[u8]) -> Result<Cloud, String> {
             faces.extend([idx[0], idx[j], idx[j + 1]]);
         }
     }
-    Ok(Cloud { points, colors, faces: Some(faces) })
+    Ok(Cloud {
+        points,
+        colors,
+        faces: Some(faces),
+    })
 }
 
 /// xyz: x y z; xyzrgb: x y z r g b (0..1); pts: an optional count line, then
@@ -456,7 +508,12 @@ fn read_text(raw: &[u8], ext: &str) -> Cloud {
     let mut colors = vec![];
     let mut all_colored = true;
     for line in String::from_utf8_lossy(raw).lines() {
-        let t: Vec<f32> = match line.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).map(str::parse).collect() {
+        let t: Vec<f32> = match line
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|s| !s.is_empty())
+            .map(str::parse)
+            .collect()
+        {
             Ok(t) => t,
             Err(_) => continue,
         };
@@ -476,7 +533,11 @@ fn read_text(raw: &[u8], ext: &str) -> Cloud {
         }
     }
     let colors = (all_colored && !points.is_empty()).then_some(colors);
-    Cloud { points, colors, faces: None }
+    Cloud {
+        points,
+        colors,
+        faces: None,
+    }
 }
 
 #[cfg(test)]
@@ -521,7 +582,12 @@ mod tests {
         let c = load(&tmp("plain.pcd", &ascii_pcd(&pts))).unwrap();
         assert_eq!(c.points.len(), 500);
         let col = colorize(&c, None, &LIGHT);
-        assert!(close(col[0], LIGHT.ramp[0]) && close(col[499], LIGHT.ramp[1]), "{:?} {:?}", col[0], col[499]);
+        assert!(
+            close(col[0], LIGHT.ramp[0]) && close(col[499], LIGHT.ramp[1]),
+            "{:?} {:?}",
+            col[0],
+            col[499]
+        );
     }
 
     // 2. the ramp, the tints and the mesh color must read on the background,
@@ -544,7 +610,11 @@ mod tests {
         t.dedup();
         assert_eq!(t.len(), LIGHT.palette.len(), "two files would get the same color");
         let c = load(&tmp("multi.pcd", &ascii_pcd(&[[0.0, 0.0, 0.0], [1.0, 2.0, 3.0]]))).unwrap();
-        assert!(colorize(&c, Some(LIGHT.palette[1]), &LIGHT).iter().all(|&v| close(v, LIGHT.palette[1])));
+        assert!(
+            colorize(&c, Some(LIGHT.palette[1]), &LIGHT)
+                .iter()
+                .all(|&v| close(v, LIGHT.palette[1]))
+        );
     }
 
     // 4. colors already present -> untouched, even when a tint is requested
@@ -554,9 +624,16 @@ mod tests {
         for f in ["rgb_ascii.pcd", "rgb_compressed.pcd"] {
             let c = load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(f)).unwrap();
             assert_eq!(c.points.len(), 40, "{f}");
-            assert!(close(c.points[1], [0.5, -1.0, 0.1]) && close(c.points[39], [19.5, -39.0, 152.1]), "{f}");
+            assert!(
+                close(c.points[1], [0.5, -1.0, 0.1]) && close(c.points[39], [19.5, -39.0, 152.1]),
+                "{f}"
+            );
             let col = colorize(&c, Some(LIGHT.palette[0]), &LIGHT);
-            assert!(close(col[0], [0.0, 1.0, 0.2]) && close(col[39], [1.0, 0.0, 0.2]), "{f}: {:?}", col[0]);
+            assert!(
+                close(col[0], [0.0, 1.0, 0.2]) && close(col[39], [1.0, 0.0, 0.2]),
+                "{f}: {:?}",
+                col[0]
+            );
         }
     }
 
@@ -566,7 +643,11 @@ mod tests {
     fn single_color_tinted_only_with_several_files() {
         let grey = load(&tmp("grey.xyzrgb", b"0 0 0 0.5 0.5 0.5\n0 0 1 0.5 0.5 0.5\n")).unwrap();
         assert!(colorize(&grey, None, &LIGHT).iter().all(|&v| close(v, [0.5; 3])));
-        assert!(colorize(&grey, Some(LIGHT.palette[2]), &LIGHT).iter().all(|&v| close(v, LIGHT.palette[2])));
+        assert!(
+            colorize(&grey, Some(LIGHT.palette[2]), &LIGHT)
+                .iter()
+                .all(|&v| close(v, LIGHT.palette[2]))
+        );
         let two = load(&tmp("two.xyzrgb", b"0 0 0 0.5 0.5 0.5\n0 0 1 0.1 0.5 0.5\n")).unwrap();
         assert!(close(colorize(&two, Some(LIGHT.palette[2]), &LIGHT)[1], [0.1, 0.5, 0.5]));
     }
@@ -575,7 +656,11 @@ mod tests {
     #[test]
     fn flat_cloud() {
         let c = load(&tmp("flat.pcd", &ascii_pcd(&[[0.0; 3]; 10]))).unwrap();
-        assert!(colorize(&c, None, &LIGHT).iter().all(|v| v.x.is_finite() && v.y.is_finite() && v.z.is_finite()));
+        assert!(
+            colorize(&c, None, &LIGHT)
+                .iter()
+                .all(|v| v.x.is_finite() && v.y.is_finite() && v.z.is_finite())
+        );
     }
 
     // 6. unreadable file -> an error, not an empty window
@@ -616,7 +701,8 @@ mod tests {
     #[test]
     fn pcd_binary_mixed_fields_and_nan() {
         // the motherboard scans: FIELDS Coord._Z x y z _ with a padding field of COUNT 4
-        let mut b = b"FIELDS Coord._Z x y z _\nSIZE 4 4 4 4 1\nTYPE F F F F U\nCOUNT 1 1 1 1 4\nWIDTH 2\nHEIGHT 1\nPOINTS 2\nDATA binary\n".to_vec();
+        let mut b = b"FIELDS Coord._Z x y z _\nSIZE 4 4 4 4 1\nTYPE F F F F U\nCOUNT 1 1 1 1 4\nWIDTH 2\nHEIGHT 1\nPOINTS 2\nDATA binary\n"
+            .to_vec();
         for p in [[9.0f32, 1.0, 2.0, 3.0], [9.0, f32::NAN, 0.0, 0.0]] {
             p.iter().for_each(|v| b.extend(v.to_le_bytes()));
             b.extend([0u8; 4]);

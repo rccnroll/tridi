@@ -60,7 +60,11 @@ void main() {
 }";
 
 enum Layer {
-    Points { pos: VertexBuffer<Vec3>, col: VertexBuffer<Vec3>, n: u32 },
+    Points {
+        pos: VertexBuffer<Vec3>,
+        col: VertexBuffer<Vec3>,
+        n: u32,
+    },
     Mesh(Model<PhysicalMaterial>),
 }
 
@@ -104,7 +108,11 @@ impl Scene {
             layers.push(match i {
                 Input::Points(p, c) => {
                     bb.expand(&p);
-                    Layer::Points { pos: VertexBuffer::new_with_data(ctx, &p), col: VertexBuffer::new_with_data(ctx, &c), n: p.len() as u32 }
+                    Layer::Points {
+                        pos: VertexBuffer::new_with_data(ctx, &p),
+                        col: VertexBuffer::new_with_data(ctx, &c),
+                        n: p.len() as u32,
+                    }
                 }
                 Input::Mesh(m) => {
                     let model = Model::<PhysicalMaterial>::new(ctx, &m).map_err(|e| e.to_string())?;
@@ -158,7 +166,12 @@ impl Scene {
     /// Three-quarter view from the front-right, above, as close as it can be
     /// with all eight bbox corners on screen (and a small margin).
     pub fn camera(&self, vp: Viewport) -> Camera {
-        let dir = if self.up.y > 0.5 { vec3(1.0, 0.8, 1.0) } else { vec3(1.0, -1.0, 0.8) }.normalize();
+        let dir = if self.up.y > 0.5 {
+            vec3(1.0, 0.8, 1.0)
+        } else {
+            vec3(1.0, -1.0, 0.8)
+        }
+        .normalize();
         let right = self.up.cross(dir).normalize();
         let up = dir.cross(right);
         let ty = (FOV.to_radians() / 2.0).tan() / 1.08;
@@ -166,14 +179,23 @@ impl Scene {
         let mut d = self.radius * 0.1;
         for i in 0..8 {
             let pick = |bit: usize, lo: f32, hi: f32| if i & bit == 0 { lo } else { hi };
-            let v = vec3(pick(1, self.lo.x, self.hi.x), pick(2, self.lo.y, self.hi.y), pick(4, self.lo.z, self.hi.z)) - self.center;
+            let v = vec3(
+                pick(1, self.lo.x, self.hi.x),
+                pick(2, self.lo.y, self.hi.y),
+                pick(4, self.lo.z, self.hi.z),
+            ) - self.center;
             // the corner is at depth d - v·dir from the camera
             let z = v.dot(dir);
             d = d.max(z + v.dot(right).abs() / tx).max(z + v.dot(up).abs() / ty);
         }
         Camera::new_perspective(
-            vp, self.center + dir * d, self.center, self.up,
-            degrees(FOV), self.radius * 0.01, d + self.radius * 20.0,
+            vp,
+            self.center + dir * d,
+            self.center,
+            self.up,
+            degrees(FOV),
+            self.radius * 0.01,
+            d + self.radius * 20.0,
         )
     }
 
@@ -198,14 +220,25 @@ impl Scene {
         let draw = |pos: &VertexBuffer<Vec3>, col: &VertexBuffer<Vec3>, mode: u32, n: u32| {
             p.use_vertex_attribute("pos", pos);
             p.use_vertex_attribute("color", col);
-            p.draw_with(RenderStates::default(), cam.viewport(), || unsafe { ctx.draw_arrays(mode, 0, n as i32) });
+            p.draw_with(RenderStates::default(), cam.viewport(), || unsafe {
+                ctx.draw_arrays(mode, 0, n as i32)
+            });
         };
         let has_points = shown().any(|l| matches!(l, Layer::Points { .. }));
         if has_points {
             let vp = cam.viewport();
             let mut cache = self.edl_targets.borrow_mut();
             if !matches!(&*cache, Some((w, h, ..)) if *w == vp.width && *h == vp.height) {
-                let color = Texture2D::new_empty::<[u8; 4]>(ctx, vp.width, vp.height, Interpolation::Nearest, Interpolation::Nearest, None, Wrapping::ClampToEdge, Wrapping::ClampToEdge);
+                let color = Texture2D::new_empty::<[u8; 4]>(
+                    ctx,
+                    vp.width,
+                    vp.height,
+                    Interpolation::Nearest,
+                    Interpolation::Nearest,
+                    None,
+                    Wrapping::ClampToEdge,
+                    Wrapping::ClampToEdge,
+                );
                 let depth = DepthTexture2D::new::<f32>(ctx, vp.width, vp.height, Wrapping::ClampToEdge, Wrapping::ClampToEdge);
                 *cache = Some((vp.width, vp.height, color, depth));
             }
@@ -222,7 +255,9 @@ impl Scene {
                             p.use_vertex_attribute("pos", pos);
                             p.use_vertex_attribute("color", col);
                             let n = *n as i32;
-                            p.draw_with(RenderStates::default(), own.viewport(), || unsafe { ctx.draw_arrays(context::POINTS, 0, n) });
+                            p.draw_with(RenderStates::default(), own.viewport(), || unsafe {
+                                ctx.draw_arrays(context::POINTS, 0, n)
+                            });
                         }
                     }
                     Ok(())
@@ -240,7 +275,14 @@ impl Scene {
             e.use_vertex_attribute("corner", &self.edl_tri);
             target
                 .write::<RendererError>(|| {
-                    e.draw_arrays(RenderStates { depth_test: DepthTest::LessOrEqual, ..Default::default() }, vp, 3);
+                    e.draw_arrays(
+                        RenderStates {
+                            depth_test: DepthTest::LessOrEqual,
+                            ..Default::default()
+                        },
+                        vp,
+                        3,
+                    );
                     Ok(())
                 })
                 .unwrap();
@@ -297,7 +339,9 @@ fn open_headless() -> Result<(Context, impl Sized), String> {
     // a GPU with a name that isn't NVIDIA (waking the dGPU costs ~2.7 s),
     // else llvmpipe; a device without a name is a node Mesa has no driver for
     let gpu = |d: &Device| {
-        d.vendor().is_some_and(|v| !v.to_ascii_lowercase().contains("nvidia")) && !software(d) && !d.extensions().contains("EGL_NV_device_cuda")
+        d.vendor().is_some_and(|v| !v.to_ascii_lowercase().contains("nvidia"))
+            && !software(d)
+            && !d.extensions().contains("EGL_NV_device_cuda")
     };
     let dev = match std::env::var("TRIDI_EGL_DEVICE").ok().and_then(|s| s.parse::<usize>().ok()) {
         Some(i) => devs.get(i),
@@ -312,8 +356,13 @@ fn open_headless() -> Result<(Context, impl Sized), String> {
     }
     let display = unsafe { Display::with_device(dev, None) }.map_err(|e| e.to_string())?;
     let tmpl = ConfigTemplateBuilder::new().with_surface_type(ConfigSurfaceTypes::empty()).build();
-    let config = unsafe { display.find_configs(tmpl) }.map_err(|e| e.to_string())?.next().ok_or("no EGL config")?;
-    let attrs = ContextAttributesBuilder::new().with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3)))).build(None);
+    let config = unsafe { display.find_configs(tmpl) }
+        .map_err(|e| e.to_string())?
+        .next()
+        .ok_or("no EGL config")?;
+    let attrs = ContextAttributesBuilder::new()
+        .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
+        .build(None);
     let gl_ctx = unsafe { display.create_context(&config, &attrs) }
         .map_err(|e| e.to_string())?
         .make_current_surfaceless()
@@ -328,7 +377,16 @@ fn open_headless() -> Result<(Context, impl Sized), String> {
 /// doesn't smooth.
 pub fn offscreen(ctx: &Context, scene: &Scene, size: u32, bg: [f32; 3]) -> Result<Vec<u8>, String> {
     let big = size * 2;
-    let color = Texture2D::new_empty::<[u8; 4]>(ctx, big, big, Interpolation::Nearest, Interpolation::Nearest, None, Wrapping::ClampToEdge, Wrapping::ClampToEdge);
+    let color = Texture2D::new_empty::<[u8; 4]>(
+        ctx,
+        big,
+        big,
+        Interpolation::Nearest,
+        Interpolation::Nearest,
+        None,
+        Wrapping::ClampToEdge,
+        Wrapping::ClampToEdge,
+    );
     let depth = DepthTexture2D::new::<f32>(ctx, big, big, Wrapping::ClampToEdge, Wrapping::ClampToEdge);
     let cam = scene.camera(Viewport::new_at_origo(big, big));
     let target = RenderTarget::new(color.as_color_target(None), depth.as_depth_target());
@@ -363,7 +421,9 @@ mod tests {
         // SAFETY: tests in this binary don't read this variable concurrently
         unsafe { std::env::set_var("TRIDI_EGL_DEVICE", software_device().to_string()) };
         let (ctx, _keep) = headless().unwrap();
-        let mut pts: Vec<Vec3> = (0..2000).map(|i| vec3((i % 40) as f32 / 40.0 - 0.5, (i / 40) as f32 / 50.0 - 0.5, 1.0)).collect();
+        let mut pts: Vec<Vec3> = (0..2000)
+            .map(|i| vec3((i % 40) as f32 / 40.0 - 0.5, (i / 40) as f32 / 50.0 - 0.5, 1.0))
+            .collect();
         pts.extend((0..20).map(|i| vec3(0.0, 0.0, i as f32 / 20.0)));
         let cols = vec![vec3(0.0, 0.0, 0.0); pts.len()];
         let scene = Scene::new(&ctx, vec![Input::Points(pts, cols)], false, Vec3::unit_z()).unwrap();

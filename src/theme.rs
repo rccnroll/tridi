@@ -57,7 +57,10 @@ pub const DARK: Theme = Theme {
 pub const THEMES: [&Theme; 2] = [&LIGHT, &DARK];
 
 pub fn by_name(name: &str) -> Result<&'static Theme, String> {
-    THEMES.into_iter().find(|t| t.name == name).ok_or(format!("unknown theme {name}: light or dark"))
+    THEMES
+        .into_iter()
+        .find(|t| t.name == name)
+        .ok_or(format!("unknown theme {name}: light or dark"))
 }
 
 /// The package's thumbnailer entry, the one installed under /usr/share.
@@ -67,10 +70,14 @@ const DESKTOP: &str = include_str!("../share/applications/tridi.desktop");
 /// Extensions whose cached thumbnails a theme switch (or an install) throws
 /// away: everything we draw, plus STEP, whose 1.0 thumbnails would otherwise
 /// stay forever now that nothing redraws them.
-const EXTS: [&str; 12] = ["pcd", "ply", "xyz", "xyzrgb", "pts", "glb", "gltf", "obj", "stl", "off", "step", "stp"];
+const EXTS: [&str; 12] = [
+    "pcd", "ply", "xyz", "xyzrgb", "pts", "glb", "gltf", "obj", "stl", "off", "step", "stp",
+];
 
 fn xdg(var: &str, fallback: &str) -> Option<PathBuf> {
-    std::env::var_os(var).map(PathBuf::from).or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(fallback)))
+    std::env::var_os(var)
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(fallback)))
 }
 
 fn config_file() -> Option<PathBuf> {
@@ -91,7 +98,11 @@ pub fn current() -> &'static Theme {
 
 /// The package's entry, with `--theme dark` added for the dark theme.
 fn entry(theme: &Theme) -> String {
-    if theme.name == "dark" { ENTRY.replace(" thumb %i", " thumb --theme dark %i") } else { ENTRY.to_owned() }
+    if theme.name == "dark" {
+        ENTRY.replace(" thumb %i", " thumb --theme dark %i")
+    } else {
+        ENTRY.to_owned()
+    }
 }
 
 /// `tridi theme [light|dark]`: without a name, prints the current one.
@@ -107,7 +118,10 @@ pub fn command(name: Option<&str>) -> Result<(), String> {
     install(theme)?;
     let cache = xdg("XDG_CACHE_HOME", ".cache").ok_or("no $HOME")?.join("thumbnails");
     let n = clear_thumbnails(&cache);
-    println!("theme {}: viewer and thumbnails; {n} cached thumbnails cleared, Nautilus redraws them", theme.name);
+    println!(
+        "theme {}: viewer and thumbnails; {n} cached thumbnails cleared, Nautilus redraws them",
+        theme.name
+    );
     Ok(())
 }
 

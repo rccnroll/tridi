@@ -7,7 +7,6 @@ use std::path::Path;
 use three_d::{CpuMaterial, CpuModel, Srgba};
 use three_d_asset::{Geometry, Indices, Positions, Primitive, TriMesh};
 
-
 pub enum Item {
     Cloud(Cloud),
     Mesh(CpuModel),
@@ -45,19 +44,34 @@ pub fn load(path: &Path, grey: [f32; 3]) -> Result<Item, String> {
         }
     }
     if used {
-        let white = model.geometries.iter().any(|g| matches!(&g.geometry, Geometry::Triangles(t) if t.colors.is_some()));
+        let white = model
+            .geometries
+            .iter()
+            .any(|g| matches!(&g.geometry, Geometry::Triangles(t) if t.colors.is_some()));
         // with vertex colors the albedo multiplies them: keep it white
-        let albedo = if white { Srgba::WHITE } else { Srgba::from([grey[0], grey[1], grey[2], 1.0]) };
-        model.materials.push(CpuMaterial { albedo, roughness: 0.6, metallic: 0.0, ..Default::default() });
+        let albedo = if white {
+            Srgba::WHITE
+        } else {
+            Srgba::from([grey[0], grey[1], grey[2], 1.0])
+        };
+        model.materials.push(CpuMaterial {
+            albedo,
+            roughness: 0.6,
+            metallic: 0.0,
+            ..Default::default()
+        });
     }
     Ok(Item::Mesh(model))
 }
 
 pub fn triangles(m: &CpuModel) -> usize {
-    m.geometries.iter().map(|g| match &g.geometry {
-        Geometry::Triangles(t) => t.triangle_count(),
-        _ => 0,
-    }).sum()
+    m.geometries
+        .iter()
+        .map(|g| match &g.geometry {
+            Geometry::Triangles(t) => t.triangle_count(),
+            _ => 0,
+        })
+        .sum()
 }
 
 fn load_asset(path: &Path, ext: &str) -> Result<CpuModel, String> {
@@ -152,7 +166,10 @@ mod tests {
         assert_eq!(tris(load(&tmp("t.ply", &bin), crate::theme::LIGHT.mesh).unwrap()), 1);
 
         let bad = b"ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nelement face 1\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n3 0 1 2\n";
-        assert!(load(&tmp("bad.ply", bad), crate::theme::LIGHT.mesh).is_err(), "face index out of range");
+        assert!(
+            load(&tmp("bad.ply", bad), crate::theme::LIGHT.mesh).is_err(),
+            "face index out of range"
+        );
     }
 
     #[test]

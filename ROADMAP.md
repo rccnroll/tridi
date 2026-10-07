@@ -454,7 +454,8 @@ goes top down; an item is ticked with its date when done.
   `LicenseRef-private`), and the copyright file of the `.deb` (cargo-deb reads it from
   `Cargo.toml`). Check that the vendored Papirus icons' license (GPL-3.0)
   is stated, since the icons are shipped.
-- [ ] `cargo fmt --check` passes (07/10). Today it fails (e.g.
+- [x] `cargo fmt --check` passes (07/10). Done 07/10: `rustfmt.toml` at
+  140, one formatting commit. Today it fails (e.g.
   `src/cloud.rs`): lines run up to 235 columns and no single width
   matches the code as it is (at 140 rustfmt still rewrites 62 spots in
   `main.rs`). Pick a width in a `rustfmt.toml` (140 keeps the wide style),
