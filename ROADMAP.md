@@ -416,8 +416,14 @@ goes top down; an item is ticked with its date when done.
 
 #### Medium
 
-- [ ] H in the window prints the keys (07/10), first of the Open3D keys
-  below; the same text the help and the man page show.
+- [x] H in the window prints the keys (07/10), first of the Open3D keys
+  below; the same text the help and the man page show. Done 07/10: it
+  prints the help's Window section.
+- [x] A legend in the window (07/10, asked by Rocco). Done 07/10: with
+  several files, top left, each one's key, tint (an empty square for own
+  colors and meshes), name and size; a file turned off is dimmed. Drawn by
+  egui through three-d's `egui-gui` feature: the binary goes from 7.2 to
+  11 MB (egui and its fonts). Not clickable, the keys toggle.
 - [ ] Keys from Open3D's viewer (its `PrintVisualizerHelp`, read 28/09),
   to implement one by one. Picked first: H help, P screenshot (the
   thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
