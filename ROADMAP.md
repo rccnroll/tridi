@@ -364,7 +364,9 @@ pages and bash/zsh/fish completions, the MIT OR Apache-2.0 license.
 
 2.4.1 released 07/10/2026 (tag `v2.4.1`): the parser fixes the fuzzing
 found. 2.5.0 released 07/10/2026 (tag `v2.5.0`): the legend of the open
-files and H for the keys; MSRV 1.92 (egui).
+files and H for the keys; MSRV 1.92 (egui). 2.5.1 released 07/10/2026
+(tag `v2.5.1`): H or ? shows the keys in the window, I toggles the
+legend, both panels see-through.
 
 ## Open
 

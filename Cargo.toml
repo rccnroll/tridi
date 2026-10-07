@@ -1,6 +1,6 @@
 [package]
 name = "tridi"
-version = "2.5.0"
+version = "2.5.1"
 edition = "2024"
 # egui 0.34 (the legend, through three-d) needs 1.92; CI checks it
 rust-version = "1.92"
