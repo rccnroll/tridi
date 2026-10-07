@@ -2,7 +2,16 @@
 name = "tridi"
 version = "2.3.1"
 edition = "2024"
+# let chains (`if let … && let …`) are stable since 1.88; CI checks it
+rust-version = "1.88"
+description = "Viewer for point clouds, meshes and STEP, with Nautilus thumbnails"
+authors = ["Rocco Caccioppoli <caccioppolirocco@gmail.com>"]
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/rccnroll/tridi"
+homepage = "https://github.com/rccnroll/tridi"
+readme = "README.md"
+keywords = ["point-cloud", "pcd", "mesh", "viewer", "thumbnailer"]
+categories = ["graphics", "visualization", "command-line-utilities"]
 
 [dependencies]
 glutin = { version = "0.32", default-features = false, features = ["egl", "wayland", "x11"] }
