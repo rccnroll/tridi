@@ -1,0 +1,84 @@
+name: Release
+
+# git tag vX.Y.Z && git push origin vX.Y.Z: both packages, built as by hand
+# (makepkg, packaging/deb/build.sh), in a draft release whose notes are the
+# Conventional Commits since the last tag. Review the notes, then publish.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag, Cargo.toml and PKGBUILD agree
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          grep -qx "version = \"$v\"" Cargo.toml || { echo "Cargo.toml isn't $v"; exit 1; }
+          grep -qx "pkgver=$v" packaging/arch/PKGBUILD || { echo "PKGBUILD isn't $v"; exit 1; }
+
+  arch:
+    needs: version
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      # git first, or checkout fetches a tarball without history
+      - run: pacman -Syu --noconfirm --needed git rust libglvnd mesa wayland libxkbcommon xdg-utils
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # makepkg refuses root; check() renders on llvmpipe, as in CI
+      - run: |
+          useradd -m builder
+          chown -R builder .
+          sudo -u builder git config --global --add safe.directory '*'
+          cd packaging/arch && sudo -u builder makepkg --noconfirm
+      - uses: actions/upload-artifact@v7
+        with:
+          name: arch
+          path: packaging/arch/*.pkg.tar.zst
+
+  deb:
+    needs: version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: packaging/deb/build.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: deb
+          path: packaging/deb/*.deb
+
+  release:
+    needs: [arch, deb]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: orhun/git-cliff-action@v4
+        with:
+          args: --latest --strip header
+        env:
+          OUTPUT: changes.md
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          {
+            printf '## Install\n\nArch:\n\n    sudo pacman -U tridi-%s-1-x86_64.pkg.tar.zst\n\n' "$v"
+            printf 'Ubuntu 24.04, Debian 12+:\n\n    sudo apt install ./tridi_%s-1_amd64.deb\n\n' "$v"
+            cat changes.md
+          } > notes.md
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "tridi $v" --notes-file notes.md dist/*

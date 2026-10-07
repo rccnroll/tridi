@@ -16,7 +16,7 @@ replaces=('pcdview')
 install=tridi.install
 source=("tridi::git+file://$(realpath "$startdir/../..")")
 sha256sums=('SKIP')
-options=('!lto')
+options=('!lto' '!debug')
 
 # the tag: 2.0.0 on v2.0.0 itself, 2.0.0.r3.gabc1234 three commits after it
 pkgver() {
