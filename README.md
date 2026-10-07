@@ -19,6 +19,14 @@ to draw their previews without a window or a GPU.
 - CAD: `.step`/`.stp` (assemblies and colors), tessellated in Rust with
   monstertruck. A file the library can't finish in 15 s is an error.
 
+## Features
+
+| | |
+|---|---|
+| ![Four tiles turned off and on with the keys 1 to 4](docs/files.gif) | **Several files at once**, one color each, so they tell apart; `1`–`9` turn the N-th file off and on. A file's own colors always win. |
+| ![The point size growing and shrinking](docs/points.gif) | **Point size** with `+` and `-`; eye-dome lighting gives the cloud its depth. |
+| ![The same scene in the light and the dark theme](docs/themes.png) | **Two themes** (Nord light and dark) for the window and the thumbnails: `tridi theme dark`. |
+
 ## Install (Arch)
 
 From a release: download `tridi-*.pkg.tar.zst` and `sudo pacman -U` it.
@@ -89,7 +97,8 @@ prints which device is used.
 - `packaging/arch/` — PKGBUILD and install script.
 - `packaging/deb/` — `.deb` build (cargo-deb, metadata in `Cargo.toml`) and `postinst`.
 - `tests/data/` — small fixtures written by Open3D.
-- `docs/` — the README's screenshots and the script that makes their files.
+- `docs/` — the README's screenshots and GIFs, the script that makes their
+  files (`samples.py`) and the one that records the GIFs on niri (`record.sh`).
 
 ## Develop
 
