@@ -14,3 +14,6 @@ updates:
     groups:
       actions:
         patterns: ['*']
+    ignore:
+      # its ref is the Rust version to test (the MSRV), not the action's
+      - dependency-name: dtolnay/rust-toolchain
