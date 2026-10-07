@@ -545,7 +545,20 @@ goes top down; an item is ticked with its date when done.
 - [ ] Decide whether the repo goes public (07/10). The AUR, crates.io,
   tldr and the badges' reach depend on it. Skipped until then: a code of
   conduct, `FUNDING.yml`, discussions.
-- [ ] Protect `main` (07/10), once public: a private repo on the free plan
-  can't (rulesets and branch protection answer 403). A ruleset that blocks
-  force pushes and deletion, and wants CI green on pull requests; the
-  owner bypasses it, so releases still go straight to `main`.
+- [ ] The rules for going public (07/10), set the day it goes public (a
+  private repo on the free plan can't: rulesets and branch protection
+  answer 403). Already true without rules: anyone can open a pull request
+  from a fork, only who has write access can merge it, push to `main` or
+  push a `v*` tag (a release); today that is only Rocco.
+  - A ruleset on `main`: no force push, no deletion, CI (`check`, `msrv`)
+    green before a pull request merges. Rocco bypasses it, so his own
+    commits and releases still go straight to `main`.
+  - A ruleset on the `v*` tags: no deletion or move, so a published
+    release can't be swapped.
+  - Actions: approval before the workflows of any outside contributor run
+    (a fork's PR could otherwise run its own code on our runners), the
+    default `GITHUB_TOKEN` read-only (CI already asks for nothing more;
+    only the release job writes). Never `pull_request_target`.
+  - Never add collaborators with write access: help comes as pull
+    requests.
+  - Private vulnerability reporting on, with `SECURITY.md` above.
