@@ -1,6 +1,6 @@
 [package]
 name = "tridi"
-version = "2.3.1"
+version = "2.4.0"
 edition = "2024"
 # let chains (`if let … && let …`) are stable since 1.88; CI checks it
 rust-version = "1.88"
