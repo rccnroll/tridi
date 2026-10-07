@@ -20,7 +20,7 @@ Before pushing, what CI checks on every push and PR:
     cargo clippy --all-targets --locked -- -D warnings
     cargo test --locked
 
-plus `cargo check` on the oldest Rust supported, 1.88 (`rust-version` in
+plus `cargo check` on the oldest Rust supported, 1.92 (`rust-version` in
 `Cargo.toml`).
 
 The files in `tests/data/` are tiny and made for the tests: no real scans

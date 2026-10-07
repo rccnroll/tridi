@@ -497,7 +497,7 @@ goes top down; an item is ticked with its date when done.
   from the Conventional Commits. Today a release is by hand: `makepkg`,
   `build.sh`, `gh release`.
 - [x] Package metadata in `Cargo.toml` (07/10). Done 07/10; MSRV 1.88
-  (let chains), checked by a second CI job. Was: `description`,
+  (let chains; 1.92 since the legend's egui), checked by a second CI job. Was: `description`,
   `repository`, `homepage`, `readme`, `keywords`, `categories`
   (`graphics`, `command-line-utilities`, `visualization`),
   `rust-version` (the MSRV CI checks), `authors`.
