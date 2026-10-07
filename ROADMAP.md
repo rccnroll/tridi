@@ -358,6 +358,10 @@ ours (winit 0.30 + glutin 0.32), three-d's pinned winit 0.28, whose title
 bar GNOME at scale 2 rejected (`Buffer size (820x45) must be an integer
 multiple of the buffer_scale (2)`, seen on Ubuntu 24.04).
 
+2.4.0 released 07/10/2026 (tag `v2.4.0`, both packages), the first one
+built by the Release workflow: `--help` and `--version` through clap, man
+pages and bash/zsh/fish completions, the MIT OR Apache-2.0 license.
+
 ## Open
 
 Two lists, each from urgent to low: what makes tridi a better tool, and
