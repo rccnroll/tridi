@@ -107,7 +107,13 @@ prints which device is used.
     cargo run --release -- FILE
 
 CI runs `cargo fmt --check`, clippy with `-D warnings` and the tests on
-every push, and checks the build on the oldest Rust supported (1.88). The
+every push, and checks the build on the oldest Rust supported (1.88).
+
+A release: set the version in `Cargo.toml` and the PKGBUILD's `pkgver`,
+`cargo check` (for `Cargo.lock`), commit `chore(release): X.Y.Z`, then
+`git tag vX.Y.Z && git push origin main vX.Y.Z`. The Release workflow
+builds both packages and opens a draft release with them and the commits
+since the last tag; edit the notes and publish it. The
 screenshots come from synthetic files: `python3 docs/samples.py`.
 
 ## History

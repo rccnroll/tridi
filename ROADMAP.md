@@ -472,7 +472,11 @@ goes top down; an item is ticked with its date when done.
   --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`
   (the render test needs Mesa's llvmpipe: `libegl1 libgl1-mesa-dri` on the
   runner). Cache with `Swatinem/rust-cache`. Badge in the README.
-- [ ] One release pipeline (05/10): GitHub Actions on a `v*` tag builds and
+- [x] One release pipeline (05/10). Done 07/10: `release.yml`, on a `v*`
+  tag, checks the version, builds the Arch package (container, as
+  `makepkg`) and the `.deb` (`build.sh`), and opens a draft release with
+  git-cliff's notes. Left for when the repo is public: the AUR and a Nix
+  flake. Was: GitHub Actions on a `v*` tag builds and
   publishes the AUR package, the `.deb` (Ubuntu 24.04, today
   `packaging/deb/build.sh`) and a Nix flake, with the changelog generated
   from the Conventional Commits. Today a release is by hand: `makepkg`,
