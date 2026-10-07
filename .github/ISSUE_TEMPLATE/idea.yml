@@ -1,0 +1,11 @@
+name: Idea
+description: A format, a key, a way to install, anything tridi should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: What you'd like, and the files or workflow it is for.
+    validations:
+      required: true

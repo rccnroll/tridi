@@ -1,0 +1,37 @@
+name: Bug
+description: Something opens wrong, crashes, or a thumbnail is missing
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: tridi version
+      description: "`tridi --version`, and whether from the .deb, the Arch package or a build"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: Distro, desktop or compositor (GNOME, KDE, niri, ...), Wayland or X11, display scale
+      placeholder: Ubuntu 24.04, GNOME on Wayland, scale 2
+    validations:
+      required: true
+  - type: textarea
+    id: debug
+    attributes:
+      label: Debug output
+      description: The output of `TRIDI_DEBUG=1 tridi FILE` (or `TRIDI_DEBUG=1 tridi thumb FILE out.png 256` for a thumbnail)
+      render: text
+  - type: textarea
+    id: file
+    attributes:
+      label: The file
+      description: Attach it if it can be shared (zip it if GitHub refuses the extension), or say what made it (scanner, CAD, Open3D, ...).
