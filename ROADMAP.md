@@ -545,3 +545,7 @@ goes top down; an item is ticked with its date when done.
 - [ ] Decide whether the repo goes public (07/10). The AUR, crates.io,
   tldr and the badges' reach depend on it. Skipped until then: a code of
   conduct, `FUNDING.yml`, discussions.
+- [ ] Protect `main` (07/10), once public: a private repo on the free plan
+  can't (rulesets and branch protection answer 403). A ruleset that blocks
+  force pushes and deletion, and wants CI green on pull requests; the
+  owner bypasses it, so releases still go straight to `main`.
