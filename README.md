@@ -1,10 +1,16 @@
 # tridi
 
 [![CI](https://github.com/rccnroll/tridi/actions/workflows/ci.yml/badge.svg)](https://github.com/rccnroll/tridi/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
-Viewer for point clouds and meshes, with thumbnails in Nautilus. One Rust
-binary does both: a window for looking at the files, and `tridi thumb`,
-which Nautilus calls to draw their previews without a window or a GPU.
+A fast viewer for point clouds, meshes and STEP files on Linux, and the
+thumbnails for them in Nautilus (GNOME Files). One Rust binary does both:
+a window for looking at the files, and `tridi thumb`, which Nautilus calls
+to draw their previews without a window or a GPU.
+
+![Four point cloud tiles in the viewer, one color each](docs/viewer.png)
+
+![Nautilus showing tridi's thumbnails of pcd, xyzrgb, stl, obj, glb and step files](docs/nautilus.png)
 
 - Point clouds: `.pcd` (ascii, binary, binary_compressed; rgb from PCL or
   Open3D), `.ply` without faces, `.xyz`, `.xyzrgb`, `.pts`.
@@ -12,11 +18,6 @@ which Nautilus calls to draw their previews without a window or a GPU.
   `.ply` with faces.
 - CAD: `.step`/`.stp` (assemblies and colors), tessellated in Rust with
   monstertruck. A file the library can't finish in 15 s is an error.
-
-1.0 (tag `v1.0.0`) was Python + Open3D launched by `uv`, with an f3d-drawn
-thumbnailer; 2.0 replaces it and dropped STEP, which came back in Rust
-after 2.1. Up to 2.2.0 it was called pcdview (same tags, same history).
-Why and how is in [ROADMAP.md](ROADMAP.md).
 
 ## Install (Arch)
 
@@ -88,11 +89,23 @@ prints which device is used.
 - `packaging/arch/` — PKGBUILD and install script.
 - `packaging/deb/` — `.deb` build (cargo-deb, metadata in `Cargo.toml`) and `postinst`.
 - `tests/data/` — small fixtures written by Open3D.
+- `docs/` — the README's screenshots and the script that makes their files.
 
 ## Develop
 
-    cargo test                   # 21 tests; one renders on llvmpipe
+    cargo test                   # one test renders on llvmpipe (Mesa, no GPU)
     cargo run --release -- FILE
+
+CI runs `cargo fmt --check`, clippy with `-D warnings` and the tests on
+every push, and checks the build on the oldest Rust supported (1.88). The
+screenshots come from synthetic files: `python3 docs/samples.py`.
+
+## History
+
+1.0 (tag `v1.0.0`) was Python + Open3D launched by `uv`, with an f3d-drawn
+thumbnailer; 2.0 replaces it and dropped STEP, which came back in Rust
+after 2.1. Up to 2.2.0 it was called pcdview (same tags, same history).
+Why and how is in [ROADMAP.md](ROADMAP.md).
 
 ## License
 

@@ -482,7 +482,9 @@ goes top down; an item is ticked with its date when done.
   `repository`, `homepage`, `readme`, `keywords`, `categories`
   (`graphics`, `command-line-utilities`, `visualization`),
   `rust-version` (the MSRV CI checks), `authors`.
-- [ ] README for someone who has never seen tridi (07/10): a screenshot of
+- [x] README for someone who has never seen tridi (07/10). Done 07/10:
+  screenshots of synthetic files (`docs/samples.py`), license badge, the
+  history at the end. Was: a screenshot of
   the viewer and one of Nautilus with thumbnails at the top
   (`docs/` or `share/screenshots/`), badges (CI, release, license), a
   one-line pitch, "Install" before the history. The history paragraph
