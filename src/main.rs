@@ -32,10 +32,70 @@ use three_d::*;
 
 /// The Wayland app_id the dock groups the window by, matching the .desktop.
 const APP_ID: &str = "tridi";
-const USAGE: &str = "usage: tridi [--theme light|dark] FILE [FILE ...]
-       tridi thumb [--theme light|dark] IN OUT SIZE
-       tridi theme [light|dark]
-       tridi clear-thumbnails [DIR ...]";
+
+#[derive(clap::Parser)]
+#[command(
+    version,
+    override_usage = "tridi [OPTIONS] FILE...\n       tridi [OPTIONS] <COMMAND>",
+    about = "Viewer for point clouds and meshes, and their thumbnails in Nautilus",
+    after_help = AFTER_HELP
+)]
+struct Cli {
+    /// Files to open together in one window
+    #[arg(value_name = "FILE")]
+    files: Vec<String>,
+    /// Theme for this run, instead of the one `tridi theme` saved
+    #[arg(long, global = true, value_name = "THEME", value_parser = ["light", "dark"])]
+    theme: Option<String>,
+    #[command(subcommand)]
+    cmd: Option<Cmd>,
+}
+
+#[derive(clap::Subcommand)]
+enum Cmd {
+    /// Write a PNG thumbnail of IN to OUT, without a window (what Nautilus runs)
+    Thumb {
+        #[arg(value_name = "IN")]
+        input: String,
+        #[arg(value_name = "OUT")]
+        output: String,
+        /// Width and height in pixels
+        #[arg(value_name = "SIZE", value_parser = clap::value_parser!(u32).range(1..=4096))]
+        size: u32,
+    },
+    /// Show the theme, or switch viewer and thumbnails to another one
+    Theme {
+        #[arg(value_parser = ["light", "dark"])]
+        name: Option<String>,
+    },
+    /// Drop the cached thumbnails of our formats (default ~/.cache/thumbnails)
+    ClearThumbnails { dirs: Vec<std::path::PathBuf> },
+    /// Internal: step.rs runs itself as a child to tessellate
+    #[command(hide = true)]
+    StepMesh { input: String },
+}
+
+const AFTER_HELP: &str = "\
+Examples:
+  tridi scan.pcd                   open a point cloud
+  tridi a.pcd b.pcd part.step      open several files, one color each
+  tridi --theme dark model.glb     dark theme for this run only
+  tridi theme dark                 switch viewer and thumbnails to dark
+
+Formats:
+  point clouds  pcd, ply (no faces), xyz, xyzrgb, pts
+  meshes        glb, gltf, obj, stl, off, ply (with faces)
+  CAD           step, stp
+
+Window:
+  left drag orbits, right or middle drag (or shift + left) pans, the wheel zooms;
+  R resets the view, + and - change the point size, 1-9 turn the N-th file
+  off and on, Q or Esc quits.
+
+Environment:
+  TRIDI_DEBUG=1    print which GPU renders
+
+Bugs: https://github.com/rccnroll/tridi/issues";
 
 fn is_gltf(p: &str) -> bool {
     let ext = Path::new(p).extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
@@ -377,9 +437,8 @@ impl winit::application::ApplicationHandler for Viewer {
     }
 }
 
-fn thumb(inp: &str, out: &str, size: &str, theme: &theme::Theme) -> Result<(), String> {
+fn thumb(inp: &str, out: &str, size: u32, theme: &theme::Theme) -> Result<(), String> {
     let t0 = Instant::now();
-    let size: u32 = size.parse().ok().filter(|s| (1..=4096).contains(s)).ok_or("SIZE must be 1..4096")?;
     // Nautilus's sandbox clears the environment: without this glvnd would
     // also load NVIDIA's EGL, even for a user who limited it to Mesa
     let mesa = "/usr/share/glvnd/egl_vendor.d/50_mesa.json";
@@ -387,7 +446,7 @@ fn thumb(inp: &str, out: &str, size: &str, theme: &theme::Theme) -> Result<(), S
         // SAFETY: single-threaded, and before EGL is loaded
         unsafe { std::env::set_var("__EGL_VENDOR_LIBRARY_FILENAMES", mesa) };
     }
-    let input = match mesh::load(Path::new(inp), theme.mesh)? {
+    let input = match mesh::load(Path::new(inp), theme.mesh).map_err(|e| format!("{inp}: {e}"))? {
         Item::Cloud(c) => {
             let colors = cloud::colorize(&c, None, theme);
             Input::Points(c.points, colors)
@@ -405,43 +464,30 @@ fn thumb(inp: &str, out: &str, size: &str, theme: &theme::Theme) -> Result<(), S
     Ok(())
 }
 
-/// Takes `--theme NAME` out of the arguments, if it's there.
-fn take_theme(a: &mut Vec<String>) -> Result<Option<&'static theme::Theme>, String> {
-    let Some(i) = a.iter().position(|s| s == "--theme") else {
-        return Ok(None);
-    };
-    let name = a.get(i + 1).cloned().ok_or(USAGE)?;
-    a.drain(i..i + 2);
-    theme::by_name(&name).map(Some)
-}
-
 fn main() {
-    let mut a: Vec<String> = std::env::args().skip(1).collect();
-    let r = take_theme(&mut a).and_then(|t| match a.as_slice() {
+    let cli = <Cli as clap::Parser>::parse();
+    let t = cli.theme.as_deref().map(|n| theme::by_name(n).expect("clap checked the name"));
+    let r = match cli.cmd {
+        Some(Cmd::StepMesh { input }) => step::mesh_to_stdout(&input),
         // thumbnails can't read the saved theme (sandbox): light unless told
-        // internal: step.rs runs itself as a child to tessellate
-        [cmd, i] if cmd == "step-mesh" => step::mesh_to_stdout(i),
-        [cmd, i, o, s] if cmd == "thumb" => thumb(i, o, s, t.unwrap_or(&theme::LIGHT)),
-        [cmd, ..] if cmd == "thumb" => Err(USAGE.into()),
-        [cmd] if cmd == "theme" => theme::command(None),
-        [cmd, name] if cmd == "theme" => theme::command(Some(name)),
-        [cmd, dirs @ ..] if cmd == "clear-thumbnails" => {
+        Some(Cmd::Thumb { input, output, size }) => thumb(&input, &output, size, t.unwrap_or(&theme::LIGHT)),
+        Some(Cmd::Theme { name }) => theme::command(name.as_deref()),
+        Some(Cmd::ClearThumbnails { dirs }) => {
             let home = std::env::var_os("HOME").map(|h| Path::new(&h).join(".cache/thumbnails"));
-            let dirs: Vec<std::path::PathBuf> = if dirs.is_empty() {
-                home.into_iter().collect()
-            } else {
-                dirs.iter().map(Into::into).collect()
-            };
+            let dirs = if dirs.is_empty() { home.into_iter().collect() } else { dirs };
             let n: usize = dirs.iter().map(|d| theme::clear_thumbnails(d)).sum();
             println!("{n} cached thumbnails cleared");
             Ok(())
         }
-        [] => Err(USAGE.into()),
-        files => {
-            theme::refresh();
-            view(files, t.unwrap_or_else(theme::current))
+        None if cli.files.is_empty() => {
+            <Cli as clap::CommandFactory>::command().print_help().ok();
+            std::process::exit(2);
         }
-    });
+        None => {
+            theme::refresh();
+            view(&cli.files, t.unwrap_or_else(theme::current))
+        }
+    };
     if let Err(e) = r {
         if !e.is_empty() {
             eprintln!("[tridi] {e}");
@@ -453,6 +499,23 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn command_line() {
+        use clap::{CommandFactory, Parser};
+        Cli::command().debug_assert();
+        // the thumbnailer entries' Exec lines, light and dark
+        for a in [
+            &["tridi", "thumb", "i", "o", "256"][..],
+            &["tridi", "thumb", "--theme", "dark", "i", "o", "256"],
+        ] {
+            assert!(matches!(Cli::parse_from(a).cmd, Some(Cmd::Thumb { size: 256, .. })));
+        }
+        let c = Cli::parse_from(["tridi", "--theme", "dark", "a.pcd", "b.step"]);
+        assert_eq!((c.files.len(), c.theme.as_deref()), (2, Some("dark")));
+        assert!(Cli::try_parse_from(["tridi", "--help"]).is_err_and(|e| e.exit_code() == 0));
+        assert!(Cli::try_parse_from(["tridi", "-x"]).is_err_and(|e| e.exit_code() == 2));
+    }
 
     fn motion(button: MouseButton, delta: (f32, f32)) -> Event {
         Event::MouseMotion {

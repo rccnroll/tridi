@@ -369,7 +369,9 @@ goes top down; an item is ticked with its date when done.
 
 #### Urgent
 
-- [ ] `--help`/`-h` and `--version`/`-V` (07/10). Today both are read as
+- [x] `--help`/`-h` and `--version`/`-V` (07/10). Done 07/10: clap
+  derive; `--theme` goes before or after the subcommand, a test pins the
+  thumbnailer's Exec lines. Today both are read as
   file names (`--help: No such file or directory`). Move the argument
   parsing to clap (derive): subcommands `thumb`, `theme`,
   `clear-thumbnails`, the global `--theme`, and the bare `FILE...` for the
