@@ -467,7 +467,8 @@ goes top down; an item is ticked with its date when done.
 
 #### High
 
-- [ ] CI on GitHub Actions (07/10): on every push and PR, `cargo fmt
+- [x] CI on GitHub Actions (07/10). Done 07/10: `.github/workflows/ci.yml`,
+  green in ~4 min, the llvmpipe test runs there too. Was: on every push and PR, `cargo fmt
   --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`
   (the render test needs Mesa's llvmpipe: `libegl1 libgl1-mesa-dri` on the
   runner). Cache with `Swatinem/rust-cache`. Badge in the README.
