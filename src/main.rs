@@ -380,7 +380,11 @@ fn overlay(ui: &mut egui::Ui, files: &[File], visible: &[bool], legend: bool, he
         egui::Area::new(egui::Id::new(id))
             .anchor(at, off)
             .interactable(false)
-            .show(ui.ctx(), |ui| egui::Frame::popup(ui.style()).show(ui, add));
+            .show(ui.ctx(), |ui| {
+                // see-through, so the scene shows under it
+                let fill = ui.visuals().window_fill.gamma_multiply(0.75);
+                egui::Frame::popup(ui.style()).fill(fill).show(ui, add)
+            });
     };
     if help {
         panel("help", egui::Align2::RIGHT_TOP, [-12.0, 12.0], &|ui| {
