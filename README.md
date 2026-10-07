@@ -98,6 +98,7 @@ prints which device is used.
 - `packaging/arch/` — PKGBUILD and install script.
 - `packaging/deb/` — `.deb` build (cargo-deb, metadata in `Cargo.toml`) and `postinst`.
 - `tests/data/` — small fixtures written by Open3D.
+- `fuzz/` — cargo-fuzz targets for the point cloud parsers, and their seeds.
 - `docs/` — the README's screenshots and GIFs, the script that makes their
   files (`samples.py`) and the one that records the GIFs on niri (`record.sh`).
 
@@ -108,6 +109,11 @@ prints which device is used.
 
 CI runs `cargo fmt --check`, clippy with `-D warnings` and the tests on
 every push, and checks the build on the oldest Rust supported (1.88).
+
+The point cloud parsers are fuzzed (they read whatever file Nautilus
+lists): `cargo install cargo-fuzz`, then from `fuzz/`,
+`cargo +nightly fuzz run -O pcd` (or `ply`, `off`, `text`), seeded from
+`fuzz/seeds/`. A crash lands in `fuzz/artifacts/`; it becomes a test.
 
 A release: set the version in `Cargo.toml` and the PKGBUILD's `pkgver`,
 `cargo check` (for `Cargo.lock`), commit `chore(release): X.Y.Z`, then

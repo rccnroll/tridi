@@ -403,7 +403,12 @@ goes top down; an item is ticked with its date when done.
   `/usr/share/zsh/site-functions/_tridi`,
   `/usr/share/fish/vendor_completions.d/tridi.fish`. File arguments
   complete only our extensions.
-- [ ] Fuzz the parsers (07/10): `cargo-fuzz` targets for pcd (all three
+- [x] Fuzz the parsers (07/10). Done 07/10: `fuzz/`, four targets on
+  `cloud::parse`. Found in seconds: `COUNT 0` in a PCD panicked (index out
+  of the row), and PCD/PLY/OFF headers with a huge count preallocated it
+  (exabytes, the process killed). Fixed (no preallocation past the file's
+  size), with a test; then ~22M inputs clean. Meshes go through
+  three-d-asset and STEP through its watchdog: not fuzzed. Was: `cargo-fuzz` targets for pcd (all three
   encodings), ply, off and xyz/pts. Nautilus runs `tridi thumb` on any
   matching file it lists, so a panic, a huge allocation from a lying
   header or an endless loop there is the most likely real bug. Each crash

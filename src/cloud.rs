@@ -16,12 +16,16 @@ pub struct Cloud {
 
 pub fn load(path: &Path) -> Result<Cloud, String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    let raw = std::fs::read(path).map_err(|e| e.to_string())?;
-    let mut c = match ext.as_str() {
-        "pcd" => read_pcd(&raw)?,
-        "ply" => read_ply(&raw)?,
-        "off" => read_off(&raw)?,
-        "xyz" | "xyzrgb" | "pts" => read_text(&raw, &ext),
+    parse(&std::fs::read(path).map_err(|e| e.to_string())?, &ext)
+}
+
+/// A cloud from a file's bytes, `ext` lowercase. What the fuzz targets call.
+pub fn parse(raw: &[u8], ext: &str) -> Result<Cloud, String> {
+    let mut c = match ext {
+        "pcd" => read_pcd(raw)?,
+        "ply" => read_ply(raw)?,
+        "off" => read_off(raw)?,
+        "xyz" | "xyzrgb" | "pts" => read_text(raw, ext),
         _ => return Err(format!("unsupported format: .{ext}")),
     };
     // NaNs: PCL organized clouds mark missing points that way (a mesh keeps
@@ -40,7 +44,7 @@ pub fn load(path: &Path) -> Result<Cloud, String> {
         }
     }
     if c.points.is_empty() {
-        return Err(format!("no points read from {}", path.display()));
+        return Err("no points read".into());
     }
     Ok(c)
 }
@@ -149,7 +153,7 @@ fn read_pcd(raw: &[u8]) -> Result<Cloud, String> {
     let (mut off, mut col) = (0, 0);
     for i in 0..names.len() {
         let size: usize = sizes[i].parse().map_err(|_| "bad SIZE")?;
-        let count: usize = counts[i].parse().map_err(|_| "bad COUNT")?;
+        let count: usize = counts[i].parse().ok().filter(|&c| c > 0).ok_or("bad COUNT")?;
         let ty = types[i].as_bytes().first().copied().unwrap_or(0);
         if !valid_type(ty, size) {
             return Err(format!("unsupported TYPE {} SIZE {size}", types[i]));
@@ -181,8 +185,11 @@ fn read_pcd(raw: &[u8]) -> Result<Cloud, String> {
     let frgb = field("rgb").or(field("rgba"));
     let mode = get("DATA").and_then(|v| v.first()).map(String::as_str).unwrap_or("");
 
-    let mut points = Vec::with_capacity(n);
-    let mut colors = frgb.map(|_| Vec::with_capacity(n));
+    // every point takes at least a byte: a header can't make us allocate
+    // more than the file could hold
+    let cap = n.min(body.len());
+    let mut points = Vec::with_capacity(cap);
+    let mut colors = frgb.map(|_| Vec::with_capacity(cap));
     match mode {
         "ascii" => {
             let text = String::from_utf8_lossy(body);
@@ -345,8 +352,10 @@ fn read_ply(raw: &[u8]) -> Result<Cloud, String> {
     // uchar colors are 0..255, float ones 0..1
     let unit = |f: &Field, v: f64| if f.ty == b'F' { v as f32 } else { v as f32 / 255.0 };
 
-    let mut points = Vec::with_capacity(n);
-    let mut colors = rgb.map(|_| Vec::with_capacity(n));
+    // capped by the file's size, as in read_pcd
+    let cap = n.min(body.len());
+    let mut points = Vec::with_capacity(cap);
+    let mut colors = rgb.map(|_| Vec::with_capacity(cap));
     let mut push = |v: &dyn Fn(&Field) -> f64| {
         points.push(vec3(v(fx) as f32, v(fy) as f32, v(fz) as f32));
         if let (Some([r, g, b]), Some(cols)) = (rgb, &mut colors) {
@@ -370,7 +379,7 @@ fn read_ply(raw: &[u8]) -> Result<Cloud, String> {
     if m > 0 && !ascii && head.get(fel + 2).is_some_and(|l| l[0] == "property") {
         return Err("binary PLY faces with extra properties".into());
     }
-    let mut faces = list.map(|_| Vec::with_capacity(m * 3));
+    let mut faces = list.map(|_| Vec::with_capacity(m.min(body.len()) * 3));
     let mut add_face = |idx: &[u32]| -> Result<(), String> {
         if idx.iter().any(|&i| i as usize >= n) {
             return Err("PLY face index out of range".into());
@@ -465,8 +474,10 @@ fn read_off(raw: &[u8]) -> Result<Cloud, String> {
         .map(|s| s.parse().map_err(|_| "bad OFF counts"))
         .collect::<Result<_, _>>()?;
     let (n, m) = (*c.first().ok_or("bad OFF counts")?, *c.get(1).ok_or("bad OFF counts")?);
-    let mut points = Vec::with_capacity(n);
-    let mut colors = colored.then(|| Vec::with_capacity(n));
+    // capped by the file's size, as in read_pcd
+    let cap = n.min(raw.len());
+    let mut points = Vec::with_capacity(cap);
+    let mut colors = colored.then(|| Vec::with_capacity(cap));
     for line in lines.by_ref().take(n) {
         let t: Vec<f32> = line.split_whitespace().map(|s| s.parse().unwrap_or(f32::NAN)).collect();
         if t.len() < 3 {
@@ -482,7 +493,7 @@ fn read_off(raw: &[u8]) -> Result<Cloud, String> {
     if points.len() < n {
         return Err("truncated OFF".into());
     }
-    let mut faces = Vec::with_capacity(m * 3);
+    let mut faces = Vec::with_capacity(m.min(raw.len()) * 3);
     for line in lines.take(m) {
         let t: Vec<u32> = line.split_whitespace().map_while(|s| s.parse().ok()).collect();
         let k = *t.first().ok_or("bad OFF face line")? as usize;
@@ -545,6 +556,19 @@ mod tests {
     use super::*;
     use crate::theme::{LIGHT, THEMES};
     use std::path::PathBuf;
+
+    // found by `cargo fuzz` (fuzz/): each panicked or asked for exabytes
+    #[test]
+    fn lying_headers_are_errors() {
+        let pcd = b"FIELDS x y z rgb\nSIZE 4 4 4 4\nTYPE F F F U\nCOUNT 1 1 1 0\nPOINTS 1\nDATA ascii\n0 0 0\n";
+        assert!(parse(pcd, "pcd").is_err());
+        let pcd = b"FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nPOINTS 999999999999999999\nDATA ascii\n0 0 0\n";
+        assert_eq!(parse(pcd, "pcd").unwrap().points.len(), 1);
+        let ply = b"ply\nformat ascii 1.0\nelement vertex 999999999999999999\nproperty float x\nproperty float y\nproperty float z\n\
+                    element face 999999999999999999\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n";
+        assert!(parse(ply, "ply").is_ok_and(|c| c.points.len() == 1));
+        assert!(parse(b"OFF\n999999999999999999 999999999999999999 0\n0 0 0\n", "off").is_err());
+    }
 
     fn tmp(name: &str, data: &[u8]) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("tridi-test-{}", std::process::id()));

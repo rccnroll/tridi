@@ -1,0 +1,43 @@
+[package]
+name = "tridi-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+three-d = { version = "0.19", default-features = false }
+
+# its own workspace: the fuzz build (nightly, sanitizers) stays out of tridi's
+[workspace]
+
+[[bin]]
+name = "pcd"
+path = "fuzz_targets/pcd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ply"
+path = "fuzz_targets/ply.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "off"
+path = "fuzz_targets/off.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "text"
+path = "fuzz_targets/text.rs"
+test = false
+doc = false
+bench = false
