@@ -163,6 +163,11 @@ impl Scene {
         Some(*v)
     }
 
+    /// Which layers are on, in file order.
+    pub fn visible(&self) -> &[bool] {
+        &self.visible
+    }
+
     /// Three-quarter view from the front-right, above, as close as it can be
     /// with all eight bbox corners on screen (and a small margin).
     pub fn camera(&self, vp: Viewport) -> Camera {

@@ -19,7 +19,7 @@ glutin-winit = { version = "0.5", default-features = false, features = ["egl", "
 image = { version = "0.25", default-features = false, features = ["png"] }
 libc = "0.2"
 # no "window": it pins winit 0.28, whose title bar GNOME at scale 2 rejects
-three-d = { version = "0.19", default-features = false }
+three-d = { version = "0.19", default-features = false, features = ["egui-gui"] }
 three-d-asset = { version = "0.10", features = ["gltf", "obj", "stl", "data-url", "png", "jpeg"] }
 monstertruck-assembly = "0.4.1"
 monstertruck-io = "0.4.1"
