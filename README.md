@@ -1,5 +1,7 @@
 # tridi
 
+[![CI](https://github.com/rccnroll/tridi/actions/workflows/ci.yml/badge.svg)](https://github.com/rccnroll/tridi/actions/workflows/ci.yml)
+
 Viewer for point clouds and meshes, with thumbnails in Nautilus. One Rust
 binary does both: a window for looking at the files, and `tridi thumb`,
 which Nautilus calls to draw their previews without a window or a GPU.
