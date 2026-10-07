@@ -24,7 +24,7 @@ to draw their previews without a window or a GPU.
 | | |
 |---|---|
 | ![Orbiting, panning and zooming four point cloud tiles, then R](docs/navigate.gif) | **Navigation**: left drag orbits, right or middle drag (or shift + left) pans, the wheel zooms, `R` resets the view. |
-| ![Four tiles turned off and on with the keys 1 to 4](docs/files.gif) | **Several files at once**, one color each, so they tell apart; `1`–`9` turn the N-th file off and on, and a legend top left says which is which. A file's own colors always win. |
+| ![Four tiles turned off and on with the keys 1 to 4](docs/files.gif) | **Several files at once**, one color each, so they tell apart; `1`–`9` turn the N-th file off and on, and a legend top left says which is which (`I` hides it); `H` or `?` shows the keys. A file's own colors always win. |
 | ![The point size growing and shrinking](docs/points.gif) | **Point size** with `+` and `-`; eye-dome lighting gives the cloud its depth. |
 | ![The same scene in the light and the dark theme](docs/themes.png) | **Two themes** (Nord light and dark) for the window and the thumbnails: `tridi theme dark`. |
 
