@@ -449,13 +449,11 @@ goes top down; an item is ticked with its date when done.
 
 #### Urgent
 
-- [ ] A license (07/10). There is none, so nobody else may legally use or
-  change the code. Pick one (MIT OR Apache-2.0 is the Rust default), add
-  `LICENSE` (or `LICENSE-MIT` + `LICENSE-APACHE`), `license = "..."` in
-  `Cargo.toml`, `license=(...)` in the PKGBUILD (today
-  `LicenseRef-private`), and the copyright file of the `.deb` (cargo-deb reads it from
-  `Cargo.toml`). Check that the vendored Papirus icons' license (GPL-3.0)
-  is stated, since the icons are shipped.
+- [x] A license (07/10). Done 07/10: MIT OR Apache-2.0, `LICENSE-MIT` and
+  `LICENSE-APACHE`, in `Cargo.toml`, the PKGBUILD (installed to
+  `/usr/share/licenses/tridi/`) and the `.deb` (`/usr/share/doc/tridi/`).
+  The icons are ours (the `Papirus/` ones are symlinks), nothing third
+  party to declare.
 - [x] `cargo fmt --check` passes (07/10). Done 07/10: `rustfmt.toml` at
   140, one formatting commit. Today it fails (e.g.
   `src/cloud.rs`): lines run up to 235 columns and no single width

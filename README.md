@@ -90,3 +90,8 @@ prints which device is used.
 
     cargo test                   # 21 tests; one renders on llvmpipe
     cargo run --release -- FILE
+
+## License
+
+MIT or Apache-2.0, at your option: [LICENSE-MIT](LICENSE-MIT),
+[LICENSE-APACHE](LICENSE-APACHE).

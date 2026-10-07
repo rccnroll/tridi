@@ -6,7 +6,7 @@ pkgrel=1
 pkgdesc='Point cloud and mesh viewer, with Nautilus thumbnails'
 arch=('x86_64')
 url='https://github.com/rccnroll/tridi'
-license=('LicenseRef-private')
+license=('MIT OR Apache-2.0')
 # GL/EGL, Wayland and xkbcommon are dlopened at runtime
 depends=('gcc-libs' 'glibc' 'libglvnd' 'mesa' 'wayland' 'libxkbcommon' 'xdg-utils')
 makedepends=('cargo' 'git')
@@ -53,4 +53,5 @@ package() {
   install -Dm644 share/applications/tridi.desktop -t "$pkgdir/usr/share/applications"
   # one SVG, the rest are relative symlinks to it
   cp -a share/icons "$pkgdir/usr/share/"
+  install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/tridi"
 }

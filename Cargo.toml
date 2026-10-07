@@ -2,6 +2,7 @@
 name = "tridi"
 version = "2.3.1"
 edition = "2024"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 glutin = { version = "0.32", default-features = false, features = ["egl", "wayland", "x11"] }
@@ -36,4 +37,6 @@ assets = [
     ["share/mime/packages/pointcloud.xml", "usr/share/mime/packages/", "644"],
     ["share/applications/tridi.desktop", "usr/share/applications/", "644"],
     ["share/icons/**/*", "usr/share/icons/", "644"],
+    ["LICENSE-MIT", "usr/share/doc/tridi/", "644"],
+    ["LICENSE-APACHE", "usr/share/doc/tridi/", "644"],
 ]
