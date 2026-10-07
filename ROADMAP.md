@@ -362,6 +362,10 @@ multiple of the buffer_scale (2)`, seen on Ubuntu 24.04).
 built by the Release workflow: `--help` and `--version` through clap, man
 pages and bash/zsh/fish completions, the MIT OR Apache-2.0 license.
 
+2.4.1 released 07/10/2026 (tag `v2.4.1`): the parser fixes the fuzzing
+found. 2.5.0 released 07/10/2026 (tag `v2.5.0`): the legend of the open
+files and H for the keys; MSRV 1.92 (egui).
+
 ## Open
 
 Two lists, each from urgent to low: what makes tridi a better tool, and
