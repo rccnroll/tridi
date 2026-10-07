@@ -98,10 +98,15 @@ Formats:
   CAD           step, stp
 
 Window:
-  left drag orbits, right or middle drag (or shift + left) pans, the wheel zooms;
-  R resets the view, + and - change the point size, 1-9 turn the N-th file
-  off and on (the legend top left shows which), H prints these keys, Q or
-  Esc quits.
+  left drag             orbit
+  right or middle drag  pan (or shift + left drag)
+  wheel                 zoom
+  R                     reset the view
+  + and -               point size
+  1-9                   turn the N-th file off and on
+  I                     show or hide the legend (on with several files)
+  H or ?                show or hide these keys
+  Q or Esc              quit
 
 Environment:
   TRIDI_DEBUG=1    print which GPU renders
@@ -125,7 +130,7 @@ fn extent(pts: impl Iterator<Item = Vec3>) -> Vec3 {
     bb.max() - bb.min()
 }
 
-/// The Window section of the help, which H prints in the viewer.
+/// The Window section of the help, which H shows in the viewer.
 fn window_keys() -> &'static str {
     let s = &AFTER_HELP[AFTER_HELP.find("Window:").unwrap_or(0)..];
     &s[..s.find("\n\n").unwrap_or(s.len())]
@@ -245,6 +250,7 @@ fn view(paths: &[String], theme: &'static theme::Theme) -> Result<(), String> {
         println!("keys: {}", keys.join(", "));
     }
     let event_loop = winit::event_loop::EventLoop::new().map_err(|e| format!("no display: {e}"))?;
+    let legend = files.len() > 1;
     let mut v = Viewer {
         files,
         theme,
@@ -253,6 +259,8 @@ fn view(paths: &[String], theme: &'static theme::Theme) -> Result<(), String> {
         gl: None,
         err: None,
         psize: 2.0,
+        legend,
+        help: false,
         cursor: None,
         button: None,
         mods: Modifiers::default(),
@@ -265,8 +273,8 @@ fn view(paths: &[String], theme: &'static theme::Theme) -> Result<(), String> {
 /// loop starts, as winit 0.30 wants.
 struct Gl {
     scene: render::Scene,
-    /// draws the legend; None with a single file
-    gui: Option<GUI>,
+    /// draws the legend and the keys
+    gui: GUI,
     /// egui's clock, for its fade-in
     start: Instant,
     cam: Camera,
@@ -291,6 +299,10 @@ struct Viewer {
     gl: Option<Gl>,
     err: Option<String>,
     psize: f32,
+    /// I: the legend, on from the start with several files
+    legend: bool,
+    /// H or ?: the keys
+    help: bool,
     /// last cursor position, logical pixels
     cursor: Option<(f32, f32)>,
     button: Option<MouseButton>,
@@ -340,13 +352,10 @@ impl Viewer {
         let cam = scene.camera(viewport(&window));
         // min above the near plane (radius * 0.01), or zooming in clips everything
         let (min, max) = (scene.radius * 0.05, scene.radius * 15.0);
-        let gui = (self.files.len() > 1).then(|| {
-            let gui = GUI::new(&context);
-            let dark = self.theme.name == "dark";
-            gui.context()
-                .set_visuals(if dark { egui::Visuals::dark() } else { egui::Visuals::light() });
-            gui
-        });
+        let gui = GUI::new(&context);
+        let dark = self.theme.name == "dark";
+        gui.context()
+            .set_visuals(if dark { egui::Visuals::dark() } else { egui::Visuals::light() });
         Ok(Gl {
             scene,
             gui,
@@ -362,41 +371,64 @@ impl Viewer {
     }
 }
 
-/// Top left: each file with its key, its tint and its size; the ones turned
-/// off are dimmed. Not clickable: the keys toggle, the mouse moves the view.
-fn legend(ui: &mut egui::Ui, files: &[File], visible: &[bool]) {
-    egui::Area::new(egui::Id::new("legend"))
-        .anchor(egui::Align2::LEFT_TOP, [12.0, 12.0])
-        .interactable(false)
-        .show(ui.ctx(), |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                egui::Grid::new("files").min_col_width(0.0).spacing([10.0, 4.0]).show(ui, |ui| {
-                    for (i, (f, &on)) in files.iter().zip(visible).enumerate() {
-                        let alpha = if on { 1.0 } else { 0.35 };
-                        let fg = ui.visuals().text_color().gamma_multiply(alpha);
-                        let text = |t: String| egui::RichText::new(t).color(fg);
-                        ui.label(text(if i < 9 { format!("{}", i + 1) } else { String::new() }));
-                        let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
-                        match f.tint {
-                            Some(c) => {
-                                // the palette is written to the screen as is: sRGB
-                                let [r8, g8, b8] = c.map(|v| (v * 255.0).round() as u8);
-                                let c = egui::Color32::from_rgb(r8, g8, b8).gamma_multiply(alpha);
-                                ui.painter().rect_filled(r, 2.0, c);
-                            }
-                            // own colors or a mesh: an empty square
-                            None => {
-                                ui.painter()
-                                    .rect_stroke(r, 2.0, egui::Stroke::new(1.0_f32, fg), egui::StrokeKind::Inside);
-                            }
-                        }
-                        ui.label(text(f.name.clone()));
-                        ui.label(text(f.count.clone()));
-                        ui.end_row();
-                    }
-                });
+/// What's drawn over the scene, none of it clickable (the keys toggle, the
+/// mouse moves the view). Top left, with `legend`: each file with its key,
+/// its tint and its size, the ones turned off dimmed. Top right, with
+/// `help`, the keys; else a hint bottom left that H shows them.
+fn overlay(ui: &mut egui::Ui, files: &[File], visible: &[bool], legend: bool, help: bool) {
+    let panel = |id: &str, at: egui::Align2, off: [f32; 2], add: &dyn Fn(&mut egui::Ui)| {
+        egui::Area::new(egui::Id::new(id))
+            .anchor(at, off)
+            .interactable(false)
+            .show(ui.ctx(), |ui| egui::Frame::popup(ui.style()).show(ui, add));
+    };
+    if help {
+        panel("help", egui::Align2::RIGHT_TOP, [-12.0, 12.0], &|ui| {
+            // the help's lines: two spaces or more between key and what it does
+            egui::Grid::new("keys").spacing([16.0, 4.0]).show(ui, |ui| {
+                for (k, d) in window_keys().lines().skip(1).filter_map(|l| l.trim().split_once("  ")) {
+                    ui.strong(k);
+                    ui.label(d.trim());
+                    ui.end_row();
+                }
             });
         });
+    } else {
+        egui::Area::new(egui::Id::new("hint"))
+            .anchor(egui::Align2::LEFT_BOTTOM, [12.0, -12.0])
+            .interactable(false)
+            .show(ui.ctx(), |ui| ui.weak("H  keys"));
+    }
+    if !legend {
+        return;
+    }
+    panel("legend", egui::Align2::LEFT_TOP, [12.0, 12.0], &|ui| {
+        egui::Grid::new("files").min_col_width(0.0).spacing([10.0, 4.0]).show(ui, |ui| {
+            for (i, (f, &on)) in files.iter().zip(visible).enumerate() {
+                let alpha = if on { 1.0 } else { 0.35 };
+                let fg = ui.visuals().text_color().gamma_multiply(alpha);
+                let text = |t: String| egui::RichText::new(t).color(fg);
+                ui.label(text(if i < 9 { format!("{}", i + 1) } else { String::new() }));
+                let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                match f.tint {
+                    Some(c) => {
+                        // the palette is written to the screen as is: sRGB
+                        let [r8, g8, b8] = c.map(|v| (v * 255.0).round() as u8);
+                        let c = egui::Color32::from_rgb(r8, g8, b8).gamma_multiply(alpha);
+                        ui.painter().rect_filled(r, 2.0, c);
+                    }
+                    // own colors or a mesh: an empty square
+                    None => {
+                        ui.painter()
+                            .rect_stroke(r, 2.0, egui::Stroke::new(1.0_f32, fg), egui::StrokeKind::Inside);
+                    }
+                }
+                ui.label(text(f.name.clone()));
+                ui.label(text(f.count.clone()));
+                ui.end_row();
+            }
+        });
+    });
 }
 
 fn viewport(w: &winit::window::Window) -> Viewport {
@@ -485,7 +517,9 @@ impl winit::application::ApplicationHandler for Viewer {
                     "+" | "=" => self.psize = f32::min(self.psize * 1.25, 20.0),
                     "-" => self.psize = f32::max(self.psize / 1.25, 1.0),
                     "q" => el.exit(),
-                    "h" => println!("{}", window_keys()),
+                    // H is Open3D's help key, ? everyone else's
+                    "h" | "?" => self.help = !self.help,
+                    "i" => self.legend = !self.legend,
                     d => {
                         if let Some(i) = d.parse::<usize>().ok().filter(|n| (1..=9).contains(n)).map(|n| n - 1)
                             && let Some(on) = gl.scene.toggle(i)
@@ -503,15 +537,14 @@ impl winit::application::ApplicationHandler for Viewer {
                 let bg = self.theme.bg;
                 screen.clear(ClearState::color_and_depth(bg[0], bg[1], bg[2], 1.0, 1.0));
                 gl.scene.render(&screen, &gl.cam, self.psize * dpr);
-                if let Some(gui) = gl.gui.as_mut() {
-                    let visible = gl.scene.visible();
-                    let ms = gl.start.elapsed().as_secs_f64() * 1000.0;
-                    gui.update(&mut [], ms, vp, dpr, |ui| legend(ui, &self.files, visible));
-                    screen.write(|| gui.render()).ok();
-                    // egui sizes a new area on one frame and shows it on the next
-                    if gui.context().has_requested_repaint() {
-                        gl.window.request_redraw();
-                    }
+                let (visible, legend, help) = (gl.scene.visible(), self.legend, self.help);
+                let ms = gl.start.elapsed().as_secs_f64() * 1000.0;
+                gl.gui
+                    .update(&mut [], ms, vp, dpr, |ui| overlay(ui, &self.files, visible, legend, help));
+                screen.write(|| gl.gui.render()).ok();
+                // egui sizes a new area on one frame and shows it on the next
+                if gl.gui.context().has_requested_repaint() {
+                    gl.window.request_redraw();
                 }
                 if let Err(e) = gl.surface.swap_buffers(&gl.ctx) {
                     self.err = Some(e.to_string());
@@ -618,12 +651,9 @@ mod tests {
         assert_eq!((c.files.len(), c.theme.as_deref()), (2, Some("dark")));
         assert!(Cli::try_parse_from(["tridi", "--help"]).is_err_and(|e| e.exit_code() == 0));
         assert!(Cli::try_parse_from(["tridi", "-x"]).is_err_and(|e| e.exit_code() == 2));
-        // H prints the Window section, all of it and nothing after
+        // H shows the Window section, all of it and nothing after
         let k = window_keys();
-        assert!(
-            k.starts_with("Window:") && k.ends_with("Esc quits.") && k.contains("H prints"),
-            "{k}"
-        );
+        assert!(k.starts_with("Window:") && k.ends_with("quit") && k.contains("H or ?"), "{k}");
     }
 
     #[test]
