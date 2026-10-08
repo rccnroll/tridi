@@ -14,6 +14,29 @@
     <comment>XYZ point cloud</comment>
     <glob pattern="*.xyz"/>
     <glob pattern="*.xyzrgb"/>
+  </mime-type>
+  <!-- the next four are no distro's but f3d's (ply, pts, off) and newer
+       shared-mime-info's (step): without f3d, or on Debian 12, Ubuntu 24.04
+       and Fedora, no file had them. Same names as theirs, so they merge -->
+  <mime-type type="application/vnd.ply">
+    <comment>Polygon File Format</comment>
+    <glob pattern="*.ply"/>
+  </mime-type>
+  <mime-type type="application/vnd.pts">
+    <comment>Point cloud (PTS)</comment>
     <glob pattern="*.pts"/>
+  </mime-type>
+  <mime-type type="application/vnd.off">
+    <comment>Object File Format</comment>
+    <glob pattern="*.off"/>
+  </mime-type>
+  <mime-type type="model/step">
+    <comment>STEP 3D model</comment>
+    <generic-icon name="image-x-generic"/>
+    <glob pattern="*.step"/>
+    <glob pattern="*.stp"/>
+    <magic>
+      <match type="string" value="ISO-10303-21;" offset="0"/>
+    </magic>
   </mime-type>
 </mime-info>

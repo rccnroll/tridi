@@ -274,6 +274,21 @@ mod tests {
         );
         assert!(!d.contains("/usr/bin"), "{d}");
     }
+
+    // a type no package defines matches no file: Debian 12, Ubuntu 24.04 and
+    // Fedora define only these, and ply, pts and off came from f3d's package
+    #[test]
+    fn every_type_has_a_definition() {
+        let xml = include_str!("../share/mime/packages/tridi.xml");
+        let system = ["model/gltf-binary", "model/gltf+json", "model/obj", "model/stl"];
+        let types = ENTRY.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap();
+        for t in types.split(';').filter(|t| !t.is_empty()) {
+            assert!(
+                system.contains(&t) || xml.contains(&format!(r#"<mime-type type="{t}">"#)),
+                "{t} isn't in tridi.xml"
+            );
+        }
+    }
 }
 
 // }}}
