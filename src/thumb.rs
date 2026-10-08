@@ -5,6 +5,7 @@ use std::{env, path::Path, time::Instant};
 use tridi::{Input, Item, Scene, Theme};
 
 /// Draws `inp` into the PNG `out`, `size` pixels square.
+#[instrument(skip(theme), fields(theme = theme.name))]
 pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()> {
     let t0 = Instant::now();
     // Nautilus's sandbox clears the environment: without this glvnd would
@@ -26,8 +27,7 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()>
     let scene = Scene::new(&ctx, vec![input], false, tridi::up_for(tridi::is_gltf(Path::new(inp))))?;
     let img = tridi::offscreen(&ctx, &scene, size, theme.bg);
     image::save_buffer(out, &img, size, size, image::ExtendedColorType::Rgba8).wrap_err_with(|| format!("cannot write {out}"))?;
-    if env::var_os("TRIDI_TIMING").is_some() {
-        eprintln!("thumb {} ms", t0.elapsed().as_millis());
-    }
+    let elapsed_ms = u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX);
+    info!(elapsed_ms, "thumbnail written");
     Ok(())
 }

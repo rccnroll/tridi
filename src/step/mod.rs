@@ -13,7 +13,7 @@ use std::{
     process::{Command, Stdio},
     sync::mpsc,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use three_d::{Srgba, Vec3};
 use three_d_asset::{Indices, Positions, TriMesh};
@@ -54,7 +54,9 @@ pub(crate) const NONE: [f32; 3] = [-1.0; 3];
 
 /// Parent side: run the child, read its triangles. `grey` stands in for the
 /// faces without a color, when others have one.
+#[instrument(skip(grey))]
 pub fn load(path: &Path, grey: [f32; 3]) -> StepResult<TriMesh> {
+    let start = Instant::now();
     let exe = env::current_exe().map_err(StepError::Spawn)?;
     let mut child = Command::new(exe)
         .arg("step-mesh")
@@ -91,7 +93,10 @@ pub fn load(path: &Path, grey: [f32; 3]) -> StepResult<TriMesh> {
         };
         return Err(StepError::Failed { message });
     }
-    Ok(decode(&bytes, grey))
+    let mesh = decode(&bytes, grey);
+    let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+    debug!(elapsed_ms, triangles = mesh.triangle_count(), "tessellated");
+    Ok(mesh)
 }
 
 /// Child side: `tridi step-mesh IN`.

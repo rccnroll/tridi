@@ -10,7 +10,7 @@ use glutin::{
     surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
 };
 use glutin_winit::{DisplayBuilder, GlWindow};
-use std::{env, io::Write, num::NonZeroU32, path::Path, sync::Arc, time::Instant};
+use std::{io::Write, num::NonZeroU32, path::Path, sync::Arc, time::Instant};
 use three_d::{
     AxisAlignedBoundingBox, Camera, ClearState, Context, Event, GUI, HasContext, InnerSpace, MetricSpace, Modifiers, MouseButton,
     PhysicalPoint, RenderTarget, Vec3, Viewport, context, egui,
@@ -108,7 +108,7 @@ fn load_all(paths: &[String], theme: &Theme, out: &mut dyn Write) -> Option<(Vec
         let item = match tridi::load(path, theme.mesh) {
             Ok(it) => it,
             Err(e) => {
-                eprintln!("[tridi] {name}: {:#}", eyre::Report::new(e));
+                warn!("{name}: {:#}", eyre::Report::new(e));
                 continue;
             }
         };
@@ -274,15 +274,13 @@ impl Viewer {
             (ctx.make_current(&surface).wrap_err("cannot make the GL context current")?, surface)
         };
         if let Err(e) = surface.set_swap_interval(&ctx, SwapInterval::Wait(NonZeroU32::MIN)) {
-            eprintln!("[tridi] no vsync: {e}");
+            debug!("no vsync: {e}");
         }
         // SAFETY: the context made current above, whose functions EGL returns
         let gl = unsafe { context::Context::from_loader_function_cstr(|s| display.get_proc_address(s)) };
         let context = Context::from_gl_context(Arc::new(gl)).wrap_err("cannot load GL")?;
-        if env::var_os("TRIDI_DEBUG").is_some() {
-            // SAFETY: a plain query on the current context
-            eprintln!("GL: {}", unsafe { context.get_parameter_string(context::RENDERER) });
-        }
+        // SAFETY: a plain query on the current context
+        debug!(renderer = unsafe { context.get_parameter_string(context::RENDERER) }, "GL");
         let scene = Scene::new(&context, self.inputs.take().unwrap_or_default(), true, self.up)?;
         let cam = scene.camera(viewport(&window));
         let (min, max) = (scene.radius() * ZOOM_MIN, scene.radius() * ZOOM_MAX);
@@ -348,7 +346,7 @@ impl Viewer {
         gl.gui
             .update(&mut [], ms, vp, dpr, |ui| overlay(ui, &self.files, visible, legend, help));
         if let Err(e) = screen.write(|| gl.gui.render()) {
-            eprintln!("[tridi] cannot draw the panels: {e}");
+            warn!("cannot draw the panels: {e}");
         }
         // egui sizes a new area on one frame and shows it on the next
         if gl.gui.context().has_requested_repaint() {

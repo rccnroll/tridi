@@ -98,7 +98,7 @@ fn install(theme: &Theme) -> eyre::Result<()> {
         .status()
         .is_ok_and(|s| s.success());
     if !ok {
-        eprintln!("[tridi] xdg-mime failed: tridi isn't the default app for our types");
+        warn!("xdg-mime failed: tridi isn't the default app for our types");
     }
     Ok(())
 }
@@ -115,7 +115,7 @@ pub fn refresh() {
         && fs::read_to_string(&ovr).is_ok_and(|s| s != entry(theme))
     {
         if let Err(e) = install(theme) {
-            eprintln!("[tridi] cannot update the thumbnailer entry: {e:#}");
+            warn!("cannot update the thumbnailer entry: {e:#}");
         }
         if let Some(cache) = xdg("XDG_CACHE_HOME", ".cache") {
             clear_thumbnails(&cache.join("thumbnails"));

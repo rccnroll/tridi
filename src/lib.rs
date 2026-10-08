@@ -13,6 +13,9 @@
     )
 )]
 
+#[macro_use]
+extern crate tracing;
+
 mod color;
 mod formats;
 mod model;

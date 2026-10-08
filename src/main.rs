@@ -28,6 +28,9 @@
     )
 )]
 
+#[macro_use]
+extern crate tracing;
+
 mod desktop;
 mod thumb;
 mod view;
@@ -41,6 +44,7 @@ use std::{
     path::{Path, PathBuf},
     process::ExitCode,
 };
+use tracing_subscriber::EnvFilter;
 use tridi::{LIGHT, Theme};
 
 #[derive(Parser)]
@@ -119,7 +123,8 @@ Window:
   Q or Esc              quit
 
 Environment:
-  TRIDI_DEBUG=1    print which GPU renders
+  TRIDI_DEBUG=1    debug output: which GPU renders, how long things take
+  TRIDI_LOG=info   a log filter instead (warnings only by default)
 
 Files:
   ~/.config/tridi/theme
@@ -153,8 +158,26 @@ fn generate(dir: &Path) -> eyre::Result<()> {
     Ok(())
 }
 
+/// Logs to stderr, stdout being the user's: warnings by default,
+/// `TRIDI_DEBUG=1` for debug, or a filter in `TRIDI_LOG` (`info`,
+/// `tridi=debug`, ...).
+fn init_logging() {
+    let default = if env::var_os("TRIDI_DEBUG").is_some() { "debug" } else { "warn" };
+    let filter = EnvFilter::try_from_env("TRIDI_LOG").unwrap_or_else(|_err| EnvFilter::new(default));
+    tracing_subscriber::fmt()
+        .with_writer(io::stderr)
+        .with_env_filter(filter)
+        .without_time()
+        .with_target(false)
+        .init();
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    // not in the STEP child: its stderr is the error it hands back
+    if !matches!(cli.cmd, Some(Cmd::StepMesh { .. })) {
+        init_logging();
+    }
     let mut out = io::stdout();
     let t = cli.theme.as_deref().and_then(Theme::by_name);
     let r = match cli.cmd {

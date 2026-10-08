@@ -59,12 +59,9 @@ fn open_headless() -> RenderResult<(Context, impl Sized)> {
         None => devs.iter().find(|d| gpu(d)).or(devs.iter().find(|d| software(d))),
     }
     .ok_or(RenderError::NoDevice)?;
-    if env::var_os("TRIDI_DEBUG").is_some() {
-        for (i, d) in devs.iter().enumerate() {
-            let tag = if ptr::eq(d, dev) { "  <- used" } else { "" };
-            let (vendor, name) = (d.vendor().unwrap_or("-"), d.name().unwrap_or("-"));
-            eprintln!("egl device {i}: {vendor} {name} software={}{tag}", software(d));
-        }
+    for (i, d) in devs.iter().enumerate() {
+        let (vendor, name) = (d.vendor().unwrap_or("-"), d.name().unwrap_or("-"));
+        debug!(used = ptr::eq(d, dev), software = software(d), "egl device {i}: {vendor} {name}");
     }
     // SAFETY: a device EGL itself listed, no native display
     let display = unsafe { Display::with_device(dev, None) }.map_err(|source| RenderError::Egl {
