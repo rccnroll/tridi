@@ -106,3 +106,5 @@ ROADMAP.md (open), not in the commit.
    `git tag vX.Y.Z && git push origin main vX.Y.Z`.
 4. The Release workflow builds both packages and opens a draft release
    with them and this version's changelog. Edit the notes, publish.
+5. In `packaging/aur/PKGBUILD`, set `pkgver` and run `updpkgsums` (the
+   tag's tarball now exists), commit `build(aur): X.Y.Z`.

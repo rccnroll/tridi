@@ -1,7 +1,7 @@
 # Maintainer: Rocco Caccioppoli <caccioppolirocco@gmail.com>
 # The AUR package: builds a release tag. packaging/arch/ builds this repo's HEAD.
 pkgname=tridi
-pkgver=2.6.0
+pkgver=2.7.0
 pkgrel=1
 pkgdesc='Point cloud and mesh viewer, with Nautilus thumbnails'
 arch=('x86_64')
@@ -15,7 +15,7 @@ conflicts=('pcdview')
 replaces=('pcdview')
 install=tridi.install
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
-sha256sums=('de78d64e9a86250f7c1ea3f18385241378ab954cf4469b93a62b5377c4d79026')
+sha256sums=('ce377b8c77a7401387985983db42d2245c7001eaa4ec542daad15ea3e1c56a5c')
 options=('!lto' '!debug')
 
 prepare() {
