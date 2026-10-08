@@ -41,7 +41,8 @@ fuzzed: `cargo install cargo-fuzz`, then from `fuzz/`,
 One line, [Conventional Commits](https://www.conventionalcommits.org),
 no body: `feat(viewer): ...`, `fix(cloud): ...`, `docs(readme): ...`. The
 changelog and the release notes are generated from them, so the line is
-what a user reads. The why goes in ROADMAP.md, not in the commit.
+what a user reads. The why goes in docs/history.md (decided) or
+ROADMAP.md (open), not in the commit.
 
 ## Releases
 
