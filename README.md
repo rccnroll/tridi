@@ -109,7 +109,8 @@ prints which device is used.
 
 What CI checks, fuzzing, the commit style and how a release is cut are in
 [CONTRIBUTING.md](CONTRIBUTING.md); what changed in each release in
-[CHANGELOG.md](CHANGELOG.md).
+[CHANGELOG.md](CHANGELOG.md). Security issues go through
+[SECURITY.md](SECURITY.md), not the issues.
 
 ## History
 
