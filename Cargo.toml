@@ -22,11 +22,6 @@ libc = "0.2"
 # no "window": it pins winit 0.28, whose title bar GNOME at scale 2 rejects
 three-d = { version = "0.19", default-features = false, features = ["egui-gui"] }
 three-d-asset = { version = "0.10", features = ["gltf", "obj", "stl", "data-url", "png", "jpeg"] }
-monstertruck-assembly = "0.4.1"
-monstertruck-io = "0.4.1"
-monstertruck-meshing = "0.4.1"
-# already monstertruck's: a pool per STEP worker (step/tessellate.rs)
-rayon = "1.12"
 winit = "0.30"
 clap = { version = "4.6.7", features = ["derive"] }
 clap_mangen = "0.3.3"
@@ -35,6 +30,10 @@ thiserror = "2"
 eyre = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std"] }
+
+# the STEP child's OpenCASCADE side (build.rs)
+[build-dependencies]
+cc = "1.2"
 
 [profile.release]
 strip = true
@@ -47,8 +46,9 @@ codegen-units = 1
 maintainer = "Rocco Caccioppoli <caccioppolirocco@gmail.com>"
 extended-description = "Point cloud and mesh viewer, with file manager thumbnails."
 section = "graphics"
-# GL/EGL, Wayland and xkbcommon are dlopened at runtime: no shlibdeps
-depends = "libc6 (>= 2.34), libgcc-s1, libegl1, libgl1-mesa-dri, libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, xdg-utils"
+# GL/EGL, Wayland and xkbcommon are dlopened at runtime; $auto is what's
+# linked: OpenCASCADE (STEP), libstdc++
+depends = "$auto, libc6 (>= 2.34), libgcc-s1, libegl1, libgl1-mesa-dri, libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, xdg-utils"
 maintainer-scripts = "packaging/deb/"
 assets = [
     ["target/release/tridi", "usr/bin/", "755"],

@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # OpenCASCADE's headers and libraries (7.6 on 24.04)
+  OCCT: libocct-data-exchange-dev libocct-ocaf-dev libocct-modeling-algorithms-dev libocct-modeling-data-dev libocct-foundation-dev
+
 jobs:
   check:
     runs-on: ubuntu-24.04
@@ -18,8 +22,8 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-      # the thumbnail test renders on Mesa's llvmpipe through EGL
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri
+      # the thumbnail test renders on Mesa's llvmpipe through EGL; OpenCASCADE reads STEP
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri ${{ env.OCCT }}
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
@@ -31,4 +35,6 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.92
       - uses: Swatinem/rust-cache@v2
+      # build.rs builds the STEP side against OpenCASCADE
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ${{ env.OCCT }}
       - run: cargo check --locked

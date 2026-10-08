@@ -28,7 +28,7 @@ jobs:
     container: archlinux:base-devel
     steps:
       # git first, or checkout fetches a tarball without history
-      - run: pacman -Syu --noconfirm --needed git rust libglvnd mesa wayland libxkbcommon xdg-utils
+      - run: pacman -Syu --noconfirm --needed git rust libglvnd mesa wayland libxkbcommon xdg-utils opencascade
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -78,7 +78,7 @@ jobs:
           v=${GITHUB_REF_NAME#v}
           {
             printf '## Install\n\nArch:\n\n    sudo pacman -U tridi-%s-1-x86_64.pkg.tar.zst\n\n' "$v"
-            printf 'Ubuntu 24.04, Debian 12+:\n\n    sudo apt install ./tridi_%s-1_amd64.deb\n\n' "$v"
+            printf 'Ubuntu 24.04, Debian 12:\n\n    sudo apt install ./tridi_%s-1_amd64.deb\n\n' "$v"
             cat changes.md
           } > notes.md
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "tridi $v" --notes-file notes.md dist/*

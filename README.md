@@ -17,9 +17,9 @@ a window or a GPU.
   Open3D), `.ply` without faces, `.xyz`, `.xyzrgb`, `.pts`.
 - Meshes: `.glb`/`.gltf` (materials and textures), `.obj`, `.stl`, `.off`,
   `.ply` with faces.
-- CAD: `.step`/`.stp` (assemblies and colors), tessellated in Rust with
-  monstertruck. Its solids show up as they're tessellated, and one the
-  library is slow on gets a coarser second try (the thumbnail is coarse,
+- CAD: `.step`/`.stp` (assemblies and colors), read and tessellated by the
+  system's OpenCASCADE, a part per core. Parts show up as they're done,
+  and one that's slow gets a coarser second try (the thumbnail is coarse,
   and draws what came in 15 s).
 
 ## Features
@@ -38,7 +38,7 @@ From the repo (builds the committed HEAD):
 
     cd packaging/arch && makepkg -si
 
-## Install (Ubuntu 24.04, Debian 12+)
+## Install (Ubuntu 24.04, Debian 12)
 
 From [a release](https://github.com/rccnroll/tridi/releases/latest): download `tridi_*.deb` and `sudo apt install ./tridi_*.deb`.
 From the repo (builds the committed HEAD in a Debian 12 container, podman):

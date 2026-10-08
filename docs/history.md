@@ -453,3 +453,25 @@ history above keep the old name.
   thumbnails go coarse from the start. On that file: all 97 solids in
   97 s with the fine pass alone, 5.5 GB at the peak; the thumbnail has
   94 of 97 in 15 s, the arm the gripper hung from included.
+- **STEP through OpenCASCADE** (09/10): on the same assembly the robot
+  arm grew fins, triangles standing off the part. monstertruck sometimes
+  gets a boundary point's surface parameters wrong, or meshes outside a
+  face's trim, and its triangles then reach across the face; filters on
+  the mesh (normals, points off the surface) took most away but left
+  holes and still one fin, every point of it on the untrimmed surface.
+  The prototype (28/09) had seen them already ("lensmount still has thin
+  spikes"). OpenCASCADE, the kernel FreeCAD and f3d use, meshed the file
+  clean, so it replaces monstertruck: the system's library, linked through
+  a small C++ side (`src/step/occt.cpp`, built by `build.rs` with `cc`),
+  a package dependency rather than something we ship. XCAF reads the
+  assembly and the colors (our STYLED_ITEM scanner went); the parts are
+  healed and meshed a part per core and handed to the same child, wire and
+  passes as before. The healing was 27 of the 33 s of reading, one core:
+  it's turned off in the reader (after `ReadFile`, which sets it back) and
+  run per part instead. On that file: 6 s to read, all 98 parts in 22 s
+  (was 97 s), 1.0M triangles, 1.2 GB at the peak (was 5.5 GB); the
+  thumbnail has 92 of 97 in 15 s. OpenCASCADE's colors are linear, turned
+  back into the file's sRGB. Before 7.8 (Debian 12, Ubuntu 24.04) there's
+  no per-part healing API, so the reader heals on one core there, as
+  before; the `.deb` built on Debian 12 depends on 7.6 and so no longer
+  installs on Debian 13.

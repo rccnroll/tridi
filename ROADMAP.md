@@ -26,9 +26,9 @@ why.
   fine for now). Maybe recognize Open3D's GLBs (its generator string) and
   treat them as Z-up.
 
-- [ ] Which other CAD formats are worth it: IGES first. monstertruck-io
-  has IGES code (`src/iges.rs`, a `cadmpeg-codec-iges` feature), not
-  tried.
+- [ ] Which other CAD formats are worth it: IGES first. OpenCASCADE
+  reads it (`IGESCAFControl_Reader`, colors too), the rest of the STEP
+  path would serve as is.
 
 - [ ] Dolphin (KDE) thumbnails (08/10): KDE ignores `.thumbnailer` files
   (bugs.kde.org 402721) and wants a KIO ThumbnailCreator plugin, C++

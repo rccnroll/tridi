@@ -6,6 +6,12 @@ reproduce. A pull request is welcome for anything already in
 
 ## Build and test
 
+STEP needs OpenCASCADE's headers and libraries, 7.6 or later: `opencascade`
+on Arch and Fedora, `libocct-data-exchange-dev libocct-ocaf-dev
+libocct-modeling-algorithms-dev libocct-modeling-data-dev
+libocct-foundation-dev` on Debian/Ubuntu. Elsewhere, point
+`OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR` at them.
+
     cargo build --release
     cargo run --release -- FILE
     cargo test
@@ -42,9 +48,9 @@ the desktop integration). Dependencies go one way, down this list:
 - `src/formats/` — the point cloud readers, one file per format (pcd, ply,
   off, xyz/xyzrgb/pts). Every byte is untrusted, and nothing here uses the
   rest of tridi, so the fuzz targets include this folder alone.
-- `src/step/` — STEP: the child process with its deadline (`mod.rs`),
-  monstertruck's tessellation and our assemblies (`tessellate.rs`), the
-  colors read from the file (`styles.rs`).
+- `src/step/` — STEP: the child process with its deadline (`mod.rs`), the
+  OpenCASCADE side that reads, heals and meshes the parts (`occt.cpp`,
+  built by `build.rs`), and its Rust end (`tessellate.rs`).
 - `src/model.rs` — what a file is: a cloud, or a mesh (three-d-asset,
   ply/off faces, STEP), and which way is up.
 - `src/color.rs`, `src/theme.rs` — the coloring rules and the two themes.
@@ -62,7 +68,7 @@ the desktop integration). Dependencies go one way, down this list:
   `Cargo.toml`) with their install scripts, and the licenses of the fonts
   egui builds into the binary.
 - `tests/data/` — tiny fixtures: PCD and GLB written by Open3D, STEP by
-  monstertruck.
+  hand.
 - `fuzz/` — cargo-fuzz targets for the readers, and their seeds.
 - `docs/` — `history.md` (how tridi got here, and why) and `media/`, the
   README's screenshots and GIFs.

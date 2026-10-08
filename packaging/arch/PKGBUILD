@@ -7,8 +7,8 @@ pkgdesc='Point cloud and mesh viewer, with file manager thumbnails'
 arch=('x86_64')
 url='https://github.com/rccnroll/tridi'
 license=('MIT OR Apache-2.0' 'OFL-1.1' 'Ubuntu-font-1.0')  # the last two: egui's fonts
-# GL/EGL, Wayland and xkbcommon are dlopened at runtime
-depends=('gcc-libs' 'glibc' 'libglvnd' 'mesa' 'wayland' 'libxkbcommon' 'xdg-utils')
+# GL/EGL, Wayland and xkbcommon are dlopened at runtime; OpenCASCADE reads STEP
+depends=('gcc-libs' 'glibc' 'libglvnd' 'mesa' 'wayland' 'libxkbcommon' 'xdg-utils' 'opencascade')
 makedepends=('cargo' 'git')
 # renamed from pcdview after 2.2.0
 conflicts=('pcdview')

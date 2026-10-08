@@ -1,249 +1,152 @@
-//! The child's work: the STEP file's solids tessellated with monstertruck,
-//! in parallel, each handed on placed where the assembly puts it, as FLOATS
-//! f32 per vertex.
+//! The child's work, done by OpenCASCADE (`occt.cpp`): the STEP file's parts
+//! healed and meshed in parallel, each handed on placed where the assembly
+//! puts it, as FLOATS f32 per vertex.
 
 // ========================================== Imports ========================================== {{{
 
-use monstertruck_assembly::assy::{EdgeEntity, NodeEntity};
-use monstertruck_io::step::load::Table;
-use monstertruck_io::step::load::step_p21::{ast::Name, tables::PlaceHolder};
-use monstertruck_meshing::prelude::*;
-use rayon::ThreadPoolBuilder;
 use std::{
-    fs, io, iter,
-    num::NonZeroUsize,
+    ffi::{CString, c_char, c_int, c_void},
+    fs, io,
+    os::unix::ffi::OsStrExt,
     path::Path,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-    thread,
+    slice,
+    sync::{Mutex, PoisonError},
 };
 
-use crate::{
-    formats::narrow,
-    step::{
-        FLOATS, NONE, Quality, StepError, StepResult,
-        styles::{Colors, Ents, colors, entities, outer_faces},
-    },
-};
+use crate::step::{Quality, StepError, StepResult};
 
 // }}}
 
-// ========================================= Constants ========================================= {{{
+// ============================================ FFI ============================================ {{{
 
-/// Triangles past which a face is the library's blow-up, not the part: on
-/// a real assembly two bicubic B-spline faces came out at 3.7M each, the
-/// rest of their 429-face solid at a few thousand. Left out.
-const FACE_CAP: usize = 100_000;
+/// What `tridi_step_tessellate` returns.
+const OK: c_int = 0;
+const NOT_STEP: c_int = 1;
+const NO_SOLID: c_int = 2;
+
+/// OpenCASCADE's document application is one for the process, and not for
+/// two readers at once (colors came out mixed): one file at a time. The
+/// child reads one anyway; the tests read several.
+static OCCT: Mutex<()> = Mutex::new(());
+
+type IdsFn = unsafe extern "C" fn(*mut c_void, *const u64, usize) -> c_int;
+type PartFn = unsafe extern "C" fn(*mut c_void, u64, *const f32, usize) -> c_int;
+
+unsafe extern "C" {
+    fn tridi_step_tessellate(
+        path: *const c_char,
+        coarse: c_int,
+        only: *const u64,
+        n_only: usize,
+        ctx: *mut c_void,
+        ids: IdsFn,
+        part: PartFn,
+    ) -> c_int;
+}
+
+/// The two callbacks behind the `ctx` pointer, and the first error one of
+/// them returned. `part` runs on several threads at once.
+struct Ctx<I, P> {
+    ids: Mutex<Option<I>>,
+    part: P,
+    err: Mutex<Option<io::Error>>,
+}
+
+impl<I, P> Ctx<I, P> {
+    /// 0 to go on; else the error kept, and nonzero to stop.
+    fn keep(&self, r: io::Result<()>) -> c_int {
+        let Err(e) = r else { return 0 };
+        if let Ok(mut slot) = self.err.lock() {
+            slot.get_or_insert(e);
+        }
+        1
+    }
+}
+
+/// `n` values at `p`; C++ hands a null pointer for none.
+///
+/// # Safety
+/// Unless `n` is 0, `p` points at `n` values alive for `'a`.
+unsafe fn values<'a, T>(p: *const T, n: usize) -> &'a [T] {
+    if n == 0 || p.is_null() {
+        return &[];
+    }
+    // SAFETY: the caller's promise
+    unsafe { slice::from_raw_parts(p, n) }
+}
+
+unsafe extern "C" fn on_ids<I, P>(ctx: *mut c_void, ids: *const u64, n: usize) -> c_int
+where
+    I: FnOnce(&[u64]) -> io::Result<()>,
+{
+    // SAFETY: `ctx` is the Ctx<I, P> tessellate passed, alive for the call
+    let ctx = unsafe { &*ctx.cast::<Ctx<I, P>>() };
+    // SAFETY: C++ hands its id vector, alive for the call
+    let ids = unsafe { values(ids, n) };
+    let f = ctx.ids.lock().ok().and_then(|mut f| f.take());
+    f.map_or(1, |f| ctx.keep(f(ids)))
+}
+
+unsafe extern "C" fn on_part<I, P>(ctx: *mut c_void, id: u64, v: *const f32, n: usize) -> c_int
+where
+    P: Fn(u64, &[f32]) -> io::Result<()> + Sync,
+{
+    // SAFETY: as in on_ids; only `part` and `err` are shared between the
+    // threads, the one Sync, the other a Mutex
+    let ctx = unsafe { &*ctx.cast::<Ctx<I, P>>() };
+    // SAFETY: C++ hands its float vector, alive for the call
+    let v = unsafe { values(v, n) };
+    ctx.keep((ctx.part)(id, v))
+}
 
 // }}}
 
 // ======================================= Tessellation ======================================== {{{
 
-/// `ids` first gets the solids to do: the file's, or those of them in `only`
+/// `ids` first gets the parts to do: the file's, or those of them in `only`
 /// if it isn't empty; then `part` gets each one's id and triangles, at every
-/// place the assembly uses it, as soon as it's done (empty if the library
-/// can't convert it). The solids are spread over the cores: one the library
-/// never finishes holds back only itself.
-pub(crate) fn tessellate(
-    path: &Path,
-    quality: Quality,
-    only: &[u64],
-    ids: impl FnOnce(&[u64]) -> io::Result<()>,
-    part: impl Fn(u64, &[f32]) -> io::Result<()> + Sync,
-) -> StepResult<()> {
-    let raw = fs::read(path).map_err(StepError::Read)?;
-    // names and comments are often Latin-1: the geometry is ASCII either way
-    let text = String::from_utf8_lossy(&raw);
-    #[expect(clippy::map_err_ignore, reason = "see StepError::NotStep")]
-    let table = Table::from_step(&text).map_err(|_| StepError::NotStep)?;
-    let ents = entities(&text);
-    let colors = colors(&ents);
-    let mut jobs = placements(&table);
-    if !only.is_empty() {
-        jobs.retain(|(id, _)| only.contains(id));
-    }
-    if jobs.is_empty() {
-        return Err(StepError::NoSolid);
-    }
-    ids(&jobs.iter().map(|(id, _)| *id).collect::<Vec<_>>()).map_err(StepError::Write)?;
-    let (next, any) = (AtomicUsize::new(0), AtomicBool::new(false));
-    let workers = thread::available_parallelism().map_or(1, NonZeroUsize::get).min(jobs.len());
-    thread::scope(|s| {
-        let handles: Vec<_> = iter::repeat_with(|| {
-            s.spawn(|| {
-                // a pool of its own, one thread: monstertruck parallelizes in
-                // rayon's global pool, where a big solid's faces queued every
-                // small solid behind them (52 of 97 in 13 s, the other 45 at
-                // 100 s); now a slow solid holds back only its worker
-                let pool = ThreadPoolBuilder::new().num_threads(1).build().ok();
-                while let Some((id, at)) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
-                    let mesh = || mesh_item(&table, &ents, &colors, *id, quality);
-                    let v = place(&pool.as_ref().map_or_else(mesh, |p| p.install(mesh)), at);
-                    any.fetch_or(!v.is_empty(), Ordering::Relaxed);
-                    part(*id, &v)?;
-                }
-                Ok(())
-            })
-        })
-        .take(workers)
-        .collect();
-        let mut r = Ok(());
-        for h in handles {
-            // a solid the library panics on is lost, like one it can't
-            // convert; its thread's other solids go to the threads left
-            if let Ok(Err(e)) = h.join() {
-                r = Err(StepError::Write(e));
-            }
-        }
-        r
-    })?;
-    if !any.into_inner() {
-        return Err(StepError::NoSolid);
-    }
-    Ok(())
-}
-
-/// Each solid once, with every placement the assembly gives it; with no
-/// assembly the library understands, every solid where it was modelled.
-fn placements(table: &Table) -> Vec<(u64, Vec<Matrix4>)> {
-    let mut jobs: Vec<(u64, Vec<Matrix4>)> = Vec::new();
-    if let Ok(assy) = table.step_assy() {
-        let assy = assy.map(
-            |n| NodeEntity {
-                shape: n.attrs.shape_representation,
-                attrs: (),
-            },
-            |e| EdgeEntity {
-                matrix: Matrix4::try_from(&e.matrix).unwrap_or(Matrix4::identity()),
-                attrs: (),
-            },
-        );
-        for top in assy.top_nodes() {
-            for p in assy.paths_iter(top.index()) {
-                let Some(rep) = *p.terminal_node().shape() else { continue };
-                for item in solids_of(table, rep) {
-                    match jobs.iter_mut().find(|(id, _)| *id == item) {
-                        Some((_, at)) => at.push(p.matrix()),
-                        None => jobs.push((item, vec![p.matrix()])),
-                    }
-                }
-            }
-        }
-    }
-    if jobs.is_empty() {
-        jobs = (table.manifold_solid_brep.keys().chain(table.shell_based_surface_model.keys()))
-            .map(|&id| (id, vec![Matrix4::identity()]))
-            .collect();
-    }
-    jobs
-}
-
-/// A solid's triangles copied to each of its placements.
-fn place(local: &[f32], at: &[Matrix4]) -> Vec<f32> {
-    let mut out = Vec::with_capacity(local.len() * at.len());
-    for m in at {
-        for &[px, py, pz, nx, ny, nz, red, green, blue] in local.as_chunks::<FLOATS>().0 {
-            let q = m.transform_point(Point3::new(px.into(), py.into(), pz.into()));
-            let n = m.transform_vector(Vector3::new(nx.into(), ny.into(), nz.into())).normalize();
-            out.extend([q.x, q.y, q.z, n.x, n.y, n.z].map(narrow));
-            out.extend([red, green, blue]);
-        }
-    }
-    out
-}
-
-/// The solids of a representation: its own items, and those of the
-/// representations tied to it without a transform (a product's
-/// `SHAPE_REPRESENTATION` often holds only a placement, and its brep sits in
-/// an `ADVANCED_BREP_SHAPE_REPRESENTATION` linked by a relationship).
-fn solids_of(table: &Table, rep: u64) -> Vec<u64> {
-    let (mut todo, mut seen, mut found) = (vec![rep], vec![rep], Vec::new());
-    while let Some(r) = todo.pop() {
-        if let Some(sr) = table.shape_representation.get(&r) {
-            for item in &sr.items {
-                if let PlaceHolder::Ref(Name::Entity(id)) = item
-                    && (table.manifold_solid_brep.contains_key(id) || table.shell_based_surface_model.contains_key(id))
-                {
-                    found.push(*id);
-                }
-            }
-        }
-        #[expect(
-            clippy::iter_over_hash_type,
-            reason = "the order only changes the order of the triangles, not the mesh"
-        )]
-        for srr in table.shape_representation_relationship.values() {
-            let (PlaceHolder::Ref(Name::Entity(a)), PlaceHolder::Ref(Name::Entity(b))) = (&srr.rep_1, &srr.rep_2) else {
-                continue;
-            };
-            let other = if *a == r {
-                *b
-            } else if *b == r {
-                *a
-            } else {
-                continue;
-            };
-            if !seen.contains(&other) {
-                seen.push(other);
-                todo.push(other);
-            }
-        }
-    }
-    found
-}
-
-/// Triangles of one `MANIFOLD_SOLID_BREP` or `SHELL_BASED_SURFACE_MODEL`, in its
-/// own coordinates; empty if the library can't convert it. A face takes its
-/// own color, else the solid's.
-fn mesh_item(table: &Table, ents: &Ents, colors: &Colors, id: u64, quality: Quality) -> Vec<f32> {
-    let shells = if let Some(s) = table.manifold_solid_brep.get(&id) {
-        table.to_compressed_solid(s).map(|s| s.boundaries).unwrap_or_default()
-    } else if let Some(s) = table.shell_based_surface_model.get(&id) {
-        table.to_compressed_shells(s).unwrap_or_default()
-    } else {
-        Vec::new()
+/// place the assembly uses it, as soon as it's done (empty if OpenCASCADE
+/// can't mesh it), from several threads. A part's ids are its rank in the
+/// file's assembly, the same on every run.
+pub(crate) fn tessellate<I, P>(path: &Path, quality: Quality, only: &[u64], ids: I, part: P) -> StepResult<()>
+where
+    I: FnOnce(&[u64]) -> io::Result<()>,
+    P: Fn(u64, &[f32]) -> io::Result<()> + Sync,
+{
+    // OpenCASCADE tells a missing file from a bad one only on its console
+    fs::File::open(path).map_err(StepError::Read)?;
+    let c_path = CString::new(path.as_os_str().as_bytes()).map_err(|e| StepError::Read(io::Error::other(e)))?;
+    let ctx = Ctx {
+        ids: Mutex::new(Some(ids)),
+        part,
+        err: Mutex::new(None),
     };
-    let solid = colors.get(&id).copied().unwrap_or(NONE);
-    // the outer shell's faces as the file lists them: the library keeps their
-    // order but drops the ones it can't read, so they line up only if none was
-    let listed = outer_faces(ents, id);
-    let mut out = Vec::new();
-    for (k, shell) in shells.into_iter().enumerate() {
-        let bbox: BoundingBox<Point3> = shell.vertices.iter().collect();
-        let tri = match quality {
-            Quality::Fine => shell.robust_triangulation(f64::max(bbox.diameter() * 0.001, TOLERANCE)),
-            Quality::Coarse => shell.triangulation(f64::max(bbox.diameter() * 0.01, TOLERANCE)),
-        };
-        let aligned = k == 0 && listed.len() == tri.faces.len();
-        for (i, face) in tri.faces.iter().enumerate() {
-            let Some(surface) = &face.surface else { continue };
-            if surface.faces().len() > FACE_CAP {
-                continue;
-            }
-            let poly = if face.orientation { surface.clone() } else { surface.inverse() };
-            let own = || colors.get(<[u64]>::get(&listed, i)?);
-            let color = aligned.then(own).flatten().copied().unwrap_or(solid);
-            let (positions, normals) = (poly.positions(), poly.normals());
-            for corners in poly.faces().triangle_iter() {
-                // the library's indices point into its own arrays; `<[_]>::get`,
-                // because the prelude brings a trait with a `get` of its own
-                let [Some(&a), Some(&b), Some(&c)] = corners.map(|v| <[_]>::get(positions, v.pos)) else {
-                    continue;
-                };
-                // a degenerate triangle shows nothing, and has no normal
-                let cross = (b - a).cross(c - a);
-                if cross.magnitude2() <= 0.0 {
-                    continue;
-                }
-                let flat = cross.normalize();
-                for (v, at) in corners.iter().zip([a, b, c]) {
-                    let normal = v.nor.and_then(|i| <[_]>::get(normals, i)).copied().unwrap_or(flat);
-                    out.extend([at.x, at.y, at.z, normal.x, normal.y, normal.z].map(narrow));
-                    out.extend(color);
-                }
-            }
-        }
+    let _one = OCCT.lock().unwrap_or_else(PoisonError::into_inner);
+    // SAFETY: every pointer outlives the call, which returns only once its
+    // threads are done; the callbacks are the ones for this Ctx's types
+    let status = unsafe {
+        tridi_step_tessellate(
+            c_path.as_ptr(),
+            c_int::from(quality == Quality::Coarse),
+            only.as_ptr(),
+            only.len(),
+            (&raw const ctx).cast_mut().cast(),
+            on_ids::<I, P>,
+            on_part::<I, P>,
+        )
+    };
+    match status {
+        OK => Ok(()),
+        NOT_STEP => Err(StepError::NotStep),
+        NO_SOLID => Err(StepError::NoSolid),
+        _ => Err(StepError::Write(
+            ctx.err
+                .into_inner()
+                .ok()
+                .flatten()
+                .unwrap_or_else(|| io::Error::other("a callback failed")),
+        )),
     }
-    out
 }
 
 // }}}

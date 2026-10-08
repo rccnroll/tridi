@@ -1,13 +1,12 @@
-//! STEP (.step/.stp) through monstertruck. Tessellation runs in a child
-//! process, `tridi step-mesh IN`, that hands back each solid as it's done
-//! and is killed once none has come for a while: the library can take
-//! minutes on a solid, and may never finish one, while its memory grows (a
-//! thread can't be stopped, a process can). A panic stays in the child too.
-//! The solids the fine pass didn't hand back get a second, coarse one.
+//! STEP (.step/.stp) through the system's OpenCASCADE. Tessellation runs in
+//! a child process, `tridi step-mesh IN`, that hands back each part as it's
+//! done and is killed once none has come for a while: a part can take long
+//! to heal, a crash in C++ or a runaway memory stays in the child (a thread
+//! can't be stopped, a process can). The parts the fine pass didn't hand
+//! back get a second, coarse one.
 
 // ======================================== Sub-modules ======================================== {{{
 
-mod styles;
 mod tessellate;
 
 // }}}
@@ -33,12 +32,12 @@ use crate::step::tessellate::tessellate;
 
 // ========================================= Constants ========================================= {{{
 
-/// The wait for the child to parse the file and list its solids: an 84 MB
-/// assembly takes 7 s.
+/// The wait for the child to read the file and list its parts: an 84 MB
+/// assembly takes 6 s.
 const PARSE: Duration = Duration::from_secs(60);
 
-// ponytail: a guess, slow and stuck look the same from here. On an 84 MB assembly the fine pass
-// goes up to 31 s between two solids, and has all 97 in 97 s
+// ponytail: a guess, slow and stuck look the same from here. On an 84 MB assembly the slowest
+// part takes 15 s, and all 98 come in 22 s
 const IDLE: Duration = Duration::from_secs(60);
 
 /// A thumbnail's wait for the solids: the file manager waits on us.
@@ -46,9 +45,6 @@ const THUMB_BUDGET: Duration = Duration::from_secs(15);
 
 /// A vertex on the wire: position, normal, color.
 pub(crate) const FLOATS: usize = 9;
-
-/// The color of a face the file gives none: negative, as no real color is.
-pub(crate) const NONE: [f32; 3] = [-1.0; 3];
 
 // }}}
 
@@ -91,9 +87,8 @@ pub enum Purpose {
     Thumbnail,
 }
 
-/// How the child tessellates. Fine is monstertruck's robust triangulation
-/// at 0.1% of a shell's size; it hangs on some solids where the plain one
-/// at 1%, Coarse, doesn't.
+/// How the child tessellates: chords within 0.1% of a part's size, or
+/// 0.5% for Coarse (`occt.cpp`), the fallback and the thumbnail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Quality {
     Fine,
@@ -298,7 +293,7 @@ fn decode(bytes: &[u8], grey: [f32; 3]) -> TriMesh {
     for &[px, py, pz, nx, ny, nz, red, green, blue] in f.as_chunks::<FLOATS>().0 {
         pos.push(Vec3::new(px, py, pz));
         nor.push(Vec3::new(nx, ny, nz));
-        // NONE is negative, a real color 0..1
+        // a face the file gives no color comes negative, a real color 0..1
         let own = red >= 0.0;
         colored |= own;
         let [r, g, b] = if own { [red, green, blue] } else { grey };
@@ -361,7 +356,7 @@ fn write_solid(w: &mut impl Write, id: u64, v: &[f32]) -> io::Result<()> {
 mod tests {
     use super::*;
     use crate::test_support::tmp;
-    use std::sync::Mutex;
+    use std::{fs, sync::Mutex};
 
     // the child and the wire, not the process: `load` runs current_exe,
     // which under cargo test is the test binary; the process and the
@@ -438,6 +433,29 @@ mod tests {
         assert_eq!(c.iter().filter(|&&x| x == green).count(), 6, "one face, two triangles");
         assert_eq!(c.iter().filter(|&&x| x == red).count(), 30);
         assert!(mesh("cube.step").colors.is_none());
+    }
+
+    // the file's values, not OpenCASCADE's linear ones (0.5 would be 0.214)
+    #[test]
+    fn colors_as_in_file() {
+        let src = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/colors.step")).unwrap();
+        let grey = src.replace("COLOUR_RGB('red, with a comma', 1., 0.E+00, 0.)", "COLOUR_RGB('', 0.5, 0.5, 0.5)");
+        assert_ne!(grey, src, "the fixture's red is where the test expects it");
+        let f = tmp("grey.step", grey.as_bytes());
+        let got = Mutex::new(Vec::new());
+        tessellate(
+            &f,
+            Quality::Fine,
+            &[],
+            |_| Ok(()),
+            |_, v| {
+                got.lock().unwrap().extend_from_slice(v);
+                Ok(())
+            },
+        )
+        .unwrap();
+        let got = got.into_inner().unwrap();
+        assert!(got.chunks(FLOATS).any(|v| v[6..9].iter().all(|c| (c - 0.5).abs() < 1e-3)));
     }
 
     // the fallback for the solids the fine pass misses: the same cube
