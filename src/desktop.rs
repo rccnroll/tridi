@@ -83,7 +83,7 @@ pub fn current() -> &'static Theme {
 pub fn refresh() {
     let theme = current();
     if let Some(ovr) = override_file()
-        && fs::read_to_string(&ovr).is_ok_and(|s| s != entry(theme))
+        && fs::read_to_string(&ovr).is_ok_and(|s| s != entry(theme, &program()))
     {
         if let Err(e) = install(theme) {
             warn!("cannot update the thumbnailer entry: {e:#}");
@@ -98,7 +98,7 @@ pub fn refresh() {
 /// the thumbnailer entry, and tridi as the default app for our types.
 fn install(theme: &Theme) -> eyre::Result<()> {
     let ovr = override_file().ok_or_eyre("no $HOME")?;
-    write(&ovr, &entry(theme))?;
+    write(&ovr, &entry(theme, &program()))?;
     let types = DESKTOP.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or("");
     let ok = Command::new("xdg-mime")
         .args(["default", "io.github.rccnroll.tridi.desktop"])
@@ -111,12 +111,25 @@ fn install(theme: &Theme) -> eyre::Result<()> {
     Ok(())
 }
 
-/// The package's entry, with `--theme dark` added for the dark theme.
-fn entry(theme: &Theme) -> String {
+/// The tridi the user's entry runs: the first on `PATH`, a path that
+/// survives upgrades (/usr/bin/tridi, NixOS's /run/current-system/sw/bin/tridi)
+/// where `current_exe` would give a versioned one under /nix/store.
+fn program() -> PathBuf {
+    env::var_os("PATH")
+        .and_then(|p| env::split_paths(&p).map(|d| d.join("tridi")).find(|f| f.is_file()))
+        .or_else(|| env::current_exe().ok())
+        .unwrap_or_else(|| PathBuf::from("/usr/bin/tridi"))
+}
+
+/// The package's entry running `program`, with `--theme dark` added for the
+/// dark theme.
+// ponytail: a path with spaces breaks Exec=; quote it if someone installs there
+fn entry(theme: &Theme, program: &Path) -> String {
+    let e = ENTRY.replace("/usr/bin/tridi", &program.to_string_lossy());
     if theme.name == "dark" {
-        ENTRY.replace(" thumb %i", " thumb --theme dark %i")
+        e.replace(" thumb %i", " thumb --theme dark %i")
     } else {
-        ENTRY.to_owned()
+        e
     }
 }
 
@@ -242,11 +255,24 @@ mod tests {
 
     #[test]
     fn dark_entry_only_adds_the_theme() {
-        assert_eq!(entry(&LIGHT), ENTRY);
-        let d = entry(&DARK);
+        let usr = Path::new("/usr/bin/tridi");
+        assert_eq!(entry(&LIGHT, usr), ENTRY);
+        let d = entry(&DARK, usr);
         assert!(d.contains("Exec=/usr/bin/tridi thumb --theme dark %i %o %s"), "{d}");
         let mime = |s: &str| s.lines().find(|l| l.starts_with("MimeType=")).map(str::to_owned);
         assert_eq!(mime(&d), mime(ENTRY));
+    }
+
+    // NixOS: the package's /usr/bin path doesn't exist there
+    #[test]
+    fn entry_runs_the_installed_tridi() {
+        let d = entry(&DARK, Path::new("/run/current-system/sw/bin/tridi"));
+        assert!(d.contains("TryExec=/run/current-system/sw/bin/tridi\n"), "{d}");
+        assert!(
+            d.contains("Exec=/run/current-system/sw/bin/tridi thumb --theme dark %i %o %s"),
+            "{d}"
+        );
+        assert!(!d.contains("/usr/bin"), "{d}");
     }
 }
 
