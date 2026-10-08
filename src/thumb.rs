@@ -1,10 +1,11 @@
 //! `tridi thumb IN OUT SIZE`: what Nautilus runs, inside its sandbox.
 
+use eyre::WrapErr;
 use std::path::Path;
 use std::time::Instant;
 use tridi::{Input, Item, Scene, Theme};
 
-pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> Result<(), String> {
+pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()> {
     let t0 = Instant::now();
     // Nautilus's sandbox clears the environment: without this glvnd would
     // also load NVIDIA's EGL, even for a user who limited it to Mesa
@@ -13,7 +14,7 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> Result<(), Strin
         // SAFETY: single-threaded, and before EGL is loaded
         unsafe { std::env::set_var("__EGL_VENDOR_LIBRARY_FILENAMES", mesa) };
     }
-    let input = match tridi::load(Path::new(inp), theme.mesh).map_err(|e| format!("{inp}: {e}"))? {
+    let input = match tridi::load(Path::new(inp), theme.mesh).wrap_err_with(|| inp.to_owned())? {
         Item::Cloud(c) => {
             let colors = tridi::colorize(&c, None, theme);
             Input::Points(c.points, colors)
@@ -23,8 +24,8 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> Result<(), Strin
     let (ctx, _keep) = tridi::headless()?;
     // no axis triad: at thumbnail size it's only noise
     let scene = Scene::new(&ctx, vec![input], false, tridi::up_for(tridi::is_gltf(Path::new(inp))))?;
-    let img = tridi::offscreen(&ctx, &scene, size, theme.bg)?;
-    image::save_buffer(out, &img, size, size, image::ExtendedColorType::Rgba8).map_err(|e| e.to_string())?;
+    let img = tridi::offscreen(&ctx, &scene, size, theme.bg);
+    image::save_buffer(out, &img, size, size, image::ExtendedColorType::Rgba8).wrap_err_with(|| format!("cannot write {out}"))?;
     if std::env::var_os("TRIDI_TIMING").is_some() {
         eprintln!("thumb {:?}", t0.elapsed());
     }

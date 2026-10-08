@@ -3,6 +3,8 @@
 use std::sync::Arc;
 use three_d::{Context, context};
 
+use crate::render::{RenderError, RenderResult};
+
 /// Runs `f` with stderr closed. Mesa prints `pci id for fd N: 10de:…, driver
 /// (null)` for every GPU node it has no driver for (the NVIDIA one) while
 /// EGL starts, before any of its log settings apply. Real failures still come
@@ -29,16 +31,21 @@ pub fn quiet_stderr<T>(f: impl FnOnce() -> T) -> T {
 
 /// GL context with no window and no display: EGL device + surfaceless.
 /// The second value keeps the EGL context and display alive.
-pub fn headless() -> Result<(Context, impl Sized), String> {
+pub fn headless() -> RenderResult<(Context, impl Sized)> {
     quiet_stderr(open_headless)
 }
 
-fn open_headless() -> Result<(Context, impl Sized), String> {
+fn open_headless() -> RenderResult<(Context, impl Sized)> {
     use glutin::api::egl::{device::Device, display::Display};
     use glutin::config::{ConfigSurfaceTypes, ConfigTemplateBuilder};
     use glutin::context::{ContextApi, ContextAttributesBuilder, Version};
     use glutin::prelude::*;
-    let devs: Vec<Device> = Device::query_devices().map_err(|e| e.to_string())?.collect();
+    let devs: Vec<Device> = Device::query_devices()
+        .map_err(|source| RenderError::Egl {
+            step: "list the devices",
+            source,
+        })?
+        .collect();
     let software = |d: &Device| d.extensions().contains("EGL_MESA_device_software");
     // a GPU with a name that isn't NVIDIA (waking the dGPU costs ~2.7 s),
     // else llvmpipe; a device without a name is a node Mesa has no driver for
@@ -51,27 +58,39 @@ fn open_headless() -> Result<(Context, impl Sized), String> {
         Some(i) => devs.get(i),
         None => devs.iter().find(|d| gpu(d)).or(devs.iter().find(|d| software(d))),
     }
-    .ok_or("no usable EGL device")?;
+    .ok_or(RenderError::NoDevice)?;
     if std::env::var_os("TRIDI_DEBUG").is_some() {
         for (i, d) in devs.iter().enumerate() {
             let tag = if std::ptr::eq(d, dev) { "  <- used" } else { "" };
             eprintln!("egl device {i}: {:?} {:?} software={}{tag}", d.vendor(), d.name(), software(d));
         }
     }
-    let display = unsafe { Display::with_device(dev, None) }.map_err(|e| e.to_string())?;
+    let display = unsafe { Display::with_device(dev, None) }.map_err(|source| RenderError::Egl {
+        step: "open the display",
+        source,
+    })?;
     let tmpl = ConfigTemplateBuilder::new().with_surface_type(ConfigSurfaceTypes::empty()).build();
     let config = unsafe { display.find_configs(tmpl) }
-        .map_err(|e| e.to_string())?
+        .map_err(|source| RenderError::Egl {
+            step: "list the configs",
+            source,
+        })?
         .next()
-        .ok_or("no EGL config")?;
+        .ok_or(RenderError::NoConfig)?;
     let attrs = ContextAttributesBuilder::new()
         .with_context_api(ContextApi::OpenGl(Some(Version::new(3, 3))))
         .build(None);
     let gl_ctx = unsafe { display.create_context(&config, &attrs) }
-        .map_err(|e| e.to_string())?
+        .map_err(|source| RenderError::Egl {
+            step: "create a context",
+            source,
+        })?
         .make_current_surfaceless()
-        .map_err(|e| e.to_string())?;
+        .map_err(|source| RenderError::Egl {
+            step: "make the context current",
+            source,
+        })?;
     let gl = unsafe { context::Context::from_loader_function_cstr(|s| display.get_proc_address(s)) };
-    let ctx = Context::from_gl_context(Arc::new(gl)).map_err(|e| e.to_string())?;
+    let ctx = Context::from_gl_context(Arc::new(gl)).map_err(|source| RenderError::Gl { step: "load GL", source })?;
     Ok((ctx, (gl_ctx, display)))
 }

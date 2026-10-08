@@ -3,6 +3,8 @@
 
 use three_d::*;
 
+use crate::render::{RenderError, RenderResult};
+
 const VS: &str = "
 uniform mat4 mvp;
 uniform float psize;
@@ -100,7 +102,7 @@ pub enum Input {
 impl Scene {
     /// With `axes`, the triad sits at the min corner of the bbox (size 20% of
     /// the largest extent, like 1.0).
-    pub fn new(ctx: &Context, inputs: Vec<Input>, axes: bool, up: Vec3) -> Result<Scene, String> {
+    pub fn new(ctx: &Context, inputs: Vec<Input>, axes: bool, up: Vec3) -> RenderResult<Scene> {
         let mut bb = AxisAlignedBoundingBox::EMPTY;
         let mut layers = vec![];
         for i in inputs {
@@ -114,7 +116,7 @@ impl Scene {
                     }
                 }
                 Input::Mesh(m) => {
-                    let model = Model::<PhysicalMaterial>::new(ctx, &m).map_err(|e| e.to_string())?;
+                    let model = Model::<PhysicalMaterial>::new(ctx, &m).map_err(RenderError::Mesh)?;
                     for part in model.iter() {
                         bb.expand_with_aabb(part.aabb());
                     }
@@ -139,8 +141,14 @@ impl Scene {
         unsafe { ctx.enable(context::PROGRAM_POINT_SIZE) };
         Ok(Scene {
             ctx: ctx.clone(),
-            program: Program::from_source(ctx, VS, FS).map_err(|e| e.to_string())?,
-            edl: Program::from_source(ctx, EDL_VS, EDL_FS).map_err(|e| e.to_string())?,
+            program: Program::from_source(ctx, VS, FS).map_err(|source| RenderError::Gl {
+                step: "build the point shader",
+                source,
+            })?,
+            edl: Program::from_source(ctx, EDL_VS, EDL_FS).map_err(|source| RenderError::Gl {
+                step: "build the eye-dome shader",
+                source,
+            })?,
             edl_targets: Default::default(),
             edl_tri: VertexBuffer::new_with_data(ctx, &[vec2(0.0, 0.0), vec2(2.0, 0.0), vec2(0.0, 2.0)]),
             visible: vec![true; layers.len()],

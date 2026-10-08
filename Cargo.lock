@@ -761,6 +761,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "eyre"
+version = "0.6.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c08309dbcc659c5549a24ddb9b27027640641b282ef5768267c7e675558986a3"
+dependencies = [
+ "autocfg",
+ "indenter",
+ "once_cell",
+]
+
+[[package]]
 name = "fdeflate"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1082,6 +1093,12 @@ dependencies = [
  "zune-core",
  "zune-jpeg",
 ]
+
+[[package]]
+name = "indenter"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "964de6e86d545b246d84badc0fef527924ace5134f30641c203ef52ba83f58d5"
 
 [[package]]
 name = "indexmap"
@@ -2768,6 +2785,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "clap_mangen",
+ "eyre",
  "glutin",
  "glutin-winit",
  "image",
@@ -2775,6 +2793,7 @@ dependencies = [
  "monstertruck-assembly",
  "monstertruck-io",
  "monstertruck-meshing",
+ "thiserror 2.0.21",
  "three-d",
  "three-d-asset",
  "winit",

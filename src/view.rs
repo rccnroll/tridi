@@ -1,6 +1,7 @@
 //! The window: the files loaded, mouse navigation, the keys, and the legend
 //! and keys panels drawn by egui.
 
+use eyre::{OptionExt, WrapErr, eyre};
 use std::path::Path;
 use std::time::Instant;
 use three_d::*;
@@ -36,7 +37,7 @@ fn load_all(paths: &[String], theme: &Theme) -> Option<(Vec<Input>, Vec<File>, V
         let item = match tridi::load(path, theme.mesh) {
             Ok(it) => it,
             Err(e) => {
-                eprintln!("[tridi] {name}: {e}");
+                eprintln!("[tridi] {name}: {:#}", eyre::Report::new(e));
                 continue;
             }
         };
@@ -113,8 +114,9 @@ fn navigate(cam: &mut Camera, events: &mut [Event], dpr: f32, min: f32, max: f32
     }
 }
 
-pub fn view(paths: &[String], theme: &'static Theme) -> Result<(), String> {
-    let (inputs, files, up) = load_all(paths, theme).ok_or("")?;
+pub fn view(paths: &[String], theme: &'static Theme) -> eyre::Result<()> {
+    // each file that failed was reported as it was read
+    let (inputs, files, up) = load_all(paths, theme).ok_or_eyre("no file could be opened")?;
     if files.len() > 1 {
         let keys: Vec<String> = files
             .iter()
@@ -124,7 +126,7 @@ pub fn view(paths: &[String], theme: &'static Theme) -> Result<(), String> {
             .collect();
         println!("keys: {}", keys.join(", "));
     }
-    let event_loop = winit::event_loop::EventLoop::new().map_err(|e| format!("no display: {e}"))?;
+    let event_loop = winit::event_loop::EventLoop::new().wrap_err("no display")?;
     let legend = files.len() > 1;
     let mut v = Viewer {
         files,
@@ -140,7 +142,7 @@ pub fn view(paths: &[String], theme: &'static Theme) -> Result<(), String> {
         button: None,
         mods: Modifiers::default(),
     };
-    event_loop.run_app(&mut v).map_err(|e| e.to_string())?;
+    event_loop.run_app(&mut v).wrap_err("the window's event loop failed")?;
     v.err.map_or(Ok(()), Err)
 }
 
@@ -172,7 +174,8 @@ struct Viewer {
     inputs: Option<Vec<Input>>,
     up: Vec3,
     gl: Option<Gl>,
-    err: Option<String>,
+    /// what closed the window, if not the user
+    err: Option<eyre::Report>,
     psize: f32,
     /// I: the legend, on from the start with several files
     legend: bool,
@@ -185,7 +188,7 @@ struct Viewer {
 }
 
 impl Viewer {
-    fn open(&mut self, el: &winit::event_loop::ActiveEventLoop) -> Result<Gl, String> {
+    fn open(&mut self, el: &winit::event_loop::ActiveEventLoop) -> eyre::Result<Gl> {
         use glutin::display::GetGlDisplay;
         use glutin::prelude::*;
         use glutin_winit::GlWindow;
@@ -205,21 +208,24 @@ impl Viewer {
                 .with_window_attributes(Some(attrs))
                 .build(el, tmpl, |cs| cs.max_by_key(|c| c.num_samples().min(4)).expect("no GL config"))
         })
-        .map_err(|e| e.to_string())?;
-        let window = window.ok_or("no window")?;
+        // glutin-winit's error is a Box<dyn Error> without Send: keep its text
+        .map_err(|e| eyre!("cannot open the window: {e}"))?;
+        let window = window.ok_or_eyre("cannot open the window")?;
         let display = config.display();
-        let handle = window.window_handle().map_err(|e| e.to_string())?.as_raw();
+        let handle = window.window_handle().wrap_err("no window handle")?.as_raw();
         let attrs = glutin::context::ContextAttributesBuilder::new().build(Some(handle));
-        let sattrs = window.build_surface_attributes(Default::default()).map_err(|e| e.to_string())?;
+        let sattrs = window.build_surface_attributes(Default::default()).wrap_err("no surface")?;
         let (ctx, surface) = unsafe {
-            let ctx = display.create_context(&config, &attrs).map_err(|e| e.to_string())?;
-            let surface = display.create_window_surface(&config, &sattrs).map_err(|e| e.to_string())?;
-            (ctx.make_current(&surface).map_err(|e| e.to_string())?, surface)
+            let ctx = display.create_context(&config, &attrs).wrap_err("cannot create the GL context")?;
+            let surface = display
+                .create_window_surface(&config, &sattrs)
+                .wrap_err("cannot create the GL surface")?;
+            (ctx.make_current(&surface).wrap_err("cannot make the GL context current")?, surface)
         };
         let vsync = glutin::surface::SwapInterval::Wait(std::num::NonZeroU32::MIN);
         surface.set_swap_interval(&ctx, vsync).ok();
         let gl = unsafe { context::Context::from_loader_function_cstr(|s| display.get_proc_address(s)) };
-        let context = Context::from_gl_context(std::sync::Arc::new(gl)).map_err(|e| e.to_string())?;
+        let context = Context::from_gl_context(std::sync::Arc::new(gl)).wrap_err("cannot load GL")?;
         if std::env::var_os("TRIDI_DEBUG").is_some() {
             eprintln!("GL: {}", unsafe { context.get_parameter_string(context::RENDERER) });
         }
@@ -426,7 +432,7 @@ impl winit::application::ApplicationHandler for Viewer {
                     gl.window.request_redraw();
                 }
                 if let Err(e) = gl.surface.swap_buffers(&gl.ctx) {
-                    self.err = Some(e.to_string());
+                    self.err = Some(eyre::Report::new(e).wrap_err("cannot show the frame"));
                     el.exit();
                 }
                 return;

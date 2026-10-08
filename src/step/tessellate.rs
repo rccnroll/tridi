@@ -9,15 +9,16 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::step::{
-    FLOATS, NONE,
+    FLOATS, NONE, StepError, StepResult,
     styles::{Ents, colors, entities, outer_faces},
 };
 
-pub(crate) fn tessellate(path: &Path) -> Result<Vec<f32>, String> {
-    let raw = std::fs::read(path).map_err(|e| e.to_string())?;
+pub(crate) fn tessellate(path: &Path) -> StepResult<Vec<f32>> {
+    let raw = std::fs::read(path).map_err(StepError::Io)?;
     // names and comments are often Latin-1: the geometry is ASCII either way
     let text = String::from_utf8_lossy(&raw);
-    let table = Table::from_step(&text).map_err(|e| format!("not a STEP file: {e:?}"))?;
+    #[expect(clippy::map_err_ignore, reason = "see StepError::NotStep")]
+    let table = Table::from_step(&text).map_err(|_| StepError::NotStep)?;
     let ents = entities(&text);
     let colors = colors(&ents);
     let mut out = Vec::new();
@@ -57,7 +58,7 @@ pub(crate) fn tessellate(path: &Path) -> Result<Vec<f32>, String> {
         }
     }
     if out.is_empty() {
-        return Err("no solid in the STEP file could be read".into());
+        return Err(StepError::NoSolid);
     }
     Ok(out)
 }

@@ -3,9 +3,14 @@
 
 use three_d::vec3;
 
-use crate::formats::{Cloud, Field, scalar, split_header};
+use crate::formats::{Cloud, Field, FormatError, FormatResult, scalar, split_header};
 
-pub(crate) fn read(raw: &[u8]) -> Result<Cloud, String> {
+pub(crate) fn read(raw: &[u8]) -> FormatResult<Cloud> {
+    parse(raw).map_err(|reason| FormatError::Invalid { format: "PLY", reason })
+}
+
+/// The reader proper; the error is the reason the file is invalid.
+fn parse(raw: &[u8]) -> Result<Cloud, String> {
     if !raw.starts_with(b"ply") {
         return Err("not a PLY file".into());
     }

@@ -13,8 +13,8 @@ mod test_support;
 mod theme;
 
 pub use color::{colorize, own_colors};
-pub use formats::{Cloud, load_cloud, parse_cloud};
-pub use model::{Item, is_gltf, load, triangles, up_for};
-pub use render::{FOV, Input, Scene, headless, offscreen, quiet_stderr};
-pub use step::mesh_to_stdout as step_mesh_to_stdout;
+pub use formats::{Cloud, FormatError, FormatResult, load_cloud, parse_cloud};
+pub use model::{Item, LoadError, LoadResult, is_gltf, load, triangles, up_for};
+pub use render::{FOV, Input, RenderError, RenderResult, Scene, headless, offscreen, quiet_stderr};
+pub use step::{StepError, StepResult, mesh_to_stdout as step_mesh_to_stdout};
 pub use theme::{DARK, LIGHT, THEMES, Theme};

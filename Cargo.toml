@@ -29,6 +29,8 @@ winit = "0.30"
 clap = { version = "4.6.7", features = ["derive"] }
 clap_mangen = "0.3.3"
 clap_complete = "4.6.11"
+thiserror = "2"
+eyre = "0.6"
 
 [profile.release]
 strip = true

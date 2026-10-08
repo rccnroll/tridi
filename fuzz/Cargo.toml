@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 three-d = { version = "0.19", default-features = false }
+thiserror = "2"
 
 # its own workspace: the fuzz build (nightly, sanitizers) stays out of tridi's
 [workspace]

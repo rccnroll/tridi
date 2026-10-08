@@ -7,7 +7,7 @@ use crate::render::Scene;
 /// Renders `scene` to a size×size RGBA image, top row first. Drawn at twice
 /// the size and averaged down 2×2: anti-aliasing for points too, which MSAA
 /// doesn't smooth.
-pub fn offscreen(ctx: &Context, scene: &Scene, size: u32, bg: [f32; 3]) -> Result<Vec<u8>, String> {
+pub fn offscreen(ctx: &Context, scene: &Scene, size: u32, bg: [f32; 3]) -> Vec<u8> {
     let big = size * 2;
     let color = Texture2D::new_empty::<[u8; 4]>(
         ctx,
@@ -39,7 +39,7 @@ pub fn offscreen(ctx: &Context, scene: &Scene, size: u32, bg: [f32; 3]) -> Resul
             }
         }
     }
-    Ok(out)
+    out
 }
 
 #[cfg(test)]
@@ -60,7 +60,7 @@ mod tests {
         pts.extend((0..20).map(|i| vec3(0.0, 0.0, i as f32 / 20.0)));
         let cols = vec![vec3(0.0, 0.0, 0.0); pts.len()];
         let scene = Scene::new(&ctx, vec![Input::Points(pts, cols)], false, Vec3::unit_z()).unwrap();
-        let img = offscreen(&ctx, &scene, 64, [1.0, 1.0, 1.0]).unwrap();
+        let img = offscreen(&ctx, &scene, 64, [1.0, 1.0, 1.0]);
         assert_eq!(img.len(), 64 * 64 * 4);
         let dark = |rows: &[u8]| rows.chunks(4).filter(|p| p[0] < 128).count();
         let (top, bottom) = img.split_at(img.len() / 2);

@@ -7,9 +7,31 @@ use three_d::{CpuMaterial, CpuModel, Srgba, Vec3};
 use three_d_asset::{Geometry, Indices, Positions, Primitive, TriMesh};
 
 use crate::{
-    formats::{Cloud, load_cloud},
-    step,
+    formats::{Cloud, FormatError, load_cloud},
+    step::{self, StepError},
 };
+
+/// Why a file couldn't be opened.
+#[derive(Debug, thiserror::Error)]
+pub enum LoadError {
+    #[error(transparent)]
+    Format(#[from] FormatError),
+    #[error(transparent)]
+    Step(#[from] StepError),
+    #[error("not a valid .{ext} file")]
+    Asset {
+        ext: String,
+        #[source]
+        source: three_d_asset::Error,
+    },
+    /// three-d-asset panicked on it (a .obj that isn't UTF-8, for one).
+    #[error("not a valid .{ext} file")]
+    Panicked { ext: String },
+    #[error("no mesh read")]
+    NoMesh,
+}
+
+pub type LoadResult<T> = Result<T, LoadError>;
 
 /// A file read: a cloud to color, or a mesh ready for the GPU.
 pub enum Item {
@@ -18,7 +40,7 @@ pub enum Item {
 }
 
 /// `grey` is the color of meshes without a material (the theme's).
-pub fn load(path: &Path, grey: [f32; 3]) -> Result<Item, String> {
+pub fn load(path: &Path, grey: [f32; 3]) -> LoadResult<Item> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let mut model = match ext.as_str() {
         "glb" | "gltf" | "obj" | "stl" => load_asset(path, &ext)?,
@@ -32,7 +54,7 @@ pub fn load(path: &Path, grey: [f32; 3]) -> Result<Item, String> {
         }
     };
     if triangles(&model) == 0 {
-        return Err(format!("no mesh read from {}", path.display()));
+        return Err(LoadError::NoMesh);
     }
     // a primitive without a material would be white on white: give it the grey
     let slot = model.materials.len();
@@ -91,13 +113,17 @@ pub fn up_for(gltf: bool) -> Vec3 {
     if gltf { Vec3::unit_y() } else { Vec3::unit_z() }
 }
 
-fn load_asset(path: &Path, ext: &str) -> Result<CpuModel, String> {
-    let mut raw = three_d_asset::io::load(&[path]).map_err(|e| e.to_string())?;
+fn load_asset(path: &Path, ext: &str) -> LoadResult<CpuModel> {
+    let asset = |source| LoadError::Asset {
+        ext: ext.to_owned(),
+        source,
+    };
+    let mut raw = three_d_asset::io::load(&[path]).map_err(asset)?;
     // three-d-asset picks the reader from the extension, case-sensitively:
     // SolidWorks writes .STL, so file it under a lowercase name
     let key = path.with_extension(ext);
     if key != path {
-        let bytes = raw.remove(path).map_err(|e| e.to_string())?;
+        let bytes = raw.remove(path).map_err(asset)?;
         raw.insert(&key, bytes);
     }
     // three-d-asset panics on some files (unwrap on a .obj that isn't UTF-8):
@@ -107,7 +133,9 @@ fn load_asset(path: &Path, ext: &str) -> Result<CpuModel, String> {
     std::panic::set_hook(Box::new(|_| {}));
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| raw.deserialize::<CpuModel>(&key)));
     std::panic::set_hook(hook);
-    r.map_err(|_| format!("not a valid .{ext} file"))?.map_err(|e| e.to_string())
+    #[expect(clippy::map_err_ignore, reason = "the panic payload says nothing a user can act on")]
+    let model = r.map_err(|_| LoadError::Panicked { ext: ext.to_owned() })?;
+    model.map_err(asset)
 }
 
 fn from_faces(c: Cloud) -> CpuModel {

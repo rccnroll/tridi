@@ -2,11 +2,16 @@
 
 use three_d::vec3;
 
-use crate::formats::Cloud;
+use crate::formats::{Cloud, FormatError, FormatResult};
 
 /// OFF / COFF: counts, then vertices (COFF adds r g b a, 0..255 or 0..1),
 /// then faces as `k i0 i1 ...`.
-pub(crate) fn read(raw: &[u8]) -> Result<Cloud, String> {
+pub(crate) fn read(raw: &[u8]) -> FormatResult<Cloud> {
+    parse(raw).map_err(|reason| FormatError::Invalid { format: "OFF", reason })
+}
+
+/// The reader proper; the error is the reason the file is invalid.
+fn parse(raw: &[u8]) -> Result<Cloud, String> {
     let text = String::from_utf8_lossy(raw);
     let mut lines = text
         .lines()

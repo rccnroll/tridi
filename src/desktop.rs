@@ -9,6 +9,7 @@
 //! to f3d's entries in /usr/share, which also claim glb, stl and obj, which
 //! one wins is down to directory order; the user's directory comes first.
 
+use eyre::{OptionExt, WrapErr};
 use std::path::{Path, PathBuf};
 
 use tridi::{LIGHT, Theme};
@@ -42,7 +43,7 @@ fn override_file() -> Option<PathBuf> {
 pub fn current() -> &'static Theme {
     config_file()
         .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| Theme::by_name(s.trim()).ok())
+        .and_then(|s| Theme::by_name(s.trim()))
         .unwrap_or(&LIGHT)
 }
 
@@ -56,17 +57,16 @@ fn entry(theme: &Theme) -> String {
 }
 
 /// `tridi theme [light|dark]`: without a name, prints the current one.
-pub fn command(name: Option<&str>) -> Result<(), String> {
+pub fn command(name: Option<&str>) -> eyre::Result<()> {
     let Some(name) = name else {
         println!("{}", current().name);
         return Ok(());
     };
-    let theme = Theme::by_name(name)?;
-    let cfg = config_file().ok_or("no $HOME")?;
-    std::fs::create_dir_all(cfg.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(&cfg, format!("{}\n", theme.name)).map_err(|e| e.to_string())?;
+    let theme = Theme::by_name(name).ok_or_else(|| eyre::eyre!("unknown theme {name}: light or dark"))?;
+    let cfg = config_file().ok_or_eyre("no $HOME")?;
+    write(&cfg, &format!("{}\n", theme.name))?;
     install(theme)?;
-    let cache = xdg("XDG_CACHE_HOME", ".cache").ok_or("no $HOME")?.join("thumbnails");
+    let cache = xdg("XDG_CACHE_HOME", ".cache").ok_or_eyre("no $HOME")?.join("thumbnails");
     let n = clear_thumbnails(&cache);
     println!(
         "theme {}: viewer and thumbnails; {n} cached thumbnails cleared, Nautilus redraws them",
@@ -77,10 +77,9 @@ pub fn command(name: Option<&str>) -> Result<(), String> {
 
 /// The per-user half of the install, which the package can't do: our copy of
 /// the thumbnailer entry, and tridi as the default app for our types.
-fn install(theme: &Theme) -> Result<(), String> {
-    let ovr = override_file().ok_or("no $HOME")?;
-    std::fs::create_dir_all(ovr.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(&ovr, entry(theme)).map_err(|e| e.to_string())?;
+fn install(theme: &Theme) -> eyre::Result<()> {
+    let ovr = override_file().ok_or_eyre("no $HOME")?;
+    write(&ovr, &entry(theme))?;
     let types = DESKTOP.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or("");
     let ok = std::process::Command::new("xdg-mime")
         .args(["default", "tridi.desktop"])
@@ -108,6 +107,14 @@ pub fn refresh() {
             clear_thumbnails(&cache.join("thumbnails"));
         }
     }
+}
+
+/// Writes `text` to `path`, making its directory first.
+fn write(path: &Path, text: &str) -> eyre::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
+    }
+    std::fs::write(path, text).wrap_err_with(|| format!("cannot write {}", path.display()))
 }
 
 /// Deletes the cached thumbnails of our formats under `dir` (a

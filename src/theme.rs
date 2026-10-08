@@ -48,11 +48,9 @@ pub const THEMES: [&Theme; 2] = [&LIGHT, &DARK];
 
 impl Theme {
     /// The theme called `name`: `light` or `dark`.
-    pub fn by_name(name: &str) -> Result<&'static Theme, String> {
-        THEMES
-            .into_iter()
-            .find(|t| t.name == name)
-            .ok_or(format!("unknown theme {name}: light or dark"))
+    #[must_use]
+    pub fn by_name(name: &str) -> Option<&'static Theme> {
+        THEMES.into_iter().find(|t| t.name == name)
     }
 }
 

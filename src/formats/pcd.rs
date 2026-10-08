@@ -2,9 +2,14 @@
 
 use three_d::vec3;
 
-use crate::formats::{Cloud, Field, scalar, split_header, unpack_rgb, valid_type};
+use crate::formats::{Cloud, Field, FormatError, FormatResult, scalar, split_header, unpack_rgb, valid_type};
 
-pub(crate) fn read(raw: &[u8]) -> Result<Cloud, String> {
+pub(crate) fn read(raw: &[u8]) -> FormatResult<Cloud> {
+    parse(raw).map_err(|reason| FormatError::Invalid { format: "PCD", reason })
+}
+
+/// The reader proper; the error is the reason the file is invalid.
+fn parse(raw: &[u8]) -> Result<Cloud, String> {
     let (head, body) = split_header(raw, "DATA")?;
     let get = |k: &str| head.iter().find(|l| l[0] == k).map(|l| &l[1..]);
     let names = get("FIELDS").ok_or("PCD without FIELDS")?;

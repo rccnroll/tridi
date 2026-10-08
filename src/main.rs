@@ -22,7 +22,9 @@ mod desktop;
 mod thumb;
 mod view;
 
+use eyre::WrapErr;
 use std::path::Path;
+use std::process::ExitCode;
 use tridi::{LIGHT, Theme};
 
 #[derive(clap::Parser)]
@@ -119,23 +121,32 @@ fn window_keys() -> &'static str {
 
 /// `tridi generate DIR`: the man pages (tridi.1, one per subcommand), and
 /// tridi.bash, _tridi and tridi.fish, which the packages install.
-fn generate(dir: &Path) -> std::io::Result<()> {
+fn generate(dir: &Path) -> eyre::Result<()> {
     use clap_complete::Shell;
     let mut cmd = <Cli as clap::CommandFactory>::command();
-    std::fs::create_dir_all(dir)?;
-    clap_mangen::generate_to(cmd.clone(), dir)?;
+    std::fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
+    clap_mangen::generate_to(cmd.clone(), dir).wrap_err("cannot write the man pages")?;
     for sh in [Shell::Bash, Shell::Zsh, Shell::Fish] {
-        clap_complete::generate_to(sh, &mut cmd, "tridi", dir)?;
+        clap_complete::generate_to(sh, &mut cmd, "tridi", dir).wrap_err_with(|| format!("cannot write the {sh} completions"))?;
     }
     Ok(())
 }
 
-fn main() {
+fn main() -> ExitCode {
     let cli = <Cli as clap::Parser>::parse();
-    let t = cli.theme.as_deref().map(|n| Theme::by_name(n).expect("clap checked the name"));
+    let t = cli.theme.as_deref().and_then(Theme::by_name);
     let r = match cli.cmd {
-        Some(Cmd::StepMesh { input }) => tridi::step_mesh_to_stdout(&input),
-        Some(Cmd::Generate { dir }) => generate(&dir).map_err(|e| e.to_string()),
+        Some(Cmd::StepMesh { input }) => {
+            // the parent reads this and puts the file's name in front
+            return tridi::step_mesh_to_stdout(&input).map_or_else(
+                |e| {
+                    eprintln!("{:#}", eyre::Report::new(e));
+                    ExitCode::FAILURE
+                },
+                |()| ExitCode::SUCCESS,
+            );
+        }
+        Some(Cmd::Generate { dir }) => generate(&dir),
         // thumbnails can't read the saved theme (sandbox): light unless told
         Some(Cmd::Thumb { input, output, size }) => thumb::thumb(&input, &output, size, t.unwrap_or(&LIGHT)),
         Some(Cmd::Theme { name }) => desktop::command(name.as_deref()),
@@ -148,18 +159,20 @@ fn main() {
         }
         None if cli.files.is_empty() => {
             <Cli as clap::CommandFactory>::command().print_help().ok();
-            std::process::exit(2);
+            return ExitCode::from(2);
         }
         None => {
             desktop::refresh();
             view::view(&cli.files, t.unwrap_or_else(desktop::current))
         }
     };
-    if let Err(e) = r {
-        if !e.is_empty() {
-            eprintln!("[tridi] {e}");
+    match r {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            // the whole chain on one line: "a.step: gave up tessellating after 15 s"
+            eprintln!("[tridi] {e:#}");
+            ExitCode::FAILURE
         }
-        std::process::exit(1);
     }
 }
 

@@ -10,6 +10,23 @@ mod text;
 use std::path::Path;
 use three_d::{Vec3, vec3};
 
+/// Why a file isn't a cloud we can read.
+#[derive(Debug, thiserror::Error)]
+pub enum FormatError {
+    #[error("cannot read the file")]
+    Io(#[source] std::io::Error),
+    #[error("unsupported format: .{ext}")]
+    Unsupported { ext: String },
+    /// The file is the format its extension says, but broken or using a
+    /// part of the format we don't read.
+    #[error("not a valid {format} file: {reason}")]
+    Invalid { format: &'static str, reason: String },
+    #[error("no points read")]
+    Empty,
+}
+
+pub type FormatResult<T> = Result<T, FormatError>;
+
 /// A cloud read from a file, before any coloring.
 pub struct Cloud {
     pub points: Vec<Vec3>,
@@ -20,19 +37,19 @@ pub struct Cloud {
 }
 
 /// Reads `path`, picking the reader from its extension (any case).
-pub fn load_cloud(path: &Path) -> Result<Cloud, String> {
+pub fn load_cloud(path: &Path) -> FormatResult<Cloud> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    parse_cloud(&std::fs::read(path).map_err(|e| e.to_string())?, &ext)
+    parse_cloud(&std::fs::read(path).map_err(FormatError::Io)?, &ext)
 }
 
 /// A cloud from a file's bytes, `ext` lowercase. What the fuzz targets call.
-pub fn parse_cloud(raw: &[u8], ext: &str) -> Result<Cloud, String> {
+pub fn parse_cloud(raw: &[u8], ext: &str) -> FormatResult<Cloud> {
     let mut c = match ext {
         "pcd" => pcd::read(raw)?,
         "ply" => ply::read(raw)?,
         "off" => off::read(raw)?,
         "xyz" | "xyzrgb" | "pts" => text::read(raw, ext),
-        _ => return Err(format!("unsupported format: .{ext}")),
+        _ => return Err(FormatError::Unsupported { ext: ext.to_owned() }),
     };
     // NaNs: PCL organized clouds mark missing points that way (a mesh keeps
     // them, or its indices would shift)
@@ -50,7 +67,7 @@ pub fn parse_cloud(raw: &[u8], ext: &str) -> Result<Cloud, String> {
         }
     }
     if c.points.is_empty() {
-        return Err("no points read".into());
+        return Err(FormatError::Empty);
     }
     Ok(c)
 }
@@ -89,7 +106,8 @@ pub(crate) fn unpack_rgb(bits: u32) -> Vec3 {
 }
 
 /// Splits `raw` after the header line that starts with `last`; returns the
-/// header lines (comments dropped) and the body.
+/// header lines (comments dropped) and the body. The error is the reason,
+/// for the reader's `FormatError::Invalid`.
 pub(crate) fn split_header<'a>(raw: &'a [u8], last: &str) -> Result<(Vec<Vec<String>>, &'a [u8]), String> {
     let mut lines = vec![];
     let mut off = 0;
@@ -125,6 +143,18 @@ pub(crate) struct Field {
 mod tests {
     use super::*;
     use crate::test_support::tmp;
+
+    #[test]
+    fn errors_say_what_failed() {
+        assert!(matches!(parse_cloud(b"1 2 3", "md"), Err(FormatError::Unsupported { ext }) if ext == "md"));
+        assert!(matches!(parse_cloud(b"hello\n", "xyz"), Err(FormatError::Empty)));
+        assert!(matches!(
+            parse_cloud(b"ply\n", "ply"),
+            Err(FormatError::Invalid { format: "PLY", .. })
+        ));
+        let missing = std::env::temp_dir().join("tridi-no-such-file.pcd");
+        assert!(matches!(load_cloud(&missing), Err(FormatError::Io(_))));
+    }
 
     // found by `cargo fuzz` (fuzz/): each panicked or asked for exabytes
     #[test]
