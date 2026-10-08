@@ -32,10 +32,34 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()>
     // no axis triad: at thumbnail size it's only noise
     let scene = Scene::new(&ctx, vec![input], false, tridi::up_for(tridi::is_gltf(Path::new(inp))))?;
     let img = tridi::offscreen(&ctx, &scene, size, theme.bg);
-    image::save_buffer(out, &img, size, size, image::ExtendedColorType::Rgba8).wrap_err_with(|| format!("cannot write {out}"))?;
+    // PNG whatever `out` is called: yazi's cache files have no extension
+    image::save_buffer_with_format(out, &img, size, size, image::ExtendedColorType::Rgba8, image::ImageFormat::Png)
+        .wrap_err_with(|| format!("cannot write {out}"))?;
     let elapsed_ms = u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX);
     info!(elapsed_ms, "thumbnail written");
     Ok(())
+}
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, process};
+
+    // yazi's cache paths have no extension
+    #[test]
+    fn writes_png_without_extension() {
+        let dir = env::temp_dir().join(format!("tridi-thumb-{}", process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("cache-entry");
+        // not a STEP file: those run `current_exe() step-mesh`, the test binary under cargo test
+        let inp = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rgb_ascii.pcd");
+        thumb(inp, out.to_str().unwrap(), 64, &tridi::LIGHT).unwrap();
+        assert_eq!(&fs::read(&out).unwrap()[..8], b"\x89PNG\r\n\x1a\n");
+    }
 }
 
 // }}}
