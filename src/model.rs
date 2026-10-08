@@ -4,7 +4,7 @@
 
 // ========================================== Imports ========================================== {{{
 
-use std::{panic, path::Path};
+use std::{panic, path::Path, time::Duration};
 use three_d::{CpuMaterial, CpuModel, Mat4, Srgba, Vec3};
 use three_d_asset::{Geometry, Indices, Positions, Primitive, TriMesh, io};
 
@@ -49,16 +49,21 @@ pub enum Item {
     Mesh(CpuModel),
 }
 
-/// `grey` is the color of meshes without a material (the theme's).
-pub fn load(path: &Path, grey: [f32; 3]) -> LoadResult<Item> {
+/// Reads `path` into `part`: in one piece, or a STEP file solid by solid
+/// as they're tessellated. `grey` is the color of meshes without a material
+/// (the theme's); `budget` caps the wait for a STEP file's solids. Returns
+/// how many solids were given up on: 0 but for STEP.
+pub fn load(path: &Path, grey: [f32; 3], budget: Option<Duration>, part: &mut dyn FnMut(Item)) -> LoadResult<usize> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    let mut model = match ext.as_str() {
+    let model = match ext.as_str() {
         "glb" | "gltf" | "obj" | "stl" => load_asset(path, &ext)?,
-        "step" | "stp" => model(step::load(path, grey)?),
+        // a solid is never empty: the child sends only those with triangles
+        "step" | "stp" => return Ok(step::load(path, grey, budget, |m| part(finish(model(m), grey)))?),
         _ => {
             let c = load_cloud(path)?;
             if c.faces.is_none() {
-                return Ok(Item::Cloud(c));
+                part(Item::Cloud(c));
+                return Ok(0);
             }
             from_faces(c)
         }
@@ -66,7 +71,13 @@ pub fn load(path: &Path, grey: [f32; 3]) -> LoadResult<Item> {
     if triangles(&model) == 0 {
         return Err(LoadError::NoMesh);
     }
-    // a primitive without a material would be white on white: give it the grey
+    part(finish(model, grey));
+    Ok(0)
+}
+
+/// Normals where missing, and the grey for a primitive without a material,
+/// which would be white on white.
+fn finish(mut model: CpuModel, grey: [f32; 3]) -> Item {
     let slot = model.materials.len();
     let mut used = false;
     for g in &mut model.geometries {
@@ -98,7 +109,7 @@ pub fn load(path: &Path, grey: [f32; 3]) -> LoadResult<Item> {
             ..Default::default()
         });
     }
-    Ok(Item::Mesh(model))
+    Item::Mesh(model)
 }
 
 #[must_use]
@@ -192,6 +203,13 @@ mod tests {
     use super::*;
     use crate::{test_support::tmp, theme::LIGHT};
     use std::fs;
+
+    /// A file that isn't STEP, in its one piece.
+    fn load(path: &Path, grey: [f32; 3]) -> LoadResult<Item> {
+        let mut item = None;
+        super::load(path, grey, None, &mut |i| item = Some(i))?;
+        Ok(item.unwrap())
+    }
 
     /// The triangles of a mesh, None for a cloud.
     fn tris(item: Item) -> Option<usize> {

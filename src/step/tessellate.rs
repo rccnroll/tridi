@@ -1,5 +1,6 @@
 //! The child's work: the STEP file's solids tessellated with monstertruck,
-//! placed where the assembly puts them, as FLOATS f32 per vertex.
+//! in parallel, each handed on placed where the assembly puts it, as FLOATS
+//! f32 per vertex.
 
 // ========================================== Imports ========================================== {{{
 
@@ -7,7 +8,13 @@ use monstertruck_assembly::assy::{EdgeEntity, NodeEntity};
 use monstertruck_io::step::load::Table;
 use monstertruck_io::step::load::step_p21::{ast::Name, tables::PlaceHolder};
 use monstertruck_meshing::prelude::*;
-use std::{collections::HashMap, fs, path::Path};
+use std::{
+    fs, io, iter,
+    num::NonZeroUsize,
+    path::Path,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    thread,
+};
 
 use crate::{
     formats::narrow,
@@ -21,7 +28,15 @@ use crate::{
 
 // ======================================= Tessellation ======================================== {{{
 
-pub(crate) fn tessellate(path: &Path) -> StepResult<Vec<f32>> {
+/// `total` first gets how many solids the file has; then `part` gets each
+/// solid's triangles, at every place the assembly uses it, as soon as it's
+/// done (empty if the library can't convert it). The solids are spread
+/// over the cores: one the library never finishes holds back only itself.
+pub(crate) fn tessellate(
+    path: &Path,
+    total: impl FnOnce(usize) -> io::Result<()>,
+    part: impl Fn(&[f32]) -> io::Result<()> + Sync,
+) -> StepResult<()> {
     let raw = fs::read(path).map_err(StepError::Read)?;
     // names and comments are often Latin-1: the geometry is ASCII either way
     let text = String::from_utf8_lossy(&raw);
@@ -29,9 +44,46 @@ pub(crate) fn tessellate(path: &Path) -> StepResult<Vec<f32>> {
     let table = Table::from_step(&text).map_err(|_| StepError::NotStep)?;
     let ents = entities(&text);
     let colors = colors(&ents);
-    let mut out = Vec::new();
-    // each solid tessellated once, however many times the assembly uses it
-    let mut cache = HashMap::<u64, Vec<f32>>::new();
+    let jobs = placements(&table);
+    if jobs.is_empty() {
+        return Err(StepError::NoSolid);
+    }
+    total(jobs.len()).map_err(StepError::Write)?;
+    let (next, any) = (AtomicUsize::new(0), AtomicBool::new(false));
+    let workers = thread::available_parallelism().map_or(1, NonZeroUsize::get).min(jobs.len());
+    thread::scope(|s| {
+        let handles: Vec<_> = iter::repeat_with(|| {
+            s.spawn(|| {
+                while let Some((id, at)) = jobs.get(next.fetch_add(1, Ordering::Relaxed)) {
+                    let v = place(&mesh_item(&table, &ents, &colors, *id), at);
+                    any.fetch_or(!v.is_empty(), Ordering::Relaxed);
+                    part(&v)?;
+                }
+                Ok(())
+            })
+        })
+        .take(workers)
+        .collect();
+        let mut r = Ok(());
+        for h in handles {
+            // a solid the library panics on is lost, like one it can't
+            // convert; its thread's other solids go to the threads left
+            if let Ok(Err(e)) = h.join() {
+                r = Err(StepError::Write(e));
+            }
+        }
+        r
+    })?;
+    if !any.into_inner() {
+        return Err(StepError::NoSolid);
+    }
+    Ok(())
+}
+
+/// Each solid once, with every placement the assembly gives it; with no
+/// assembly the library understands, every solid where it was modelled.
+fn placements(table: &Table) -> Vec<(u64, Vec<Matrix4>)> {
+    let mut jobs: Vec<(u64, Vec<Matrix4>)> = Vec::new();
     if let Ok(assy) = table.step_assy() {
         let assy = assy.map(
             |n| NodeEntity {
@@ -46,29 +98,35 @@ pub(crate) fn tessellate(path: &Path) -> StepResult<Vec<f32>> {
         for top in assy.top_nodes() {
             for p in assy.paths_iter(top.index()) {
                 let Some(rep) = *p.terminal_node().shape() else { continue };
-                let m = p.matrix();
-                for item in solids_of(&table, rep) {
-                    let local = cache.entry(item).or_insert_with(|| mesh_item(&table, &ents, &colors, item));
-                    for &[px, py, pz, nx, ny, nz, red, green, blue] in local.as_chunks::<FLOATS>().0 {
-                        let q = m.transform_point(Point3::new(px.into(), py.into(), pz.into()));
-                        let n = m.transform_vector(Vector3::new(nx.into(), ny.into(), nz.into())).normalize();
-                        out.extend([q.x, q.y, q.z, n.x, n.y, n.z].map(narrow));
-                        out.extend([red, green, blue]);
+                for item in solids_of(table, rep) {
+                    match jobs.iter_mut().find(|(id, _)| *id == item) {
+                        Some((_, at)) => at.push(p.matrix()),
+                        None => jobs.push((item, vec![p.matrix()])),
                     }
                 }
             }
         }
     }
-    // no assembly the library understands: every solid where it was modelled
-    if out.is_empty() {
-        for &id in table.manifold_solid_brep.keys().chain(table.shell_based_surface_model.keys()) {
-            out.extend(mesh_item(&table, &ents, &colors, id));
+    if jobs.is_empty() {
+        jobs = (table.manifold_solid_brep.keys().chain(table.shell_based_surface_model.keys()))
+            .map(|&id| (id, vec![Matrix4::identity()]))
+            .collect();
+    }
+    jobs
+}
+
+/// A solid's triangles copied to each of its placements.
+fn place(local: &[f32], at: &[Matrix4]) -> Vec<f32> {
+    let mut out = Vec::with_capacity(local.len() * at.len());
+    for m in at {
+        for &[px, py, pz, nx, ny, nz, red, green, blue] in local.as_chunks::<FLOATS>().0 {
+            let q = m.transform_point(Point3::new(px.into(), py.into(), pz.into()));
+            let n = m.transform_vector(Vector3::new(nx.into(), ny.into(), nz.into())).normalize();
+            out.extend([q.x, q.y, q.z, n.x, n.y, n.z].map(narrow));
+            out.extend([red, green, blue]);
         }
     }
-    if out.is_empty() {
-        return Err(StepError::NoSolid);
-    }
-    Ok(out)
+    out
 }
 
 /// The solids of a representation: its own items, and those of the

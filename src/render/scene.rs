@@ -143,9 +143,9 @@ impl Scene {
 
     /// Adds a file's layer, visible; returns its index for `toggle`.
     pub fn add(&mut self, input: Input) -> RenderResult<usize> {
-        let ctx = &self.ctx;
-        self.layers.push(match input {
+        let layer = match input {
             Input::Points(p, c) => {
+                let ctx = &self.ctx;
                 self.bb.expand(&p);
                 let n = i32::try_from(p.len()).map_err(|_err| RenderError::TooManyPoints { count: p.len() })?;
                 Layer::Points {
@@ -154,15 +154,37 @@ impl Scene {
                     n,
                 }
             }
-            Input::Mesh(m) => {
-                let model = Model::<PhysicalMaterial>::new(ctx, &m).map_err(RenderError::Mesh)?;
-                for part in model.iter() {
-                    self.bb.expand_with_aabb(part.aabb());
-                }
-                Layer::Mesh(model)
-            }
-        });
+            Input::Mesh(m) => Layer::Mesh(vec![self.model(&m)?]),
+        };
+        self.layers.push(layer);
         self.visible.push(true);
+        self.place_axes();
+        Ok(self.layers.len() - 1)
+    }
+
+    /// Adds a mesh to layer `i`: a STEP file's solids, as they come. A
+    /// layer of points takes none.
+    pub fn add_to(&mut self, i: usize, m: &CpuModel) -> RenderResult<()> {
+        let model = self.model(m)?;
+        if let Some(Layer::Mesh(models)) = self.layers.get_mut(i) {
+            models.push(model);
+            self.place_axes();
+        }
+        Ok(())
+    }
+
+    /// The mesh on the GPU, the bbox grown to hold it.
+    fn model(&mut self, m: &CpuModel) -> RenderResult<Model<PhysicalMaterial>> {
+        let model = Model::<PhysicalMaterial>::new(&self.ctx, m).map_err(RenderError::Mesh)?;
+        for part in model.iter() {
+            self.bb.expand_with_aabb(part.aabb());
+        }
+        Ok(model)
+    }
+
+    /// The triad at the bbox's min corner, if asked for.
+    fn place_axes(&mut self) {
+        let ctx = &self.ctx;
         if self.with_axes {
             let (lo, ext) = (self.bb.min(), self.bb.max() - self.bb.min());
             let size = match ext.x.max(ext.y).max(ext.z) * 0.2 {
@@ -176,7 +198,6 @@ impl Scene {
             }
             self.axes = Some((VertexBuffer::new_with_data(ctx, &p), VertexBuffer::new_with_data(ctx, &c)));
         }
-        Ok(self.layers.len() - 1)
     }
 
     /// Half the diagonal of everything drawn: the scene's size.
@@ -241,9 +262,9 @@ impl Scene {
         let (view, up) = (cam.view_direction(), cam.up());
         let key = DirectionalLight::new(ctx, 1.6, Srgba::WHITE, view - up * 0.5 + view.cross(up) * 0.35);
         let shown = || self.layers.iter().zip(&self.visible).filter(|(_, v)| **v).map(|(l, _)| l);
-        let meshes = shown().filter_map(|l| match l {
-            Layer::Mesh(m) => Some(m),
-            Layer::Points { .. } => None,
+        let meshes = shown().flat_map(|l| match l {
+            Layer::Mesh(m) => m.as_slice(),
+            Layer::Points { .. } => &[],
         });
         target.render(cam, meshes.flat_map(IntoIterator::into_iter), &[&ambient, &key]);
         let p = &self.program;
@@ -340,7 +361,8 @@ enum Layer {
         col: VertexBuffer<Vec3>,
         n: i32,
     },
-    Mesh(Model<PhysicalMaterial>),
+    /// a file's meshes: one, or a STEP file's solids
+    Mesh(Vec<Model<PhysicalMaterial>>),
 }
 
 // }}}
