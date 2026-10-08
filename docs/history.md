@@ -412,7 +412,7 @@ history above keep the old name.
   privately. Help comes as pull requests: no collaborators with write
   access.
 
-## After 2.6
+## 2.7 (released 08/10/2026)
 
 - **Files load in parallel** (08/10): one thread per core, and the window
   opens with the first file read instead of the last. A STEP file that
