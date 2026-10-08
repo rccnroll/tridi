@@ -38,7 +38,9 @@ why.
 - [ ] A tldr page (07/10). tldr-pages takes projects maintained for at
   least a year, or notable ones: not before 25/09/2027. ~5 examples, from the help.
 - [ ] More ways to install (07/10): AUR (`tridi`, or `tridi-bin` from the
-  release), `cargo install tridi` (the name is free on crates.io, see the
+  release; `packaging/aur/PKGBUILD` builds the release tag and is ready,
+  but the AUR closed new accounts on 08/10: push it when they reopen),
+  `cargo install tridi` (the name is free on crates.io, see the
   rename), a Flatpak for the other distros (the app id and the metainfo
   are ready).
 

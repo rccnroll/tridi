@@ -1,0 +1,59 @@
+# Maintainer: Rocco Caccioppoli <caccioppolirocco@gmail.com>
+# The AUR package: builds a release tag. packaging/arch/ builds this repo's HEAD.
+pkgname=tridi
+pkgver=2.6.0
+pkgrel=1
+pkgdesc='Point cloud and mesh viewer, with Nautilus thumbnails'
+arch=('x86_64')
+url='https://github.com/rccnroll/tridi'
+license=('MIT OR Apache-2.0' 'OFL-1.1' 'Ubuntu-font-1.0')  # the last two: egui's fonts
+# GL/EGL, Wayland and xkbcommon are dlopened at runtime
+depends=('gcc-libs' 'glibc' 'libglvnd' 'mesa' 'wayland' 'libxkbcommon' 'xdg-utils')
+makedepends=('cargo')
+# renamed from pcdview after 2.2.0
+conflicts=('pcdview')
+replaces=('pcdview')
+install=tridi.install
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('de78d64e9a86250f7c1ea3f18385241378ab954cf4469b93a62b5377c4d79026')
+options=('!lto' '!debug')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  # no build paths in the binary (panic messages carry source paths)
+  export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/build --remap-path-prefix=$HOME/.cargo=/cargo"
+  cargo build --frozen --release
+  target/release/tridi generate target/assets
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$srcdir=/build --remap-path-prefix=$HOME/.cargo=/cargo"
+  cargo test --frozen --release
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/tridi "$pkgdir/usr/bin/tridi"
+  install -Dm644 share/thumbnailers/tridi.thumbnailer -t "$pkgdir/usr/share/thumbnailers"
+  install -Dm644 share/mime/packages/tridi.xml -t "$pkgdir/usr/share/mime/packages"
+  install -Dm644 share/applications/io.github.rccnroll.tridi.desktop -t "$pkgdir/usr/share/applications"
+  install -Dm644 share/metainfo/io.github.rccnroll.tridi.metainfo.xml -t "$pkgdir/usr/share/metainfo"
+  # one SVG, the rest are relative symlinks to it
+  cp -a share/icons "$pkgdir/usr/share/"
+  install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/tridi"
+  # the fonts egui builds into the binary (the legend and keys panels)
+  install -Dm644 packaging/licenses/egui-fonts/* -t "$pkgdir/usr/share/licenses/tridi/egui-fonts"
+  install -Dm644 target/assets/*.1 -t "$pkgdir/usr/share/man/man1"
+  install -Dm644 target/assets/tridi.bash "$pkgdir/usr/share/bash-completion/completions/tridi"
+  install -Dm644 target/assets/_tridi -t "$pkgdir/usr/share/zsh/site-functions"
+  install -Dm644 target/assets/tridi.fish -t "$pkgdir/usr/share/fish/vendor_completions.d"
+}
