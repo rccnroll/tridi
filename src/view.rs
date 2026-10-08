@@ -28,7 +28,7 @@ use three_d::{
     PhysicalPoint, RenderTarget, Vec3, Viewport, context, egui,
 };
 use three_d_asset::Geometry;
-use tridi::{Input, Item, Scene, Theme};
+use tridi::{Input, Item, Purpose, Scene, Theme};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, MouseButton as WinitButton, MouseScrollDelta, WindowEvent},
@@ -189,7 +189,7 @@ fn load_all(paths: &[String], theme: &'static Theme, proxy: &EventLoopProxy<Load
                 let i = next.fetch_add(1, Ordering::Relaxed);
                 let Some(p) = paths.get(i) else { break };
                 let tint = theme.palette.iter().cycle().nth(i).copied().filter(|_| paths.len() > 1);
-                let result = tridi::load(Path::new(p), theme.mesh, None, &mut |item| {
+                let result = tridi::load(Path::new(p), theme.mesh, Purpose::View, &mut |item| {
                     #[expect(clippy::let_underscore_must_use, reason = "a closed window is found out below")]
                     let _ = proxy.send_event(Loaded::Part {
                         i,

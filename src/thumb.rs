@@ -3,19 +3,8 @@
 // ========================================== Imports ========================================== {{{
 
 use eyre::WrapErr;
-use std::{
-    env,
-    path::Path,
-    time::{Duration, Instant},
-};
-use tridi::{Input, Item, Scene, Theme};
-
-// }}}
-
-// ========================================= Constants ========================================= {{{
-
-/// The wait for a STEP file's solids: the file manager waits on us.
-const BUDGET: Duration = Duration::from_secs(15);
+use std::{env, path::Path, time::Instant};
+use tridi::{Input, Item, Purpose, Scene, Theme};
 
 // }}}
 
@@ -32,9 +21,9 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()>
         // SAFETY: single-threaded, and before EGL is loaded
         unsafe { env::set_var("__EGL_VENDOR_LIBRARY_FILENAMES", mesa) };
     }
-    // a STEP file's solids come one by one: the thumbnail is what came in BUDGET
+    // a STEP file's solids come one by one: the thumbnail is what came in time
     let mut inputs = vec![];
-    let skipped = tridi::load(Path::new(inp), theme.mesh, Some(BUDGET), &mut |item| {
+    let skipped = tridi::load(Path::new(inp), theme.mesh, Purpose::Thumbnail, &mut |item| {
         inputs.push(match item {
             Item::Cloud(c) => {
                 let colors = tridi::colorize(&c, None, theme);

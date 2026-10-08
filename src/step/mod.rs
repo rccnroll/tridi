@@ -1,9 +1,9 @@
 //! STEP (.step/.stp) through monstertruck. Tessellation runs in a child
 //! process, `tridi step-mesh IN`, that hands back each solid as it's done
-//! and is killed once none has come for IDLE: on some real files the
-//! library never finishes a solid and its memory grows ~20 MB/s while it
-//! tries (a thread can't be stopped, a process can). A panic stays in the
-//! child too.
+//! and is killed once none has come for a while: the library can take
+//! minutes on a solid, and may never finish one, while its memory grows (a
+//! thread can't be stopped, a process can). A panic stays in the child too.
+//! The solids the fine pass didn't hand back get a second, coarse one.
 
 // ======================================== Sub-modules ======================================== {{{
 
@@ -17,9 +17,10 @@ mod tessellate;
 use std::{
     env,
     io::{self, Read, Write},
+    iter,
     path::Path,
     process::{Command, Stdio},
-    sync::mpsc::{self, RecvTimeoutError, Sender},
+    sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
     thread,
     time::{Duration, Instant},
 };
@@ -32,9 +33,16 @@ use crate::step::tessellate::tessellate;
 
 // ========================================= Constants ========================================= {{{
 
-// ponytail: a guess. Slow and stuck look the same from here: an 84 MB assembly parses in 7 s,
-// then goes 34 s between two solids that do come, and 5 never do
+/// The wait for the child to parse the file and list its solids: an 84 MB
+/// assembly takes 7 s.
+const PARSE: Duration = Duration::from_secs(60);
+
+// ponytail: a guess, slow and stuck look the same from here. On an 84 MB assembly the fine pass
+// goes up to 31 s between two solids, and has all 97 in 97 s
 const IDLE: Duration = Duration::from_secs(60);
+
+/// A thumbnail's wait for the solids: the file manager waits on us.
+const THUMB_BUDGET: Duration = Duration::from_secs(15);
 
 /// A vertex on the wire: position, normal, color.
 pub(crate) const FLOATS: usize = 9;
@@ -72,26 +80,104 @@ pub type StepResult<T> = Result<T, StepError>;
 
 // }}}
 
-// ========================================== Parent =========================================== {{{
+// ========================================== Quality ========================================== {{{
 
-/// What comes out of the child: how many solids, then each one's triangles.
-enum Frame {
-    Total(usize),
-    Solid(Vec<u8>),
+/// What a file is read for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Purpose {
+    /// the window: a fine pass, then a coarse one for what it missed
+    View,
+    /// a thumbnail: coarse, and what came in `THUMB_BUDGET`
+    Thumbnail,
 }
 
-/// Parent side: run the child, hand each solid's triangles to `part` as it
-/// comes. `grey` stands in for the faces without a color, when others have
-/// one. Gives up on the rest once no solid has come for IDLE, or `budget`
-/// is spent; returns how many solids it gave up on.
+/// How the child tessellates. Fine is monstertruck's robust triangulation
+/// at 0.1% of a shell's size; it hangs on some solids where the plain one
+/// at 1%, Coarse, doesn't.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Quality {
+    Fine,
+    Coarse,
+}
+
+// }}}
+
+// ========================================== Parent =========================================== {{{
+
+/// What comes out of the child: the ids of the solids it'll do, then each
+/// one's id and triangles.
+enum Frame {
+    Ids(Vec<u64>),
+    Solid(u64, Vec<u8>),
+}
+
+/// Parent side: hand each solid's triangles to `part` as it comes, over
+/// the passes `purpose` asks for. `grey` stands in for the faces without a
+/// color, when others have one. Returns how many solids it gave up on.
 #[instrument(skip(grey, part))]
-pub fn load<F: FnMut(TriMesh)>(path: &Path, grey: [f32; 3], budget: Option<Duration>, mut part: F) -> StepResult<usize> {
+pub fn load<F: FnMut(TriMesh)>(path: &Path, grey: [f32; 3], purpose: Purpose, mut part: F) -> StepResult<usize> {
     let start = Instant::now();
-    let until = budget.and_then(|b| start.checked_add(b));
+    let (passes, until): (&[(Quality, Duration)], _) = match purpose {
+        Purpose::View => (&[(Quality::Fine, IDLE), (Quality::Coarse, IDLE)], None),
+        Purpose::Thumbnail => (&[(Quality::Coarse, IDLE)], start.checked_add(THUMB_BUDGET)),
+    };
+    let mut shown = 0;
+    let mut part = |m| {
+        shown += 1;
+        part(m);
+    };
+    // None until a child has listed the solids
+    let (mut missing, mut failure): (Option<Vec<u64>>, Option<StepError>) = (None, None);
+    for &(quality, idle) in passes {
+        if missing.as_ref().is_some_and(Vec::is_empty) {
+            break;
+        }
+        match run(path, quality, missing.as_deref().unwrap_or_default(), idle, until, grey, &mut part) {
+            // no list: the next pass would parse the same file the same way
+            Err(e) => {
+                failure = Some(e);
+                break;
+            }
+            Ok((left, f)) => {
+                debug!(?quality, ?left, "pass done");
+                (missing, failure) = (Some(left), f);
+            }
+        }
+    }
+    let skipped = missing.map_or(0, |m| m.len());
+    let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+    debug!(elapsed_ms, shown, skipped, "tessellated");
+    // whatever came is shown; only a file that gave nothing is an error
+    if shown > 0 {
+        return Ok(skipped);
+    }
+    Err(failure.unwrap_or(StepError::NoSolid))
+}
+
+/// One child, on the solids in `only` (all if empty). Returns the solids it
+/// didn't hand back, and why it stopped if it didn't finish; an error if it
+/// never listed them.
+fn run(
+    path: &Path,
+    quality: Quality,
+    only: &[u64],
+    idle: Duration,
+    until: Option<Instant>,
+    grey: [f32; 3],
+    part: &mut dyn FnMut(TriMesh),
+) -> StepResult<(Vec<u64>, Option<StepError>)> {
+    let start = Instant::now();
     let exe = env::current_exe().map_err(StepError::Spawn)?;
-    let mut child = Command::new(exe)
-        .arg("step-mesh")
-        .arg(path)
+    let mut cmd = Command::new(exe);
+    cmd.arg("step-mesh").arg(path);
+    if quality == Quality::Coarse {
+        cmd.arg("--coarse");
+    }
+    if !only.is_empty() {
+        let ids: Vec<String> = only.iter().map(u64::to_string).collect();
+        cmd.arg("--only").arg(ids.join(","));
+    }
+    let mut child = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -112,66 +198,93 @@ pub fn load<F: FnMut(TriMesh)>(path: &Path, grey: [f32; 3], budget: Option<Durat
         let _ = err.read_to_string(&mut e);
         e
     });
-    let (mut total, mut done, mut shown, mut timed_out) = (0, 0, 0, false);
+    let (missing, timed_out) = receive(&rx, idle, until, grey, part);
+    if timed_out {
+        #[expect(clippy::let_underscore_must_use, reason = "it may be gone already; the timeout is the news")]
+        let _ = child.kill();
+    }
+    let status = child.wait().map_err(StepError::Spawn)?;
+    let msg = errs.join().unwrap_or_default();
+    let failure = if timed_out {
+        Some(StepError::Timeout {
+            secs: start.elapsed().as_secs(),
+        })
+    } else if status.success() {
+        None
+    } else {
+        let msg = msg.trim();
+        Some(StepError::Failed {
+            message: if msg.is_empty() {
+                format!("tessellation failed ({status})")
+            } else {
+                msg.to_owned()
+            },
+        })
+    };
+    match (missing, failure) {
+        (Some(m), f) => Ok((m, f)),
+        (None, Some(e)) => Err(e),
+        // the child ended well without listing anything: can't be
+        (None, None) => Err(StepError::NoSolid),
+    }
+}
+
+/// The frames, until the child is done or quiet too long: PARSE for the
+/// list, `idle` between two solids, and never past `until`. Returns the
+/// listed solids that didn't come (None if no list came), and whether it
+/// timed out.
+fn receive(
+    rx: &Receiver<Frame>,
+    idle: Duration,
+    until: Option<Instant>,
+    grey: [f32; 3],
+    part: &mut dyn FnMut(TriMesh),
+) -> (Option<Vec<u64>>, bool) {
+    let mut missing: Option<Vec<u64>> = None;
     loop {
-        let wait = until.map_or(IDLE, |u| IDLE.min(u.saturating_duration_since(Instant::now())));
+        let limit = if missing.is_some() { idle } else { PARSE };
+        let wait = until.map_or(limit, |u| limit.min(u.saturating_duration_since(Instant::now())));
         match rx.recv_timeout(wait) {
-            Ok(Frame::Total(n)) => total = n,
-            Ok(Frame::Solid(bytes)) => {
-                done += 1;
+            Ok(Frame::Ids(ids)) => missing = Some(ids),
+            Ok(Frame::Solid(id, bytes)) => {
+                if let Some(m) = missing.as_mut() {
+                    m.retain(|&x| x != id);
+                }
                 if !bytes.is_empty() {
-                    shown += 1;
                     part(decode(&bytes, grey));
                 }
             }
             // the child closed its stdout: done, or dead
-            Err(RecvTimeoutError::Disconnected) => break,
-            Err(RecvTimeoutError::Timeout) => {
-                timed_out = true;
-                #[expect(clippy::let_underscore_must_use, reason = "it may be gone already; the timeout is the news")]
-                let _ = child.kill();
-                break;
-            }
+            Err(RecvTimeoutError::Disconnected) => return (missing, false),
+            Err(RecvTimeoutError::Timeout) => return (missing, true),
         }
     }
-    let status = child.wait().map_err(StepError::Spawn)?;
-    let msg = errs.join().unwrap_or_default();
-    let skipped = total.saturating_sub(done);
-    let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-    debug!(elapsed_ms, total, done, skipped, "tessellated");
-    // whatever came is shown; only a file that gave nothing is an error
-    if shown > 0 {
-        return Ok(skipped);
-    }
-    if timed_out {
-        return Err(StepError::Timeout {
-            secs: start.elapsed().as_secs(),
-        });
-    }
-    let msg = msg.trim();
-    let message = if msg.is_empty() {
-        format!("tessellation failed ({status})")
-    } else {
-        msg.to_owned()
-    };
-    Err(StepError::Failed { message })
 }
 
-/// The child's stdout as frames, until it ends: a u32 count of solids, then
-/// per solid a u32 byte length and the bytes.
+/// The child's stdout as frames, until it ends: a u32 count and that many
+/// u64 solid ids; then per solid its u64 id, a u32 byte length and the
+/// bytes.
 fn read_frames(mut r: impl Read, tx: &Sender<Frame>) {
-    fn word(r: &mut impl Read) -> Option<usize> {
+    fn u32_at(r: &mut impl Read) -> Option<usize> {
         let mut w = [0; 4];
         r.read_exact(&mut w).ok()?;
         usize::try_from(u32::from_le_bytes(w)).ok()
     }
-    let Some(n) = word(&mut r) else { return };
-    if tx.send(Frame::Total(n)).is_err() {
+    fn u64_at(r: &mut impl Read) -> Option<u64> {
+        let mut w = [0; 8];
+        r.read_exact(&mut w).ok()?;
+        Some(u64::from_le_bytes(w))
+    }
+    let Some(n) = u32_at(&mut r) else { return };
+    let Some(ids) = iter::repeat_with(|| u64_at(&mut r)).take(n).collect::<Option<Vec<_>>>() else {
+        return;
+    };
+    if tx.send(Frame::Ids(ids)).is_err() {
         return;
     }
-    while let Some(len) = word(&mut r) {
+    while let (Some(id), Some(len)) = (u64_at(&mut r), u32_at(&mut r)) {
         let mut bytes = vec![0; len];
-        if r.read_exact(&mut bytes).is_err() || tx.send(Frame::Solid(bytes)).is_err() {
+        if r.read_exact(&mut bytes).is_err() || tx.send(Frame::Solid(id, bytes)).is_err() {
             return;
         }
     }
@@ -205,29 +318,36 @@ fn decode(bytes: &[u8], grey: [f32; 3]) -> TriMesh {
 
 // =========================================== Child =========================================== {{{
 
-/// Child side: `tridi step-mesh IN`, frames as `read_frames` reads them.
-pub fn mesh_to_stdout(path: &str) -> StepResult<()> {
+/// Child side: `tridi step-mesh IN [--coarse] [--only ID,...]`, frames as
+/// `read_frames` reads them.
+pub fn mesh_to_stdout(path: &str, quality: Quality, only: &[u64]) -> StepResult<()> {
     // die with the parent: a viewer killed while waiting must not leave us running
     // SAFETY: prctl with PR_SET_PDEATHSIG only sets a flag on this process
     unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
     tessellate(
         Path::new(path),
-        |n| write_word(&mut io::stdout().lock(), n),
-        |v| write_solid(&mut io::stdout().lock(), v),
+        quality,
+        only,
+        |ids| write_ids(&mut io::stdout().lock(), ids),
+        |id, v| write_solid(&mut io::stdout().lock(), id, v),
     )
 }
 
-fn write_word(w: &mut impl Write, n: usize) -> io::Result<()> {
-    let n = u32::try_from(n).map_err(io::Error::other)?;
+fn write_ids(w: &mut impl Write, ids: &[u64]) -> io::Result<()> {
+    let n = u32::try_from(ids.len()).map_err(io::Error::other)?;
     w.write_all(&n.to_le_bytes())?;
+    for id in ids {
+        w.write_all(&id.to_le_bytes())?;
+    }
     // stdout is line-buffered: a frame waits for no newline
     w.flush()
 }
 
 /// One solid's frame, whole: the threads take turns on the lock.
-fn write_solid(w: &mut impl Write, v: &[f32]) -> io::Result<()> {
+fn write_solid(w: &mut impl Write, id: u64, v: &[f32]) -> io::Result<()> {
     let bytes: Vec<u8> = v.iter().flat_map(|f| f.to_le_bytes()).collect();
     let n = u32::try_from(bytes.len()).map_err(io::Error::other)?;
+    w.write_all(&id.to_le_bytes())?;
     w.write_all(&n.to_le_bytes())?;
     w.write_all(&bytes)?;
     w.flush()
@@ -244,31 +364,31 @@ mod tests {
     use std::sync::Mutex;
 
     // the child and the wire, not the process: `load` runs current_exe,
-    // which under cargo test is the test binary; the process and IDLE were
-    // checked by hand. The solids that come back, in one mesh
-    fn mesh(name: &str) -> TriMesh {
+    // which under cargo test is the test binary; the process and the
+    // timeouts were checked by hand. The solids that come back, in one mesh
+    fn mesh_with(name: &str, quality: Quality) -> TriMesh {
         let wire = Mutex::new(Vec::new());
         tessellate(
             &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name),
-            |n| write_word(&mut *wire.lock().unwrap(), n),
-            |v| write_solid(&mut *wire.lock().unwrap(), v),
+            quality,
+            &[],
+            |ids| write_ids(&mut *wire.lock().unwrap(), ids),
+            |id, v| write_solid(&mut *wire.lock().unwrap(), id, v),
         )
         .unwrap();
         let (tx, rx) = mpsc::channel();
         read_frames(&wire.into_inner().unwrap()[..], &tx);
         drop(tx);
-        let (mut total, mut bytes) = (0, Vec::new());
-        for f in rx {
-            match f {
-                Frame::Total(n) => total = n,
-                Frame::Solid(b) => {
-                    total -= 1;
-                    bytes.extend(b);
-                }
-            }
-        }
-        assert_eq!(total, 0, "every solid came back");
-        decode(&bytes, [0.5; 3])
+        let mut got = Vec::new();
+        let (missing, timed_out) = receive(&rx, Duration::from_secs(1), None, [0.5; 3], &mut |m| got.push(m));
+        assert!(!timed_out && missing == Some(vec![]), "every solid came back");
+        // one solid in each fixture (the assembly's is placed twice)
+        assert_eq!(got.len(), 1);
+        got.pop().unwrap()
+    }
+
+    fn mesh(name: &str) -> TriMesh {
+        mesh_with(name, Quality::Fine)
     }
 
     fn bbox(m: &TriMesh) -> ([f32; 3], [f32; 3]) {
@@ -320,10 +440,21 @@ mod tests {
         assert!(mesh("cube.step").colors.is_none());
     }
 
+    // the fallback for the solids the fine pass misses: the same cube
+    #[test]
+    fn coarse() {
+        let m = mesh_with("cube.step", Quality::Coarse);
+        assert_eq!(m.triangle_count(), 12);
+        assert_eq!(bbox(&m), ([0.0; 3], [1.0; 3]));
+    }
+
     #[test]
     fn not_step_is_error() {
         let f = tmp("bad.step", b"ISO-10303-21;\ngarbage");
-        assert!(matches!(tessellate(&f, |_| Ok(()), |_| Ok(())), Err(StepError::NotStep)));
+        assert!(matches!(
+            tessellate(&f, Quality::Fine, &[], |_| Ok(()), |_, _| Ok(())),
+            Err(StepError::NotStep)
+        ));
     }
 }
 

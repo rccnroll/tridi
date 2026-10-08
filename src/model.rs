@@ -4,13 +4,13 @@
 
 // ========================================== Imports ========================================== {{{
 
-use std::{panic, path::Path, time::Duration};
+use std::{panic, path::Path};
 use three_d::{CpuMaterial, CpuModel, Mat4, Srgba, Vec3};
 use three_d_asset::{Geometry, Indices, Positions, Primitive, TriMesh, io};
 
 use crate::{
     formats::{Cloud, FormatError, load_cloud},
-    step::{self, StepError},
+    step::{self, Purpose, StepError},
 };
 
 // }}}
@@ -51,14 +51,14 @@ pub enum Item {
 
 /// Reads `path` into `part`: in one piece, or a STEP file solid by solid
 /// as they're tessellated. `grey` is the color of meshes without a material
-/// (the theme's); `budget` caps the wait for a STEP file's solids. Returns
+/// (the theme's); `purpose` sets how a STEP file is tessellated. Returns
 /// how many solids were given up on: 0 but for STEP.
-pub fn load(path: &Path, grey: [f32; 3], budget: Option<Duration>, part: &mut dyn FnMut(Item)) -> LoadResult<usize> {
+pub fn load(path: &Path, grey: [f32; 3], purpose: Purpose, part: &mut dyn FnMut(Item)) -> LoadResult<usize> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let model = match ext.as_str() {
         "glb" | "gltf" | "obj" | "stl" => load_asset(path, &ext)?,
         // a solid is never empty: the child sends only those with triangles
-        "step" | "stp" => return Ok(step::load(path, grey, budget, |m| part(finish(model(m), grey)))?),
+        "step" | "stp" => return Ok(step::load(path, grey, purpose, |m| part(finish(model(m), grey)))?),
         _ => {
             let c = load_cloud(path)?;
             if c.faces.is_none() {
@@ -207,7 +207,7 @@ mod tests {
     /// A file that isn't STEP, in its one piece.
     fn load(path: &Path, grey: [f32; 3]) -> LoadResult<Item> {
         let mut item = None;
-        super::load(path, grey, None, &mut |i| item = Some(i))?;
+        super::load(path, grey, Purpose::View, &mut |i| item = Some(i))?;
         Ok(item.unwrap())
     }
 

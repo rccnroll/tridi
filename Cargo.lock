@@ -2850,6 +2850,7 @@ dependencies = [
  "monstertruck-assembly",
  "monstertruck-io",
  "monstertruck-meshing",
+ "rayon",
  "thiserror 2.0.21",
  "three-d",
  "three-d-asset",

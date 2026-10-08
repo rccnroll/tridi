@@ -437,3 +437,19 @@ history above keep the old name.
   71 of 97 there. Measured on that file: 7 s to parse, 1.9M triangles
   in 56 s, 5 solids skipped, 6.8 GB at the peak (the solids in flight at
   once).
+- **No solid left hanging** (08/10): the 5 solids skipped weren't stuck.
+  monstertruck parallelizes inside rayon's global pool, and the big
+  solids' faces queued every small one behind them: 52 of 97 in 13 s,
+  then nothing for 86 s, then the other 45 in 3 s. Each worker now has a
+  one-thread pool of its own, so solids run side by side and a slow one
+  holds back only itself. Two more causes, on one 429-face part used
+  twice: two bicubic B-spline faces came out at 3.7M triangles each, and
+  `put_together_same_attrs` never finished on them. That step only
+  merged vertices our unindexed triangles don't share: it went, a
+  zero-area check took its place, and a face over 100k triangles is left
+  out as the library's blow-up. A solid the fine pass (robust
+  triangulation, 0.1%) doesn't hand back within 60 s gets a coarse pass
+  (plain triangulation, 1%), which finished all 6 slowest alone;
+  thumbnails go coarse from the start. On that file: all 97 solids in
+  97 s with the fine pass alone, 5.5 GB at the peak; the thumbnail has
+  94 of 97 in 15 s, the arm the gripper hung from included.

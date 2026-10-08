@@ -18,8 +18,9 @@ a window or a GPU.
 - Meshes: `.glb`/`.gltf` (materials and textures), `.obj`, `.stl`, `.off`,
   `.ply` with faces.
 - CAD: `.step`/`.stp` (assemblies and colors), tessellated in Rust with
-  monstertruck. Its solids show up as they're tessellated; one the
-  library can't finish is left out (the thumbnail draws what came in 15 s).
+  monstertruck. Its solids show up as they're tessellated, and one the
+  library is slow on gets a coarser second try (the thumbnail is coarse,
+  and draws what came in 15 s).
 
 ## Features
 
