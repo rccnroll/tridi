@@ -8,13 +8,15 @@ use crate::{formats::Cloud, theme::Theme};
 /// The file's colors, if it has them and they're kept: with several files
 /// open (`tint` given) one color for every point (our scans' grey rgb) says
 /// nothing, and two of them overlapping would look like one cloud.
+#[must_use]
 pub fn own_colors(c: &Cloud, tint: Option<[f32; 3]>) -> Option<&[Vec3]> {
     c.colors
         .as_deref()
-        .filter(|v| tint.is_none() || !(v.len() > 1 && v.windows(2).all(|w| w[0] == w[1])))
+        .filter(|v| tint.is_none() || !(v.len() > 1 && v.windows(2).all(|w| w.first() == w.last())))
 }
 
 /// The file's colors if kept (see `own_colors`), else `tint` flat, else the Z ramp.
+#[must_use]
 pub fn colorize(c: &Cloud, tint: Option<[f32; 3]>, theme: &Theme) -> Vec<Vec3> {
     if let Some(cols) = own_colors(c, tint) {
         return cols.to_vec();
@@ -24,7 +26,7 @@ pub fn colorize(c: &Cloud, tint: Option<[f32; 3]>, theme: &Theme) -> Vec<Vec3> {
     }
     let (lo, hi) = c.points.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| (lo.min(p.z), hi.max(p.z)));
     let span = if hi > lo { hi - lo } else { 1.0 };
-    let (a, b) = (Vec3::from(theme.ramp[0]), Vec3::from(theme.ramp[1]));
+    let [a, b] = theme.ramp.map(Vec3::from);
     c.points.iter().map(|p| a + (b - a) * ((p.z - lo) / span)).collect()
 }
 
@@ -41,7 +43,7 @@ mod tests {
     // 1. a single file, no colors -> height ramp, bottom to top
     #[test]
     fn ramp_bottom_to_top() {
-        let pts: Vec<[f32; 3]> = (0..500).map(|i| [0.3, 0.7, i as f32 / 50.0]).collect();
+        let pts: Vec<[f32; 3]> = (0..500_u16).map(|i| [0.3, 0.7, f32::from(i) / 50.0]).collect();
         let c = load_cloud(&tmp("plain.pcd", &ascii_pcd(&pts))).unwrap();
         assert_eq!(c.points.len(), 500);
         let col = colorize(&c, None, &LIGHT);

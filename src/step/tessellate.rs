@@ -2,19 +2,21 @@
 //! placed where the assembly puts them, as FLOATS f32 per vertex.
 
 use monstertruck_assembly::assy::{EdgeEntity, NodeEntity};
+use monstertruck_io::step::load::Table;
 use monstertruck_io::step::load::step_p21::{ast::Name, tables::PlaceHolder};
-use monstertruck_io::step::load::*;
 use monstertruck_meshing::prelude::*;
-use std::collections::HashMap;
-use std::path::Path;
+use std::{collections::HashMap, fs, path::Path};
 
-use crate::step::{
-    FLOATS, NONE, StepError, StepResult,
-    styles::{Ents, colors, entities, outer_faces},
+use crate::{
+    formats::narrow,
+    step::{
+        FLOATS, NONE, StepError, StepResult,
+        styles::{Colors, Ents, colors, entities, outer_faces},
+    },
 };
 
 pub(crate) fn tessellate(path: &Path) -> StepResult<Vec<f32>> {
-    let raw = std::fs::read(path).map_err(StepError::Io)?;
+    let raw = fs::read(path).map_err(StepError::Read)?;
     // names and comments are often Latin-1: the geometry is ASCII either way
     let text = String::from_utf8_lossy(&raw);
     #[expect(clippy::map_err_ignore, reason = "see StepError::NotStep")]
@@ -41,11 +43,11 @@ pub(crate) fn tessellate(path: &Path) -> StepResult<Vec<f32>> {
                 let m = p.matrix();
                 for item in solids_of(&table, rep) {
                     let local = cache.entry(item).or_insert_with(|| mesh_item(&table, &ents, &colors, item));
-                    for v in local.as_chunks::<FLOATS>().0 {
-                        let q = m.transform_point(Point3::new(v[0].into(), v[1].into(), v[2].into()));
-                        let n = m.transform_vector(Vector3::new(v[3].into(), v[4].into(), v[5].into())).normalize();
-                        out.extend([q.x, q.y, q.z, n.x, n.y, n.z].map(|x| x as f32));
-                        out.extend(&v[6..]);
+                    for &[px, py, pz, nx, ny, nz, red, green, blue] in local.as_chunks::<FLOATS>().0 {
+                        let q = m.transform_point(Point3::new(px.into(), py.into(), pz.into()));
+                        let n = m.transform_vector(Vector3::new(nx.into(), ny.into(), nz.into())).normalize();
+                        out.extend([q.x, q.y, q.z, n.x, n.y, n.z].map(narrow));
+                        out.extend([red, green, blue]);
                     }
                 }
             }
@@ -65,8 +67,8 @@ pub(crate) fn tessellate(path: &Path) -> StepResult<Vec<f32>> {
 
 /// The solids of a representation: its own items, and those of the
 /// representations tied to it without a transform (a product's
-/// SHAPE_REPRESENTATION often holds only a placement, and its brep sits in
-/// an ADVANCED_BREP_SHAPE_REPRESENTATION linked by a relationship).
+/// `SHAPE_REPRESENTATION` often holds only a placement, and its brep sits in
+/// an `ADVANCED_BREP_SHAPE_REPRESENTATION` linked by a relationship).
 fn solids_of(table: &Table, rep: u64) -> Vec<u64> {
     let (mut todo, mut seen, mut found) = (vec![rep], vec![rep], Vec::new());
     while let Some(r) = todo.pop() {
@@ -79,6 +81,10 @@ fn solids_of(table: &Table, rep: u64) -> Vec<u64> {
                 }
             }
         }
+        #[expect(
+            clippy::iter_over_hash_type,
+            reason = "the order only changes the order of the triangles, not the mesh"
+        )]
         for srr in table.shape_representation_relationship.values() {
             let (PlaceHolder::Ref(Name::Entity(a)), PlaceHolder::Ref(Name::Entity(b))) = (&srr.rep_1, &srr.rep_2) else {
                 continue;
@@ -99,10 +105,10 @@ fn solids_of(table: &Table, rep: u64) -> Vec<u64> {
     found
 }
 
-/// Triangles of one MANIFOLD_SOLID_BREP or SHELL_BASED_SURFACE_MODEL, in its
+/// Triangles of one `MANIFOLD_SOLID_BREP` or `SHELL_BASED_SURFACE_MODEL`, in its
 /// own coordinates; empty if the library can't convert it. A face takes its
 /// own color, else the solid's.
-fn mesh_item(table: &Table, ents: &Ents, colors: &HashMap<u64, [f32; 3]>, id: u64) -> Vec<f32> {
+fn mesh_item(table: &Table, ents: &Ents, colors: &Colors, id: u64) -> Vec<f32> {
     let shells = if let Some(s) = table.manifold_solid_brep.get(&id) {
         table.to_compressed_solid(s).map(|s| s.boundaries).unwrap_or_default()
     } else if let Some(s) = table.shell_based_surface_model.get(&id) {
@@ -123,15 +129,19 @@ fn mesh_item(table: &Table, ents: &Ents, colors: &HashMap<u64, [f32; 3]>, id: u6
             let Some(surface) = &face.surface else { continue };
             let mut poly = if face.orientation { surface.clone() } else { surface.inverse() };
             poly.put_together_same_attrs(TOLERANCE * 50.0).remove_degenerate_faces();
-            let color = aligned.then(|| colors.get(&listed[i])).flatten().copied().unwrap_or(solid);
-            let (p, n) = (poly.positions(), poly.normals());
-            for t in poly.faces().triangle_iter() {
-                let [a, b, c] = t.map(|v| p[v.pos]);
+            let own = || colors.get(<[u64]>::get(&listed, i)?);
+            let color = aligned.then(own).flatten().copied().unwrap_or(solid);
+            let (positions, normals) = (poly.positions(), poly.normals());
+            for corners in poly.faces().triangle_iter() {
+                // the library's indices point into its own arrays; `<[_]>::get`,
+                // because the prelude brings a trait with a `get` of its own
+                let [Some(&a), Some(&b), Some(&c)] = corners.map(|v| <[_]>::get(positions, v.pos)) else {
+                    continue;
+                };
                 let flat = (b - a).cross(c - a).normalize();
-                for v in t {
-                    let q = p[v.pos];
-                    let m = v.nor.map_or(flat, |i| n[i]);
-                    out.extend([q.x, q.y, q.z, m.x, m.y, m.z].map(|x| x as f32));
+                for (v, at) in corners.iter().zip([a, b, c]) {
+                    let normal = v.nor.and_then(|i| <[_]>::get(normals, i)).copied().unwrap_or(flat);
+                    out.extend([at.x, at.y, at.z, normal.x, normal.y, normal.z].map(narrow));
                     out.extend(color);
                 }
             }

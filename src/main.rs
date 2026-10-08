@@ -18,16 +18,32 @@
 //! only if the cloud doesn't already carry its own colors. Meshes keep their
 //! materials.
 
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        reason = "a test may panic: that is its failure"
+    )
+)]
+
 mod desktop;
 mod thumb;
 mod view;
 
+use clap::{CommandFactory, Parser};
+use clap_complete::Shell;
 use eyre::WrapErr;
-use std::path::Path;
-use std::process::ExitCode;
+use std::{
+    env, fmt, fs,
+    io::{self, Write},
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 use tridi::{LIGHT, Theme};
 
-#[derive(clap::Parser)]
+#[derive(Parser)]
 #[command(
     version,
     disable_help_subcommand = true,
@@ -69,14 +85,14 @@ enum Cmd {
     /// Drop the cached thumbnails of our formats (default ~/.cache/thumbnails)
     ClearThumbnails {
         /// Thumbnail cache directories
-        dirs: Vec<std::path::PathBuf>,
+        dirs: Vec<PathBuf>,
     },
     /// Internal: step.rs runs itself as a child to tessellate
     #[command(hide = true)]
     StepMesh { input: String },
     /// Packaging: write the man page and the bash, zsh and fish completions to DIR
     #[command(hide = true)]
-    Generate { dir: std::path::PathBuf },
+    Generate { dir: PathBuf },
 }
 
 const AFTER_HELP: &str = "\
@@ -115,16 +131,21 @@ Bugs: https://github.com/rccnroll/tridi/issues";
 
 /// The Window section of the help, which H shows in the viewer.
 fn window_keys() -> &'static str {
-    let s = &AFTER_HELP[AFTER_HELP.find("Window:").unwrap_or(0)..];
-    &s[..s.find("\n\n").unwrap_or(s.len())]
+    let s = AFTER_HELP.find("Window:").and_then(|i| AFTER_HELP.get(i..)).unwrap_or(AFTER_HELP);
+    s.split_once("\n\n").map_or(s, |(window, _)| window)
+}
+
+/// A line for the user on `out` (stdout): what tridi read, what it did.
+pub fn tell(out: &mut dyn Write, line: fmt::Arguments) {
+    #[expect(clippy::let_underscore_must_use, reason = "a closed stdout (a pipe to head) is no reason to stop")]
+    let _ = writeln!(out, "{line}");
 }
 
 /// `tridi generate DIR`: the man pages (tridi.1, one per subcommand), and
 /// tridi.bash, _tridi and tridi.fish, which the packages install.
 fn generate(dir: &Path) -> eyre::Result<()> {
-    use clap_complete::Shell;
-    let mut cmd = <Cli as clap::CommandFactory>::command();
-    std::fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
+    let mut cmd = Cli::command();
+    fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
     clap_mangen::generate_to(cmd.clone(), dir).wrap_err("cannot write the man pages")?;
     for sh in [Shell::Bash, Shell::Zsh, Shell::Fish] {
         clap_complete::generate_to(sh, &mut cmd, "tridi", dir).wrap_err_with(|| format!("cannot write the {sh} completions"))?;
@@ -133,7 +154,8 @@ fn generate(dir: &Path) -> eyre::Result<()> {
 }
 
 fn main() -> ExitCode {
-    let cli = <Cli as clap::Parser>::parse();
+    let cli = Cli::parse();
+    let mut out = io::stdout();
     let t = cli.theme.as_deref().and_then(Theme::by_name);
     let r = match cli.cmd {
         Some(Cmd::StepMesh { input }) => {
@@ -149,21 +171,21 @@ fn main() -> ExitCode {
         Some(Cmd::Generate { dir }) => generate(&dir),
         // thumbnails can't read the saved theme (sandbox): light unless told
         Some(Cmd::Thumb { input, output, size }) => thumb::thumb(&input, &output, size, t.unwrap_or(&LIGHT)),
-        Some(Cmd::Theme { name }) => desktop::command(name.as_deref()),
+        Some(Cmd::Theme { name }) => desktop::command(name.as_deref(), &mut out),
         Some(Cmd::ClearThumbnails { dirs }) => {
-            let home = std::env::var_os("HOME").map(|h| Path::new(&h).join(".cache/thumbnails"));
+            let home = env::var_os("HOME").map(|h| Path::new(&h).join(".cache/thumbnails"));
             let dirs = if dirs.is_empty() { home.into_iter().collect() } else { dirs };
             let n: usize = dirs.iter().map(|d| desktop::clear_thumbnails(d)).sum();
-            println!("{n} cached thumbnails cleared");
+            tell(&mut out, format_args!("{n} cached thumbnails cleared"));
             Ok(())
         }
         None if cli.files.is_empty() => {
-            <Cli as clap::CommandFactory>::command().print_help().ok();
+            tell(&mut out, format_args!("{}", Cli::command().render_help()));
             return ExitCode::from(2);
         }
         None => {
             desktop::refresh();
-            view::view(&cli.files, t.unwrap_or_else(desktop::current))
+            view::view(&cli.files, t.unwrap_or_else(desktop::current), Box::new(out))
         }
     };
     match r {
@@ -179,10 +201,10 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process;
 
     #[test]
     fn command_line() {
-        use clap::{CommandFactory, Parser};
         Cli::command().debug_assert();
         // the thumbnailer entries' Exec lines, light and dark
         for a in [
@@ -202,7 +224,7 @@ mod tests {
 
     #[test]
     fn generate_writes_what_the_packages_install() {
-        let dir = std::env::temp_dir().join(format!("tridi-generate-{}", std::process::id()));
+        let dir = env::temp_dir().join(format!("tridi-generate-{}", process::id()));
         generate(&dir).unwrap();
         for f in [
             "tridi.1",
@@ -215,6 +237,6 @@ mod tests {
         ] {
             assert!(dir.join(f).is_file(), "{f}");
         }
-        std::fs::remove_dir_all(dir).unwrap();
+        fs::remove_dir_all(dir).unwrap();
     }
 }

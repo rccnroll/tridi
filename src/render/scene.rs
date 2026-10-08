@@ -1,9 +1,15 @@
 //! The scene: one layer per opened file (points with eye-dome lighting, or
 //! a mesh) and the axis triad.
 
-use three_d::*;
+use three_d::{
+    AmbientLight, AxisAlignedBoundingBox, Camera, ClearState, Context, CpuModel, DepthTest, DepthTexture2D, DirectionalLight, Geometry,
+    HasContext, InnerSpace, Interpolation, Model, PhysicalMaterial, Program, RenderStates, RenderTarget, Srgba, Texture2D, Vec2, Vec3,
+    VertexBuffer, Viewer, Viewport, Wrapping, context, degrees, vec2, vec3,
+};
 
-use crate::render::{RenderError, RenderResult};
+use std::{cell::RefCell, convert::Infallible};
+
+use crate::render::{RenderError, RenderResult, px_f32};
 
 const VS: &str = "
 uniform mat4 mvp;
@@ -64,7 +70,7 @@ enum Layer {
     Points {
         pos: VertexBuffer<Vec3>,
         col: VertexBuffer<Vec3>,
-        n: u32,
+        n: i32,
     },
     Mesh(Model<PhysicalMaterial>),
 }
@@ -81,16 +87,16 @@ pub struct Scene {
     /// VAO after every draw, and only binding an attribute brings it back)
     edl_tri: VertexBuffer<Vec2>,
     /// the points' own color and depth textures, kept while the size holds
-    edl_targets: std::cell::RefCell<Option<(u32, u32, Texture2D, DepthTexture2D)>>,
+    edl_targets: RefCell<Option<(u32, u32, Texture2D, DepthTexture2D)>>,
     layers: Vec<Layer>,
     visible: Vec<bool>,
     axes: Option<(VertexBuffer<Vec3>, VertexBuffer<Vec3>)>,
     lo: Vec3,
     hi: Vec3,
-    pub center: Vec3,
-    pub radius: f32,
+    center: Vec3,
+    radius: f32,
     /// +Z for scans and CAD, +Y when every file is glTF (its convention)
-    pub up: Vec3,
+    up: Vec3,
 }
 
 /// One opened file, ready for the GPU: a colored cloud or a mesh.
@@ -109,10 +115,11 @@ impl Scene {
             layers.push(match i {
                 Input::Points(p, c) => {
                     bb.expand(&p);
+                    let n = i32::try_from(p.len()).map_err(|_err| RenderError::TooManyPoints { count: p.len() })?;
                     Layer::Points {
                         pos: VertexBuffer::new_with_data(ctx, &p),
                         col: VertexBuffer::new_with_data(ctx, &c),
-                        n: p.len() as u32,
+                        n,
                     }
                 }
                 Input::Mesh(m) => {
@@ -138,6 +145,7 @@ impl Scene {
             }
             (VertexBuffer::new_with_data(ctx, &p), VertexBuffer::new_with_data(ctx, &c))
         });
+        // SAFETY: a state flag on the context the caller made current
         unsafe { ctx.enable(context::PROGRAM_POINT_SIZE) };
         Ok(Scene {
             ctx: ctx.clone(),
@@ -149,7 +157,7 @@ impl Scene {
                 step: "build the eye-dome shader",
                 source,
             })?,
-            edl_targets: Default::default(),
+            edl_targets: RefCell::default(),
             edl_tri: VertexBuffer::new_with_data(ctx, &[vec2(0.0, 0.0), vec2(2.0, 0.0), vec2(0.0, 2.0)]),
             visible: vec![true; layers.len()],
             layers,
@@ -160,6 +168,12 @@ impl Scene {
             radius: (ext.magnitude() * 0.5).max(1e-3),
             up,
         })
+    }
+
+    /// Half the diagonal of everything drawn: the scene's size.
+    #[must_use]
+    pub fn radius(&self) -> f32 {
+        self.radius
     }
 
     /// Turns layer `i` (the i-th file read) off or on; returns whether it's
@@ -187,7 +201,7 @@ impl Scene {
         let right = self.up.cross(dir).normalize();
         let up = dir.cross(right);
         let ty = (FOV.to_radians() / 2.0).tan() / 1.08;
-        let tx = ty * vp.width as f32 / vp.height.max(1) as f32;
+        let tx = ty * px_f32(vp.width) / px_f32(vp.height.max(1));
         let mut d = self.radius * 0.1;
         for i in 0..8 {
             let pick = |bit: usize, lo: f32, hi: f32| if i & bit == 0 { lo } else { hi };
@@ -222,18 +236,19 @@ impl Scene {
         let shown = || self.layers.iter().zip(&self.visible).filter(|(_, v)| **v).map(|(l, _)| l);
         let meshes = shown().filter_map(|l| match l {
             Layer::Mesh(m) => Some(m),
-            _ => None,
+            Layer::Points { .. } => None,
         });
-        target.render(cam, meshes.flat_map(|m| m.into_iter()), &[&ambient, &key]);
+        target.render(cam, meshes.flat_map(IntoIterator::into_iter), &[&ambient, &key]);
         let p = &self.program;
         p.use_uniform("mvp", cam.projection() * cam.view());
         p.use_uniform("psize", psize);
         // three-d's Program only draws triangles: points and lines go straight to GL
-        let draw = |pos: &VertexBuffer<Vec3>, col: &VertexBuffer<Vec3>, mode: u32, n: u32| {
+        let draw = |pos: &VertexBuffer<Vec3>, col: &VertexBuffer<Vec3>, mode: u32, n: i32| {
             p.use_vertex_attribute("pos", pos);
             p.use_vertex_attribute("color", col);
+            // SAFETY: the buffers bound just above hold n vertices
             p.draw_with(RenderStates::default(), cam.viewport(), || unsafe {
-                ctx.draw_arrays(mode, 0, n as i32)
+                ctx.draw_arrays(mode, 0, n);
             });
         };
         let has_points = shown().any(|l| matches!(l, Layer::Points { .. }));
@@ -241,6 +256,9 @@ impl Scene {
             let vp = cam.viewport();
             let mut cache = self.edl_targets.borrow_mut();
             if !matches!(&*cache, Some((w, h, ..)) if *w == vp.width && *h == vp.height) {
+                *cache = None;
+            }
+            let (_, _, color, depth) = cache.get_or_insert_with(|| {
                 let color = Texture2D::new_empty::<[u8; 4]>(
                     ctx,
                     vp.width,
@@ -252,61 +270,55 @@ impl Scene {
                     Wrapping::ClampToEdge,
                 );
                 let depth = DepthTexture2D::new::<f32>(ctx, vp.width, vp.height, Wrapping::ClampToEdge, Wrapping::ClampToEdge);
-                *cache = Some((vp.width, vp.height, color, depth));
-            }
-            let (_, _, color, depth) = cache.as_mut().unwrap();
+                (vp.width, vp.height, color, depth)
+            });
             // the points' camera draws at the origin of their own textures
             let mut own = cam.clone();
             own.set_viewport(Viewport::new_at_origo(vp.width, vp.height));
-            RenderTarget::new(color.as_color_target(None), depth.as_depth_target())
+            let Ok(_) = RenderTarget::new(color.as_color_target(None), depth.as_depth_target())
                 .clear(ClearState::color_and_depth(0.0, 0.0, 0.0, 0.0, 1.0))
-                .write::<RendererError>(|| {
+                .write::<Infallible>(|| {
                     p.use_uniform("mvp", own.projection() * own.view());
                     for l in shown() {
                         if let Layer::Points { pos, col, n } = l {
                             p.use_vertex_attribute("pos", pos);
                             p.use_vertex_attribute("color", col);
-                            let n = *n as i32;
+                            // SAFETY: the buffers bound just above hold n vertices
                             p.draw_with(RenderStates::default(), own.viewport(), || unsafe {
-                                ctx.draw_arrays(context::POINTS, 0, n)
+                                ctx.draw_arrays(context::POINTS, 0, *n);
                             });
                         }
                     }
                     Ok(())
-                })
-                .unwrap();
+                });
             let e = &self.edl;
             e.use_texture("colorTex", color);
             e.use_depth_texture("depthTex", depth);
             e.use_uniform("near", cam.z_near());
             e.use_uniform("far", cam.z_far());
             // sample radius ~1.5 px at 1080p, scaled with the image
-            let r = (vp.height as f32 / 720.0).max(1.0);
-            e.use_uniform("px", vec2(r / vp.width as f32, r / vp.height as f32));
-            e.use_uniform("strength", 6.0f32);
+            let r = (px_f32(vp.height) / 720.0).max(1.0);
+            e.use_uniform("px", vec2(r / px_f32(vp.width), r / px_f32(vp.height)));
+            e.use_uniform("strength", 6.0_f32);
             e.use_vertex_attribute("corner", &self.edl_tri);
-            target
-                .write::<RendererError>(|| {
-                    e.draw_arrays(
-                        RenderStates {
-                            depth_test: DepthTest::LessOrEqual,
-                            ..Default::default()
-                        },
-                        vp,
-                        3,
-                    );
-                    Ok(())
-                })
-                .unwrap();
-        }
-        target
-            .write::<RendererError>(|| {
-                p.use_uniform("mvp", cam.projection() * cam.view());
-                if let Some((pos, col)) = &self.axes {
-                    draw(pos, col, context::LINES, 6);
-                }
+            let Ok(_) = target.write::<Infallible>(|| {
+                e.draw_arrays(
+                    RenderStates {
+                        depth_test: DepthTest::LessOrEqual,
+                        ..Default::default()
+                    },
+                    vp,
+                    3,
+                );
                 Ok(())
-            })
-            .unwrap();
+            });
+        }
+        let Ok(_) = target.write::<Infallible>(|| {
+            p.use_uniform("mvp", cam.projection() * cam.view());
+            if let Some((pos, col)) = &self.axes {
+                draw(pos, col, context::LINES, 6);
+            }
+            Ok(())
+        });
     }
 }

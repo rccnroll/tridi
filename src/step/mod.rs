@@ -6,11 +6,15 @@
 mod styles;
 mod tessellate;
 
-use std::io::{Read, Write};
-use std::path::Path;
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::time::Duration;
+use std::{
+    env,
+    io::{self, Read, Write},
+    path::Path,
+    process::{Command, Stdio},
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 use three_d::{Srgba, Vec3};
 use three_d_asset::{Indices, Positions, TriMesh};
 
@@ -20,14 +24,16 @@ use tessellate::tessellate;
 #[derive(Debug, thiserror::Error)]
 pub enum StepError {
     #[error("cannot run the tessellator")]
-    Spawn(#[source] std::io::Error),
+    Spawn(#[source] io::Error),
     #[error("gave up tessellating after {secs} s")]
     Timeout { secs: u64 },
     /// The child failed; `message` is what it printed, or its exit status.
     #[error("{message}")]
     Failed { message: String },
     #[error("cannot read the file")]
-    Io(#[source] std::io::Error),
+    Read(#[source] io::Error),
+    #[error("cannot hand the triangles back")]
+    Write(#[source] io::Error),
     /// The parser's own error is a multi-line dump of its tokenizer state,
     /// nothing a user can act on: not kept.
     #[error("not a STEP file")]
@@ -41,15 +47,15 @@ pub type StepResult<T> = Result<T, StepError>;
 // ponytail: one deadline for viewer and thumbnails; the biggest real part (476 faces) takes 0.5 s
 const DEADLINE: Duration = Duration::from_secs(15);
 
-/// A vertex on the wire: position, normal, color (NONE when the file gives
-/// the face none).
+/// A vertex on the wire: position, normal, color (NONE, negative, when the
+/// file gives the face none).
 pub(crate) const FLOATS: usize = 9;
 pub(crate) const NONE: [f32; 3] = [-1.0; 3];
 
 /// Parent side: run the child, read its triangles. `grey` stands in for the
 /// faces without a color, when others have one.
 pub fn load(path: &Path, grey: [f32; 3]) -> StepResult<TriMesh> {
-    let exe = std::env::current_exe().map_err(StepError::Spawn)?;
+    let exe = env::current_exe().map_err(StepError::Spawn)?;
     let mut child = Command::new(exe)
         .arg("step-mesh")
         .arg(path)
@@ -58,17 +64,21 @@ pub fn load(path: &Path, grey: [f32; 3]) -> StepResult<TriMesh> {
         .stderr(Stdio::piped())
         .spawn()
         .map_err(StepError::Spawn)?;
-    let (mut out, mut err) = (child.stdout.take().unwrap(), child.stderr.take().unwrap());
+    let (Some(mut out), Some(mut err)) = (child.stdout.take(), child.stderr.take()) else {
+        return Err(StepError::Spawn(io::Error::other("the tessellator has no pipes")));
+    };
     let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
+    thread::spawn(move || {
         let (mut o, mut e) = (Vec::new(), String::new());
-        let _ = out.read_to_end(&mut o);
-        let _ = err.read_to_string(&mut e);
+        // a pipe that breaks means a child that died: its status says how
+        #[expect(clippy::let_underscore_must_use, reason = "the exit status reports the failure")]
+        let _ = (out.read_to_end(&mut o), err.read_to_string(&mut e));
+        #[expect(clippy::let_underscore_must_use, reason = "the parent stopped waiting: nobody to tell")]
         let _ = tx.send((o, e));
     });
     let Ok((bytes, msg)) = rx.recv_timeout(DEADLINE) else {
-        let _ = child.kill();
-        let _ = child.wait();
+        #[expect(clippy::let_underscore_must_use, reason = "it may be gone already; the timeout is the news")]
+        let _ = (child.kill(), child.wait());
         return Err(StepError::Timeout { secs: DEADLINE.as_secs() });
     };
     let status = child.wait().map_err(StepError::Spawn)?;
@@ -87,24 +97,28 @@ pub fn load(path: &Path, grey: [f32; 3]) -> StepResult<TriMesh> {
 /// Child side: `tridi step-mesh IN`.
 pub fn mesh_to_stdout(path: &str) -> StepResult<()> {
     // die with the parent: a viewer killed while waiting must not leave us running
+    // SAFETY: prctl with PR_SET_PDEATHSIG only sets a flag on this process
     unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
     let v = tessellate(Path::new(path))?;
     let bytes: Vec<u8> = v.iter().flat_map(|f| f.to_le_bytes()).collect();
-    std::io::stdout().lock().write_all(&bytes).map_err(StepError::Io)
+    io::stdout().lock().write_all(&bytes).map_err(StepError::Write)
 }
 
 /// FLOATS f32 per vertex, three vertices per triangle.
 fn decode(bytes: &[u8], grey: [f32; 3]) -> TriMesh {
     let f: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect();
     let (mut pos, mut nor, mut col) = (Vec::new(), Vec::new(), Vec::new());
-    for v in f.as_chunks::<FLOATS>().0 {
-        pos.push(Vec3::new(v[0], v[1], v[2]));
-        nor.push(Vec3::new(v[3], v[4], v[5]));
-        let c = if v[6..] == NONE { grey } else { [v[6], v[7], v[8]] };
-        col.push(Srgba::from([c[0], c[1], c[2], 1.0]));
+    let mut colored = false;
+    for &[px, py, pz, nx, ny, nz, red, green, blue] in f.as_chunks::<FLOATS>().0 {
+        pos.push(Vec3::new(px, py, pz));
+        nor.push(Vec3::new(nx, ny, nz));
+        // NONE is negative, a real color 0..1
+        let own = red >= 0.0;
+        colored |= own;
+        let [r, g, b] = if own { [red, green, blue] } else { grey };
+        col.push(Srgba::from([r, g, b, 1.0]));
     }
     // no color anywhere: leave it to the theme's material
-    let colored = f.as_chunks::<FLOATS>().0.iter().any(|v| v[6..] != NONE);
     TriMesh {
         positions: Positions::F32(pos),
         normals: Some(nor),
@@ -117,6 +131,7 @@ fn decode(bytes: &[u8], grey: [f32; 3]) -> TriMesh {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::tmp;
 
     // the child path only: `load` runs current_exe, which under cargo test is
     // the test binary; the process and the deadline were checked by hand
@@ -126,7 +141,7 @@ mod tests {
     }
 
     fn bbox(m: &TriMesh) -> ([f32; 3], [f32; 3]) {
-        let Positions::F32(p) = &m.positions else { unreachable!() };
+        let p = m.positions.to_f32();
         p.iter().fold(([f32::MAX; 3], [f32::MIN; 3]), |(l, h), q| {
             (
                 [l[0].min(q.x), l[1].min(q.y), l[2].min(q.z)],
@@ -176,8 +191,7 @@ mod tests {
 
     #[test]
     fn not_step_is_error() {
-        let f = std::env::temp_dir().join(format!("tridi-bad-{}.step", std::process::id()));
-        std::fs::write(&f, b"ISO-10303-21;\ngarbage").unwrap();
+        let f = tmp("bad.step", b"ISO-10303-21;\ngarbage");
         assert!(matches!(tessellate(&f), Err(StepError::NotStep)));
     }
 }

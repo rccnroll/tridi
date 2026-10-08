@@ -6,6 +6,7 @@ use crate::formats::Cloud;
 
 /// xyz: x y z; xyzrgb: x y z r g b (0..1); pts: an optional count line, then
 /// x y z [intensity] [r g b] (0..255). Spaces or commas; other lines skipped.
+#[expect(clippy::many_single_char_names, reason = "x y z and r g b, as the formats name them")]
 pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
     let mut points = vec![];
     let mut colors = vec![];
@@ -20,14 +21,12 @@ pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
             Ok(t) => t,
             Err(_) => continue,
         };
-        if t.len() < 3 {
-            continue;
-        }
-        points.push(vec3(t[0], t[1], t[2]));
-        let c = match (ext, t.len()) {
-            ("xyzrgb", 6..) => Some(vec3(t[3], t[4], t[5])),
-            ("pts", 7..) => Some(vec3(t[4], t[5], t[6]) / 255.0),
-            ("pts", 6) => Some(vec3(t[3], t[4], t[5]) / 255.0),
+        let [x, y, z, ref rest @ ..] = *t.as_slice() else { continue };
+        points.push(vec3(x, y, z));
+        let c = match (ext, rest) {
+            ("xyzrgb", &[r, g, b, ..]) => Some(vec3(r, g, b)),
+            // x y z intensity r g b, or x y z r g b
+            ("pts", &([_, r, g, b, ..] | [r, g, b])) => Some(vec3(r, g, b) / 255.0),
             _ => None,
         };
         match c {

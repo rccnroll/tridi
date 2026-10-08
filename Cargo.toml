@@ -60,3 +60,98 @@ assets = [
     ["target/assets/_tridi", "usr/share/zsh/vendor-completions/", "644"],
     ["target/assets/tridi.fish", "usr/share/fish/vendor_completions.d/", "644"],
 ]
+
+# The lint policy of the layered-architecture skill: no panics, no silent
+# casts, no unexplained exceptions; the only escape is a scoped
+# #[expect(lint, reason = "...")].
+[lints.rust]
+unused_must_use = "deny"
+unused_imports  = "warn"
+
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious  = { level = "warn", priority = -1 }
+complexity  = { level = "warn", priority = -1 }
+perf        = { level = "warn", priority = -1 }
+pedantic    = { level = "warn", priority = -1 }
+
+# override in pedantic
+missing_errors_doc                   = "allow"
+must_use_candidate                   = "deny"
+
+# individual items from the `restrictions` group
+
+absolute_paths                       = "warn"
+allow_attributes                     = "deny"
+allow_attributes_without_reason      = "deny"
+as_conversions                       = "deny"
+assertions_on_result_states          = "deny"
+cfg_not_test                         = "deny"
+clone_on_ref_ptr                     = "warn"
+create_dir                           = "deny"
+dbg_macro                            = "warn"
+doc_include_without_cfg              = "deny"
+else_if_without_else                 = "allow"
+empty_drop                           = "deny"
+empty_enum_variants_with_brackets    = "deny"
+empty_structs_with_brackets          = "deny"
+error_impl_error                     = "warn"
+exit                                 = "deny"
+expect_used                          = "deny"
+field_scoped_visibility_modifiers    = "allow"
+filetype_is_file                     = "warn"
+float_cmp_const                      = "deny"
+if_then_some_else_none               = "deny"
+implicit_clone                       = "warn"
+impl_trait_in_params                 = "warn"
+indexing_slicing                     = "deny"
+infinite_loop                        = "deny"
+integer_division                     = "warn"
+items_after_test_module              = "allow"
+iter_over_hash_type                  = "warn"
+large_include_file                   = "warn"
+let_underscore_must_use              = "warn"
+lossy_float_literal                  = "warn"
+map_err_ignore                       = "warn"
+map_with_unused_argument_over_ranges = "warn"
+mem_forget                           = "deny"
+missing_assert_message               = "warn"
+missing_docs_in_private_items        = "allow"
+module_name_repetitions              = "allow"
+mutex_atomic                         = "deny"
+mutex_integer                        = "deny"
+non_zero_suggestions                 = "warn"
+panic                                = "deny"
+partial_pub_fields                   = "warn"
+pathbuf_init_then_push               = "warn"
+print_stdout                         = "deny"
+pub_use                              = "allow"
+pub_without_shorthand                = "warn"
+rc_buffer                            = "warn"
+rc_mutex                             = "warn"
+redundant_test_prefix                = "deny"
+redundant_type_annotations           = "warn"
+renamed_function_params              = "warn"
+rest_pat_in_fully_bound_structs      = "warn"
+return_and_then                      = "warn"
+same_name_method                     = "deny"
+string_lit_chars_any                 = "deny"
+string_slice                         = "warn"
+str_to_string                        = "deny"
+tests_outside_test_module            = "deny"
+todo                                 = "deny"
+undocumented_unsafe_blocks           = "deny"
+unimplemented                        = "deny"
+unnecessary_safety_comment           = "warn"
+unnecessary_safety_doc               = "warn"
+unneeded_field_pattern               = "deny"
+unreachable                          = "deny"
+unseparated_literal_suffix           = "deny"
+unused_result_ok                     = "warn"
+unwrap_in_result                     = "deny"
+unwrap_used                          = "deny"
+use_debug                            = "warn"
+verbose_file_reads                   = "warn"
+wildcard_enum_match_arm              = "warn"
+doc_overindented_list_items          = "allow"
+

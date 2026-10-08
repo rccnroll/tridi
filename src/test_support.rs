@@ -1,13 +1,13 @@
 //! Fixtures shared by the tests of several modules.
 
-use std::path::PathBuf;
+use std::{env, fmt::Write, fs, path::PathBuf, process};
 use three_d::{InnerSpace, Vec3};
 
 pub fn tmp(name: &str, data: &[u8]) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("tridi-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = env::temp_dir().join(format!("tridi-test-{}", process::id()));
+    fs::create_dir_all(&dir).unwrap();
     let p = dir.join(name);
-    std::fs::write(&p, data).unwrap();
+    fs::write(&p, data).unwrap();
     p
 }
 
@@ -17,7 +17,7 @@ pub fn ascii_pcd(pts: &[[f32; 3]]) -> Vec<u8> {
         n = pts.len()
     );
     for p in pts {
-        s += &format!("{} {} {}\n", p[0], p[1], p[2]);
+        writeln!(s, "{} {} {}", p[0], p[1], p[2]).expect("writing to a String can't fail");
     }
     s.into_bytes()
 }

@@ -1,22 +1,28 @@
 //! What monstertruck drops: the DATA section scanned for styles, so faces
 //! and solids get the colors the file gives them.
 
-use std::collections::HashMap;
+use std::{collections::BTreeMap, iter};
 
 /// The DATA section as `id -> (NAME, arguments)`, simple entities only
 /// (complex ones, `#1 = ( A() B() );`, are relationships we don't need
 /// here). monstertruck drops the style entities, so colors are read here.
-pub(crate) type Ents<'a> = HashMap<u64, (&'a str, &'a str)>;
+/// Ordered by id, so when two styles target the same item the last one in
+/// the file wins, every time.
+pub(crate) type Ents<'a> = BTreeMap<u64, (&'a str, &'a str)>;
+
+/// Item id -> color, 0..1.
+pub(crate) type Colors = BTreeMap<u64, [f32; 3]>;
 
 pub(crate) fn entities(text: &str) -> Ents<'_> {
-    let data = text.find("DATA;").map_or(text, |i| &text[i + 5..]);
-    let mut out = HashMap::new();
+    let data = text.split_once("DATA;").map_or(text, |(_, data)| data);
+    let mut out = BTreeMap::new();
     let (mut start, mut quoted) = (0, false);
     for (i, c) in data.char_indices() {
         match c {
             '\'' => quoted = !quoted,
             ';' if !quoted => {
-                let stmt = data[start..i].trim();
+                // both ends are char boundaries: `start` follows an ASCII ';'
+                let stmt = data.get(start..i).unwrap_or_default().trim();
                 start = i + 1;
                 let Some((id, rest)) = stmt.strip_prefix('#').and_then(|s| s.split_once('=')) else {
                     continue;
@@ -42,7 +48,7 @@ fn refs(args: &str) -> Vec<u64> {
         match c {
             '\'' => quoted = !quoted,
             '#' if !quoted => {
-                let digits: String = std::iter::from_fn(|| it.next_if(char::is_ascii_digit)).collect();
+                let digits: String = iter::from_fn(|| it.next_if(char::is_ascii_digit)).collect();
                 if let Ok(n) = digits.parse() {
                     out.push(n);
                 }
@@ -53,26 +59,32 @@ fn refs(args: &str) -> Vec<u64> {
     out
 }
 
-/// Item id -> color, from STYLED_ITEM (and OVER_RIDING_STYLED_ITEM). An item
+/// Item id -> color, from `STYLED_ITEM` (and `OVER_RIDING_STYLED_ITEM`). An item
 /// is a face, a solid, or a representation, whose color then goes to its
 /// items that have none of their own.
-pub(crate) fn colors(ents: &Ents) -> HashMap<u64, [f32; 3]> {
-    let mut direct = HashMap::new();
+pub(crate) fn colors(ents: &Ents) -> Colors {
+    let mut direct = Colors::new();
     for (name, args) in ents.values() {
         let r = refs(args);
-        let item = match *name {
-            "STYLED_ITEM" if !r.is_empty() => r.len() - 1,
-            "OVER_RIDING_STYLED_ITEM" if r.len() >= 2 => r.len() - 2,
+        // STYLED_ITEM(name, styles, item); the overriding one adds the
+        // overridden style after the item
+        let target = match *name {
+            "STYLED_ITEM" => r.split_last(),
+            "OVER_RIDING_STYLED_ITEM" => r.split_last().and_then(|(_, rest)| rest.split_last()),
             _ => continue,
         };
-        if let Some(c) = r[..item].iter().find_map(|&s| colour(ents, s, 0)) {
-            direct.insert(r[item], c);
+        if let Some((&item, styles)) = target
+            && let Some(c) = styles.iter().find_map(|&s| colour(ents, s, 0))
+        {
+            direct.insert(item, c);
         }
     }
     let mut all = direct.clone();
     for (id, c) in &direct {
-        if ents.get(id).is_some_and(|(name, _)| name.ends_with("REPRESENTATION")) {
-            for item in refs(ents[id].1) {
+        if let Some((name, args)) = ents.get(id)
+            && name.ends_with("REPRESENTATION")
+        {
+            for item in refs(args) {
                 all.entry(item).or_insert(*c);
             }
         }
@@ -80,15 +92,18 @@ pub(crate) fn colors(ents: &Ents) -> HashMap<u64, [f32; 3]> {
     all
 }
 
-/// The surface color a style chain ends in (PRESENTATION_STYLE_ASSIGNMENT ->
-/// SURFACE_STYLE_USAGE -> … -> COLOUR_RGB), curve and point styles skipped.
+/// The surface color a style chain ends in (`PRESENTATION_STYLE_ASSIGNMENT` ->
+/// `SURFACE_STYLE_USAGE` -> … -> `COLOUR_RGB`), curve and point styles skipped.
 fn colour(ents: &Ents, id: u64, depth: u8) -> Option<[f32; 3]> {
     let (name, args) = ents.get(&id)?;
     match *name {
         "COLOUR_RGB" => {
             // after the name, which may hold commas
             let rgb: Vec<f32> = args.rsplit('\'').next()?.split(',').filter_map(|v| v.trim().parse().ok()).collect();
-            (rgb.len() == 3).then(|| [rgb[0], rgb[1], rgb[2]])
+            match *rgb.as_slice() {
+                [r, g, b] => Some([r, g, b]),
+                _ => None,
+            }
         }
         "DRAUGHTING_PRE_DEFINED_COLOUR" => Some(match args.trim().trim_matches('\'') {
             "red" => [1.0, 0.0, 0.0],
@@ -107,7 +122,7 @@ fn colour(ents: &Ents, id: u64, depth: u8) -> Option<[f32; 3]> {
     }
 }
 
-/// The faces of a solid's outer shell, ORIENTED_FACE resolved to the face.
+/// The faces of a solid's outer shell, `ORIENTED_FACE` resolved to the face.
 pub(crate) fn outer_faces(ents: &Ents, solid: u64) -> Vec<u64> {
     let Some((_, args)) = ents.get(&solid) else { return Vec::new() };
     let Some(&shell) = refs(args).first() else { return Vec::new() };

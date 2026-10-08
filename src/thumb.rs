@@ -1,18 +1,18 @@
 //! `tridi thumb IN OUT SIZE`: what Nautilus runs, inside its sandbox.
 
 use eyre::WrapErr;
-use std::path::Path;
-use std::time::Instant;
+use std::{env, path::Path, time::Instant};
 use tridi::{Input, Item, Scene, Theme};
 
+/// Draws `inp` into the PNG `out`, `size` pixels square.
 pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()> {
     let t0 = Instant::now();
     // Nautilus's sandbox clears the environment: without this glvnd would
     // also load NVIDIA's EGL, even for a user who limited it to Mesa
     let mesa = "/usr/share/glvnd/egl_vendor.d/50_mesa.json";
-    if std::env::var_os("__EGL_VENDOR_LIBRARY_FILENAMES").is_none() && Path::new(mesa).exists() {
+    if env::var_os("__EGL_VENDOR_LIBRARY_FILENAMES").is_none() && Path::new(mesa).exists() {
         // SAFETY: single-threaded, and before EGL is loaded
-        unsafe { std::env::set_var("__EGL_VENDOR_LIBRARY_FILENAMES", mesa) };
+        unsafe { env::set_var("__EGL_VENDOR_LIBRARY_FILENAMES", mesa) };
     }
     let input = match tridi::load(Path::new(inp), theme.mesh).wrap_err_with(|| inp.to_owned())? {
         Item::Cloud(c) => {
@@ -26,8 +26,8 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()>
     let scene = Scene::new(&ctx, vec![input], false, tridi::up_for(tridi::is_gltf(Path::new(inp))))?;
     let img = tridi::offscreen(&ctx, &scene, size, theme.bg);
     image::save_buffer(out, &img, size, size, image::ExtendedColorType::Rgba8).wrap_err_with(|| format!("cannot write {out}"))?;
-    if std::env::var_os("TRIDI_TIMING").is_some() {
-        eprintln!("thumb {:?}", t0.elapsed());
+    if env::var_os("TRIDI_TIMING").is_some() {
+        eprintln!("thumb {} ms", t0.elapsed().as_millis());
     }
     Ok(())
 }

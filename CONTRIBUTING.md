@@ -23,6 +23,11 @@ Before pushing, what CI checks on every push and PR:
 plus `cargo check` on the oldest Rust supported, 1.92 (`rust-version` in
 `Cargo.toml`).
 
+The lints in `Cargo.toml` deny what can panic or lose data silently:
+indexing, `unwrap`, `as` casts, `unsafe` without a `// SAFETY:` comment.
+The only way around one is a scoped `#[expect(lint, reason = "...")]`
+that says why; tests may unwrap and index.
+
 The files in `tests/data/` are tiny and made for the tests: no real scans
 or CAD from anyone's work. The README's screenshots and GIFs come from
 synthetic files too (`python3 scripts/samples.py`, recorded with
