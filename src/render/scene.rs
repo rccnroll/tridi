@@ -102,11 +102,10 @@ pub struct Scene {
     edl_targets: RefCell<Option<(u32, u32, Texture2D, DepthTexture2D)>>,
     layers: Vec<Layer>,
     visible: Vec<bool>,
+    /// the triad, when asked for: remade as layers come in
+    with_axes: bool,
     axes: Option<(VertexBuffer<Vec3>, VertexBuffer<Vec3>)>,
-    lo: Vec3,
-    hi: Vec3,
-    center: Vec3,
-    radius: f32,
+    bb: AxisAlignedBoundingBox,
     /// +Z for scans and CAD, +Y when every file is glTF (its convention)
     up: Vec3,
 }
@@ -115,45 +114,9 @@ impl Scene {
     /// With `axes`, the triad sits at the min corner of the bbox (size 20% of
     /// the largest extent, like 1.0).
     pub fn new(ctx: &Context, inputs: Vec<Input>, axes: bool, up: Vec3) -> RenderResult<Scene> {
-        let mut bb = AxisAlignedBoundingBox::EMPTY;
-        let mut layers = vec![];
-        for i in inputs {
-            layers.push(match i {
-                Input::Points(p, c) => {
-                    bb.expand(&p);
-                    let n = i32::try_from(p.len()).map_err(|_err| RenderError::TooManyPoints { count: p.len() })?;
-                    Layer::Points {
-                        pos: VertexBuffer::new_with_data(ctx, &p),
-                        col: VertexBuffer::new_with_data(ctx, &c),
-                        n,
-                    }
-                }
-                Input::Mesh(m) => {
-                    let model = Model::<PhysicalMaterial>::new(ctx, &m).map_err(RenderError::Mesh)?;
-                    for part in model.iter() {
-                        bb.expand_with_aabb(part.aabb());
-                    }
-                    Layer::Mesh(model)
-                }
-            });
-        }
-        let (lo, hi) = (bb.min(), bb.max());
-        let ext = hi - lo;
-        let axes = axes.then(|| {
-            let size = match ext.x.max(ext.y).max(ext.z) * 0.2 {
-                s if s > 0.0 => s,
-                _ => 0.1,
-            };
-            let (mut p, mut c) = (vec![], vec![]);
-            for axis in [Vec3::unit_x(), Vec3::unit_y(), Vec3::unit_z()] {
-                p.extend([lo, lo + axis * size]);
-                c.extend([axis, axis]);
-            }
-            (VertexBuffer::new_with_data(ctx, &p), VertexBuffer::new_with_data(ctx, &c))
-        });
         // SAFETY: a state flag on the context the caller made current
         unsafe { ctx.enable(context::PROGRAM_POINT_SIZE) };
-        Ok(Scene {
+        let mut scene = Scene {
             ctx: ctx.clone(),
             program: Program::from_source(ctx, VS, FS).map_err(|source| RenderError::Gl {
                 step: "build the point shader",
@@ -165,21 +128,61 @@ impl Scene {
             })?,
             edl_targets: RefCell::default(),
             edl_tri: VertexBuffer::new_with_data(ctx, &[vec2(0.0, 0.0), vec2(2.0, 0.0), vec2(0.0, 2.0)]),
-            visible: vec![true; layers.len()],
-            layers,
-            axes,
-            lo,
-            hi,
-            center: (lo + hi) * 0.5,
-            radius: (ext.magnitude() * 0.5).max(1e-3),
+            layers: vec![],
+            visible: vec![],
+            with_axes: axes,
+            axes: None,
+            bb: AxisAlignedBoundingBox::EMPTY,
             up,
-        })
+        };
+        for i in inputs {
+            scene.add(i)?;
+        }
+        Ok(scene)
+    }
+
+    /// Adds a file's layer, visible; returns its index for `toggle`.
+    pub fn add(&mut self, input: Input) -> RenderResult<usize> {
+        let ctx = &self.ctx;
+        self.layers.push(match input {
+            Input::Points(p, c) => {
+                self.bb.expand(&p);
+                let n = i32::try_from(p.len()).map_err(|_err| RenderError::TooManyPoints { count: p.len() })?;
+                Layer::Points {
+                    pos: VertexBuffer::new_with_data(ctx, &p),
+                    col: VertexBuffer::new_with_data(ctx, &c),
+                    n,
+                }
+            }
+            Input::Mesh(m) => {
+                let model = Model::<PhysicalMaterial>::new(ctx, &m).map_err(RenderError::Mesh)?;
+                for part in model.iter() {
+                    self.bb.expand_with_aabb(part.aabb());
+                }
+                Layer::Mesh(model)
+            }
+        });
+        self.visible.push(true);
+        if self.with_axes {
+            let (lo, ext) = (self.bb.min(), self.bb.max() - self.bb.min());
+            let size = match ext.x.max(ext.y).max(ext.z) * 0.2 {
+                s if s > 0.0 => s,
+                _ => 0.1,
+            };
+            let (mut p, mut c) = (vec![], vec![]);
+            for axis in [Vec3::unit_x(), Vec3::unit_y(), Vec3::unit_z()] {
+                p.extend([lo, lo + axis * size]);
+                c.extend([axis, axis]);
+            }
+            self.axes = Some((VertexBuffer::new_with_data(ctx, &p), VertexBuffer::new_with_data(ctx, &c)));
+        }
+        Ok(self.layers.len() - 1)
     }
 
     /// Half the diagonal of everything drawn: the scene's size.
     #[must_use]
     pub fn radius(&self) -> f32 {
-        self.radius
+        ((self.bb.max() - self.bb.min()).magnitude() * 0.5).max(1e-3)
     }
 
     /// Turns layer `i` (the i-th file read) off or on; returns whether it's
@@ -208,26 +211,24 @@ impl Scene {
         let up = dir.cross(right);
         let ty = (FOV.to_radians() / 2.0).tan() / 1.08;
         let tx = ty * px_f32(vp.width) / px_f32(vp.height.max(1));
-        let mut d = self.radius * 0.1;
+        let (lo, hi, radius) = (self.bb.min(), self.bb.max(), self.radius());
+        let center = (lo + hi) * 0.5;
+        let mut d = radius * 0.1;
         for i in 0..8 {
             let pick = |bit: usize, lo: f32, hi: f32| if i & bit == 0 { lo } else { hi };
-            let v = vec3(
-                pick(1, self.lo.x, self.hi.x),
-                pick(2, self.lo.y, self.hi.y),
-                pick(4, self.lo.z, self.hi.z),
-            ) - self.center;
+            let v = vec3(pick(1, lo.x, hi.x), pick(2, lo.y, hi.y), pick(4, lo.z, hi.z)) - center;
             // the corner is at depth d - v·dir from the camera
             let z = v.dot(dir);
             d = d.max(z + v.dot(right).abs() / tx).max(z + v.dot(up).abs() / ty);
         }
         Camera::new_perspective(
             vp,
-            self.center + dir * d,
-            self.center,
+            center + dir * d,
+            center,
             self.up,
             degrees(FOV),
-            self.radius * 0.01,
-            d + self.radius * 20.0,
+            radius * 0.01,
+            d + radius * 20.0,
         )
     }
 

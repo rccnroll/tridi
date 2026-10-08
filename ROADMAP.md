@@ -16,11 +16,6 @@ why.
   Shift+left, ours pans. Skipped: line width, depth capture, render
   options, image modes.
 
-- [ ] STEP files load one after the other in the viewer: a file that hangs
-  (one of twelve real parts tried) keeps the window empty for the
-  whole 15 s. Loading them in parallel, or opening the window first, would
-  hide that.
-
 - [ ] Thumbnails in yazi too (05/10): a previewer plugin that runs
   `tridi thumb` for our formats, set up alongside the Nautilus entry.
 

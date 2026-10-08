@@ -411,3 +411,13 @@ history above keep the old name.
   default `GITHUB_TOKEN` is read-only, and vulnerabilities are reported
   privately. Help comes as pull requests: no collaborators with write
   access.
+
+## After 2.6
+
+- **Files load in parallel** (08/10): one thread per core, and the window
+  opens with the first file read instead of the last. A STEP file that
+  hangs (one of twelve real parts tried) used to keep the window empty for
+  the whole 15 s; now it holds back only itself. The legend lists every
+  file from the start, `loading…` or `failed` until it's in, and the keys
+  1–9 follow the command line, so a file that fails doesn't shift the
+  others. The view reframes as files come in, until the user moves it.

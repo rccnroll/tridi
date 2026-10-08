@@ -12,7 +12,17 @@ use glutin::{
     surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
 };
 use glutin_winit::{DisplayBuilder, GlWindow};
-use std::{io::Write, num::NonZeroU32, path::Path, sync::Arc, time::Instant};
+use std::{
+    io::Write,
+    num::{NonZeroU32, NonZeroUsize},
+    path::Path,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    thread,
+    time::Instant,
+};
 use three_d::{
     AxisAlignedBoundingBox, Camera, ClearState, Context, Event, GUI, HasContext, InnerSpace, MetricSpace, Modifiers, MouseButton,
     PhysicalPoint, RenderTarget, Vec3, Viewport, context, egui,
@@ -22,7 +32,7 @@ use tridi::{Input, Item, Scene, Theme};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, MouseButton as WinitButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     keyboard::{Key, NamedKey},
     platform::wayland::WindowAttributesExtWayland,
     raw_window_handle::HasWindowHandle,
@@ -74,18 +84,55 @@ const PANEL_ALPHA: f32 = 0.75;
 
 // ========================================== Loading ========================================== {{{
 
-/// A file read, as the legend shows it: its tint (None when it has its own
-/// colors, or is a mesh) and how many points or triangles.
+/// A file on the command line, as the legend shows it.
 struct File {
     name: String,
+    state: State,
+}
+
+enum State {
+    Loading,
+    Failed,
+    /// its layer in the scene, its tint (None when it has its own colors, or
+    /// is a mesh) and how many points or triangles
+    Shown {
+        layer: usize,
+        tint: Option<[f32; 3]>,
+        count: String,
+    },
+}
+
+/// A file read on a loader thread and made ready for the scene.
+struct Ready {
+    input: Input,
     tint: Option<[f32; 3]>,
     count: String,
+    extent: Vec3,
+}
+
+/// What a loader thread sends the event loop: the i-th file, or why not.
+struct Loaded {
+    i: usize,
+    result: tridi::LoadResult<Ready>,
 }
 
 /// Opens the files in one window; `out` gets what the user reads on stdout.
+/// The files load in parallel and show up as they're read: the window opens
+/// with the first, so a slow one (a STEP file can take 15 s) holds back
+/// nothing but itself.
 pub fn view(paths: &[String], theme: &'static Theme, mut out: Box<dyn Write>) -> eyre::Result<()> {
-    // each file that failed was reported as it was read
-    let (inputs, files, up) = load_all(paths, theme, &mut *out).ok_or_eyre("no file could be opened")?;
+    let files: Vec<File> = paths
+        .iter()
+        .map(|p| File {
+            name: Path::new(p)
+                .file_name()
+                .map_or_else(|| p.clone(), |n| n.to_string_lossy().into_owned()),
+            state: State::Loading,
+        })
+        .collect();
+    if files.is_empty() {
+        return Err(eyre!("no file to open"));
+    }
     if files.len() > 1 {
         let keys: Vec<String> = files
             .iter()
@@ -95,19 +142,20 @@ pub fn view(paths: &[String], theme: &'static Theme, mut out: Box<dyn Write>) ->
             .collect();
         tell(&mut *out, format_args!("keys: {}", keys.join(", ")));
     }
-    let event_loop = EventLoop::new().wrap_err("no display")?;
-    let legend = files.len() > 1;
+    let event_loop = EventLoop::<Loaded>::with_user_event().build().wrap_err("no display")?;
+    load_all(paths, theme, &event_loop.create_proxy());
     let mut v = Viewer {
+        pending: files.len(),
+        legend: files.len() > 1,
         files,
         theme,
-        inputs: Some(inputs),
-        up,
+        up: tridi::up_for(paths.iter().all(|p| tridi::is_gltf(Path::new(p)))),
         out,
         gl: None,
         err: None,
         psize: POINT_SIZE,
-        legend,
         help: false,
+        moved: false,
         cursor: None,
         button: None,
         mods: Modifiers::default(),
@@ -116,61 +164,61 @@ pub fn view(paths: &[String], theme: &'static Theme, mut out: Box<dyn Write>) ->
     v.err.map_or(Ok(()), Err)
 }
 
-/// Loads every file; one that fails is reported and skipped. None if nothing
-/// could be read. Returns the scene inputs, the files read (in the same
-/// order) and the up axis: +Y when every file is glTF, +Z otherwise.
-fn load_all(paths: &[String], theme: &Theme, out: &mut dyn Write) -> Option<(Vec<Input>, Vec<File>, Vec3)> {
-    let (mut inputs, mut files, mut all_gltf) = (vec![], vec![], true);
-    let mut palette = theme.palette.iter().cycle();
-    for p in paths {
-        let path = Path::new(p);
-        let name = path.file_name().map_or_else(|| p.clone(), |n| n.to_string_lossy().into_owned());
-        // a file's place in the palette doesn't move when an earlier one fails
-        let next_tint = palette.next().copied();
-        let item = match tridi::load(path, theme.mesh) {
-            Ok(it) => it,
-            Err(e) => {
-                warn!("{name}: {:#}", eyre::Report::new(e));
-                continue;
+/// Reads the files on as many threads as there are cores, each sent to the
+/// event loop as it's ready. A file's tint is its place on the command line,
+/// so it doesn't change with the order they finish in.
+fn load_all(paths: &[String], theme: &'static Theme, proxy: &EventLoopProxy<Loaded>) {
+    let paths: Arc<[String]> = paths.into();
+    let next = Arc::new(AtomicUsize::new(0));
+    let workers = thread::available_parallelism().map_or(1, NonZeroUsize::get).min(paths.len());
+    for _ in 0..workers {
+        let (paths, next, proxy) = (Arc::clone(&paths), Arc::clone(&next), proxy.clone());
+        thread::spawn(move || {
+            loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                let Some(p) = paths.get(i) else { break };
+                let tint = theme.palette.iter().cycle().nth(i).copied().filter(|_| paths.len() > 1);
+                let result = read(Path::new(p), tint, theme);
+                // the window was closed: nobody waits for the rest
+                if proxy.send_event(Loaded { i, result }).is_err() {
+                    break;
+                }
             }
-        };
-        all_gltf &= tridi::is_gltf(path);
-        match item {
-            Item::Cloud(c) => {
-                let tint = next_tint.filter(|_| paths.len() > 1);
-                let e = extent(c.points.iter().copied());
-                let shown = tint.filter(|_| tridi::own_colors(&c, tint).is_none());
-                let tag = shown.map_or_else(String::new, |[r, g, b]| format!("  color [{r:.2}, {g:.2}, {b:.2}]"));
-                let count = format!("{} points", c.points.len());
-                tell(
-                    out,
-                    format_args!("{name}: {count}, extent [{:.3}, {:.3}, {:.3}]{tag}", e.x, e.y, e.z),
-                );
-                let colors = tridi::colorize(&c, tint, theme);
-                inputs.push(Input::Points(c.points, colors));
-                files.push(File { name, tint: shown, count });
-            }
-            Item::Mesh(m) => {
-                // ponytail: no per-file tint on meshes (1.0 didn't have one either)
-                let e = extent(m.geometries.iter().flat_map(|g| {
-                    match &g.geometry {
-                        Geometry::Triangles(t) => t
-                            .positions
-                            .to_f32()
-                            .into_iter()
-                            .map(|v| (g.transformation * v.extend(1.0)).truncate())
-                            .collect(),
-                        Geometry::Points(_) => vec![],
-                    }
-                }));
-                let count = format!("{} triangles", tridi::triangles(&m));
-                tell(out, format_args!("{name}: {count}, extent [{:.3}, {:.3}, {:.3}]", e.x, e.y, e.z));
-                inputs.push(Input::Mesh(m));
-                files.push(File { name, tint: None, count });
-            }
-        }
+        });
     }
-    (!inputs.is_empty()).then(|| (inputs, files, tridi::up_for(all_gltf)))
+}
+
+/// Loads one file and colors it; `tint` is its color among several files.
+fn read(path: &Path, tint: Option<[f32; 3]>, theme: &Theme) -> tridi::LoadResult<Ready> {
+    Ok(match tridi::load(path, theme.mesh)? {
+        Item::Cloud(c) => Ready {
+            extent: extent(c.points.iter().copied()),
+            // the legend shows the tint only if it's what the points get
+            tint: tint.filter(|_| tridi::own_colors(&c, tint).is_none()),
+            count: format!("{} points", c.points.len()),
+            input: {
+                let colors = tridi::colorize(&c, tint, theme);
+                Input::Points(c.points, colors)
+            },
+        },
+        Item::Mesh(m) => Ready {
+            // ponytail: no per-file tint on meshes (1.0 didn't have one either)
+            extent: extent(m.geometries.iter().flat_map(|g| {
+                match &g.geometry {
+                    Geometry::Triangles(t) => t
+                        .positions
+                        .to_f32()
+                        .into_iter()
+                        .map(|v| (g.transformation * v.extend(1.0)).truncate())
+                        .collect(),
+                    Geometry::Points(_) => vec![],
+                }
+            })),
+            tint: None,
+            count: format!("{} triangles", tridi::triangles(&m)),
+            input: Input::Mesh(m),
+        },
+    })
 }
 
 fn extent<I: Iterator<Item = Vec3>>(pts: I) -> Vec3 {
@@ -234,9 +282,6 @@ struct Gl {
     /// egui's clock, for its fade-in
     start: Instant,
     cam: Camera,
-    // ponytail: zoom bounds fixed at load, from the scene's radius
-    min: f32,
-    max: f32,
     context: Context,
     ctx: PossiblyCurrentContext,
     surface: Surface<WindowSurface>,
@@ -249,8 +294,9 @@ struct Gl {
 /// three-d only gets the GL context.
 struct Viewer {
     files: Vec<File>,
+    /// files not read yet
+    pending: usize,
     theme: &'static Theme,
-    inputs: Option<Vec<Input>>,
     up: Vec3,
     /// stdout: the files turned off and on
     out: Box<dyn Write>,
@@ -262,6 +308,8 @@ struct Viewer {
     legend: bool,
     /// H or ?: the keys
     help: bool,
+    /// the user moved the view: a file read later no longer reframes it
+    moved: bool,
     /// last cursor position, logical pixels
     cursor: Option<(f32, f32)>,
     button: Option<MouseButton>,
@@ -269,7 +317,8 @@ struct Viewer {
 }
 
 impl Viewer {
-    fn open(&mut self, event_loop: &ActiveEventLoop) -> eyre::Result<Gl> {
+    /// Opens the window with the first file read.
+    fn open(&self, event_loop: &ActiveEventLoop, input: Input) -> eyre::Result<Gl> {
         let names: Vec<&str> = self.files.iter().map(|f| f.name.as_str()).collect();
         let attrs = Window::default_attributes()
             .with_title(format!("tridi — {}", names.join(", ")))
@@ -311,9 +360,8 @@ impl Viewer {
         let context = Context::from_gl_context(Arc::new(gl)).wrap_err("cannot load GL")?;
         // SAFETY: a plain query on the current context
         debug!(renderer = unsafe { context.get_parameter_string(context::RENDERER) }, "GL");
-        let scene = Scene::new(&context, self.inputs.take().unwrap_or_default(), true, self.up)?;
+        let scene = Scene::new(&context, vec![input], true, self.up)?;
         let cam = scene.camera(viewport(&window));
-        let (min, max) = (scene.radius() * ZOOM_MIN, scene.radius() * ZOOM_MAX);
         let gui = GUI::new(&context);
         let dark = self.theme.name == "dark";
         gui.context()
@@ -323,13 +371,65 @@ impl Viewer {
             gui,
             start: Instant::now(),
             cam,
-            min,
-            max,
             context,
             ctx,
             surface,
             window,
         })
+    }
+
+    /// A file read: into the scene, the window opened if it's the first.
+    fn loaded(&mut self, event_loop: &ActiveEventLoop, Loaded { i, result }: Loaded) {
+        self.pending = self.pending.saturating_sub(1);
+        let name = self.files.get(i).map(|f| f.name.clone()).unwrap_or_default();
+        let state = match result {
+            Ok(Ready {
+                input,
+                tint,
+                count,
+                extent: e,
+            }) => {
+                let layer = match self.show(event_loop, input) {
+                    Ok(layer) => layer,
+                    Err(e) => {
+                        self.err = Some(e);
+                        return event_loop.exit();
+                    }
+                };
+                let tag = tint.map_or_else(String::new, |[r, g, b]| format!("  color [{r:.2}, {g:.2}, {b:.2}]"));
+                tell(
+                    &mut *self.out,
+                    format_args!("{name}: {count}, extent [{:.3}, {:.3}, {:.3}]{tag}", e.x, e.y, e.z),
+                );
+                State::Shown { layer, tint, count }
+            }
+            Err(e) => {
+                warn!("{name}: {:#}", eyre::Report::new(e));
+                State::Failed
+            }
+        };
+        if let Some(f) = self.files.get_mut(i) {
+            f.state = state;
+        }
+        if self.pending == 0 && self.gl.is_none() {
+            // each file that failed was reported as it was read
+            self.err = Some(eyre!("no file could be opened"));
+            event_loop.exit();
+        }
+        self.request_redraw();
+    }
+
+    /// Puts a file in the scene; returns its layer.
+    fn show(&mut self, event_loop: &ActiveEventLoop, input: Input) -> eyre::Result<usize> {
+        let Some(gl) = self.gl.as_mut() else {
+            self.gl = Some(self.open(event_loop, input)?);
+            return Ok(0);
+        };
+        let layer = gl.scene.add(input)?;
+        if !self.moved {
+            gl.cam = gl.scene.camera(viewport(&gl.window));
+        }
+        Ok(layer)
     }
 
     /// A key pressed; true if the scene has to be drawn again.
@@ -342,7 +442,10 @@ impl Viewer {
             _ => return false,
         };
         match c.as_str() {
-            "r" => gl.cam = gl.scene.camera(viewport(&gl.window)),
+            "r" => {
+                gl.cam = gl.scene.camera(viewport(&gl.window));
+                self.moved = false;
+            }
             "+" | "=" => self.psize = f32::min(self.psize * POINT_STEP, POINT_MAX),
             "-" => self.psize = f32::max(self.psize / POINT_STEP, POINT_MIN),
             "q" => event_loop.exit(),
@@ -351,8 +454,9 @@ impl Viewer {
             "i" => self.legend = !self.legend,
             d => {
                 if let Some(i) = d.parse::<usize>().ok().filter(|n| (1..=9).contains(n)).map(|n| n - 1)
-                    && let Some(on) = gl.scene.toggle(i)
                     && let Some(f) = self.files.get(i)
+                    && let State::Shown { layer, .. } = f.state
+                    && let Some(on) = gl.scene.toggle(layer)
                 {
                     tell(&mut *self.out, format_args!("{}: {}", f.name, if on { "on" } else { "off" }));
                 }
@@ -395,18 +499,12 @@ impl Viewer {
     }
 }
 
-impl ApplicationHandler for Viewer {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.gl.is_some() {
-            return;
-        }
-        match self.open(event_loop) {
-            Ok(gl) => self.gl = Some(gl),
-            Err(e) => {
-                self.err = Some(e);
-                event_loop.exit();
-            }
-        }
+impl ApplicationHandler<Loaded> for Viewer {
+    // the window opens with the first file read, in `user_event`
+    fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Loaded) {
+        self.loaded(event_loop, event);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
@@ -471,7 +569,9 @@ impl ApplicationHandler for Viewer {
             WindowEvent::RedrawRequested => return self.redraw(event_loop),
             _ => return,
         }
-        navigate(&mut gl.cam, &mut events, dpr, gl.min, gl.max);
+        self.moved |= !events.is_empty();
+        let r = gl.scene.radius();
+        navigate(&mut gl.cam, &mut events, dpr, r * ZOOM_MIN, r * ZOOM_MAX);
         gl.window.request_redraw();
     }
 }
@@ -482,7 +582,8 @@ impl ApplicationHandler for Viewer {
 
 /// What's drawn over the scene, none of it clickable (the keys toggle, the
 /// mouse moves the view). Top left, with `legend`: each file with its key,
-/// its tint and its size, the ones turned off dimmed. Top right, with
+/// its tint and its size, the ones turned off, still loading or failed
+/// dimmed. Top right, with
 /// `help`, the keys; else a hint bottom left that H shows them.
 fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: bool) {
     let panel = |id: &str, at: egui::Align2, off: [f32; 2], add: &dyn Fn(&mut egui::Ui)| {
@@ -517,13 +618,18 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
     }
     panel("legend", egui::Align2::LEFT_TOP, [12.0, 12.0], &|ui| {
         egui::Grid::new("files").min_col_width(0.0).spacing([10.0, 4.0]).show(ui, |ui| {
-            for (i, (f, &on)) in files.iter().zip(visible).enumerate() {
+            for (i, f) in files.iter().enumerate() {
+                let (on, tint, count) = match &f.state {
+                    State::Shown { layer, tint, count } => (visible.get(*layer).copied().unwrap_or(true), *tint, count.as_str()),
+                    State::Loading => (false, None, "loading…"),
+                    State::Failed => (false, None, "failed"),
+                };
                 let alpha = if on { 1.0 } else { OFF_ALPHA };
                 let fg = ui.visuals().text_color().gamma_multiply(alpha);
                 let text = |t: String| egui::RichText::new(t).color(fg);
                 ui.label(text(if i < 9 { format!("{}", i + 1) } else { String::new() }));
                 let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
-                if let Some(c) = f.tint {
+                if let Some(c) = tint {
                     // the palette is written to the screen as is: sRGB
                     let [r8, g8, b8] = c.map(byte);
                     let c = egui::Color32::from_rgb(r8, g8, b8).gamma_multiply(alpha);
@@ -534,7 +640,7 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
                         .rect_stroke(r, 2.0, egui::Stroke::new(1.0_f32, fg), egui::StrokeKind::Inside);
                 }
                 ui.label(text(f.name.clone()));
-                ui.label(text(f.count.clone()));
+                ui.label(text(count.to_owned()));
                 ui.end_row();
             }
         });
