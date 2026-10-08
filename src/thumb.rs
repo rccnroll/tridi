@@ -3,19 +3,8 @@
 // ========================================== Imports ========================================== {{{
 
 use eyre::WrapErr;
-use std::{
-    env,
-    path::Path,
-    time::{Duration, Instant},
-};
+use std::{env, path::Path, time::Instant};
 use tridi::{Input, Item, Scene, Theme};
-
-// }}}
-
-// ========================================= Constants ========================================= {{{
-
-/// The wait for a STEP file's solids: the file manager waits on us.
-const BUDGET: Duration = Duration::from_secs(15);
 
 // }}}
 
@@ -32,24 +21,16 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()>
         // SAFETY: single-threaded, and before EGL is loaded
         unsafe { env::set_var("__EGL_VENDOR_LIBRARY_FILENAMES", mesa) };
     }
-    // a STEP file's solids come one by one: the thumbnail is what came in BUDGET
-    let mut inputs = vec![];
-    let skipped = tridi::load(Path::new(inp), theme.mesh, Some(BUDGET), &mut |item| {
-        inputs.push(match item {
-            Item::Cloud(c) => {
-                let colors = tridi::colorize(&c, None, theme);
-                Input::Points(c.points, colors)
-            }
-            Item::Mesh(m) => Input::Mesh(m),
-        });
-    })
-    .wrap_err_with(|| inp.to_owned())?;
-    if skipped > 0 {
-        warn!("{inp}: {skipped} solids skipped");
-    }
+    let input = match tridi::load(Path::new(inp), theme.mesh).wrap_err_with(|| inp.to_owned())? {
+        Item::Cloud(c) => {
+            let colors = tridi::colorize(&c, None, theme);
+            Input::Points(c.points, colors)
+        }
+        Item::Mesh(m) => Input::Mesh(m),
+    };
     let (ctx, _keep) = tridi::headless()?;
     // no axis triad: at thumbnail size it's only noise
-    let scene = Scene::new(&ctx, inputs, false, tridi::up_for(tridi::is_gltf(Path::new(inp))))?;
+    let scene = Scene::new(&ctx, vec![input], false, tridi::up_for(tridi::is_gltf(Path::new(inp))))?;
     let img = tridi::offscreen(&ctx, &scene, size, theme.bg);
     // PNG whatever `out` is called: yazi's cache files have no extension
     image::save_buffer_with_format(out, &img, size, size, image::ExtendedColorType::Rgba8, image::ImageFormat::Png)

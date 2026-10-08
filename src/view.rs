@@ -94,43 +94,32 @@ enum State {
     Loading,
     Failed,
     /// its layer in the scene, its tint (None when it has its own colors, or
-    /// is a mesh), how many points or triangles so far and their bbox;
-    /// `loading` until the last of a STEP file's solids is in, then how many
-    /// were given up on
+    /// is a mesh) and how many points or triangles
     Shown {
         layer: usize,
         tint: Option<[f32; 3]>,
-        count: usize,
-        unit: &'static str,
-        bb: AxisAlignedBoundingBox,
-        loading: bool,
-        skipped: usize,
+        count: String,
     },
 }
 
-/// A file read on a loader thread, or one of a STEP file's solids, made
-/// ready for the scene.
+/// A file read on a loader thread and made ready for the scene.
 struct Ready {
     input: Input,
     tint: Option<[f32; 3]>,
-    count: usize,
-    unit: &'static str,
-    bb: AxisAlignedBoundingBox,
+    count: String,
+    extent: Vec3,
 }
 
-/// What a loader thread sends the event loop.
-enum Loaded {
-    /// the i-th file, or one of its solids if it's STEP
-    Part { i: usize, ready: Ready },
-    /// the i-th file is all in: how many solids were given up on, or why
-    /// nothing came
-    Done { i: usize, result: tridi::LoadResult<usize> },
+/// What a loader thread sends the event loop: the i-th file, or why not.
+struct Loaded {
+    i: usize,
+    result: tridi::LoadResult<Ready>,
 }
 
 /// Opens the files in one window; `out` gets what the user reads on stdout.
-/// The files load in parallel and show up as they're read, a STEP file
-/// solid by solid: the window opens with the first piece, so a slow file
-/// holds back nothing but itself.
+/// The files load in parallel and show up as they're read: the window opens
+/// with the first, so a slow one (a STEP file can take 15 s) holds back
+/// nothing but itself.
 pub fn view(paths: &[String], theme: &'static Theme, mut out: Box<dyn Write>) -> eyre::Result<()> {
     let files: Vec<File> = paths
         .iter()
@@ -189,15 +178,9 @@ fn load_all(paths: &[String], theme: &'static Theme, proxy: &EventLoopProxy<Load
                 let i = next.fetch_add(1, Ordering::Relaxed);
                 let Some(p) = paths.get(i) else { break };
                 let tint = theme.palette.iter().cycle().nth(i).copied().filter(|_| paths.len() > 1);
-                let result = tridi::load(Path::new(p), theme.mesh, None, &mut |item| {
-                    #[expect(clippy::let_underscore_must_use, reason = "a closed window is found out below")]
-                    let _ = proxy.send_event(Loaded::Part {
-                        i,
-                        ready: ready(item, tint, theme),
-                    });
-                });
+                let result = read(Path::new(p), tint, theme);
                 // the window was closed: nobody waits for the rest
-                if proxy.send_event(Loaded::Done { i, result }).is_err() {
+                if proxy.send_event(Loaded { i, result }).is_err() {
                     break;
                 }
             }
@@ -205,15 +188,14 @@ fn load_all(paths: &[String], theme: &'static Theme, proxy: &EventLoopProxy<Load
     }
 }
 
-/// Colors what was read; `tint` is its file's color among several files.
-fn ready(item: Item, tint: Option<[f32; 3]>, theme: &Theme) -> Ready {
-    match item {
+/// Loads one file and colors it; `tint` is its color among several files.
+fn read(path: &Path, tint: Option<[f32; 3]>, theme: &Theme) -> tridi::LoadResult<Ready> {
+    Ok(match tridi::load(path, theme.mesh)? {
         Item::Cloud(c) => Ready {
-            bb: bbox(c.points.iter().copied()),
+            extent: extent(c.points.iter().copied()),
             // the legend shows the tint only if it's what the points get
             tint: tint.filter(|_| tridi::own_colors(&c, tint).is_none()),
-            count: c.points.len(),
-            unit: "points",
+            count: format!("{} points", c.points.len()),
             input: {
                 let colors = tridi::colorize(&c, tint, theme);
                 Input::Points(c.points, colors)
@@ -221,7 +203,7 @@ fn ready(item: Item, tint: Option<[f32; 3]>, theme: &Theme) -> Ready {
         },
         Item::Mesh(m) => Ready {
             // ponytail: no per-file tint on meshes (1.0 didn't have one either)
-            bb: bbox(m.geometries.iter().flat_map(|g| {
+            extent: extent(m.geometries.iter().flat_map(|g| {
                 match &g.geometry {
                     Geometry::Triangles(t) => t
                         .positions
@@ -233,17 +215,16 @@ fn ready(item: Item, tint: Option<[f32; 3]>, theme: &Theme) -> Ready {
                 }
             })),
             tint: None,
-            count: tridi::triangles(&m),
-            unit: "triangles",
+            count: format!("{} triangles", tridi::triangles(&m)),
             input: Input::Mesh(m),
         },
-    }
+    })
 }
 
-fn bbox<I: Iterator<Item = Vec3>>(pts: I) -> AxisAlignedBoundingBox {
+fn extent<I: Iterator<Item = Vec3>>(pts: I) -> Vec3 {
     let mut bb = AxisAlignedBoundingBox::EMPTY;
     bb.expand(&pts.collect::<Vec<_>>());
-    bb
+    bb.max() - bb.min()
 }
 
 // }}}
@@ -397,74 +378,38 @@ impl Viewer {
         })
     }
 
-    /// A piece read: into the scene, the window opened if it's the first.
-    fn part(&mut self, event_loop: &ActiveEventLoop, i: usize, r: Ready) {
-        let to = match self.files.get(i) {
-            Some(File {
-                state: State::Shown { layer, .. },
-                ..
-            }) => Some(*layer),
-            _ => None,
-        };
-        let layer = match self.show(event_loop, to, r.input) {
-            Ok(layer) => layer,
-            Err(e) => {
-                self.err = Some(e);
-                return event_loop.exit();
-            }
-        };
-        if let Some(f) = self.files.get_mut(i) {
-            if let State::Shown { count, bb, .. } = &mut f.state {
-                *count += r.count;
-                bb.expand_with_aabb(r.bb);
-            } else {
-                f.state = State::Shown {
-                    layer,
-                    tint: r.tint,
-                    count: r.count,
-                    unit: r.unit,
-                    bb: r.bb,
-                    loading: true,
-                    skipped: 0,
-                };
-            }
-        }
-        self.request_redraw();
-    }
-
-    /// A file all in: what it is told on stdout, or why it failed.
-    fn done(&mut self, event_loop: &ActiveEventLoop, i: usize, result: tridi::LoadResult<usize>) {
+    /// A file read: into the scene, the window opened if it's the first.
+    fn loaded(&mut self, event_loop: &ActiveEventLoop, Loaded { i, result }: Loaded) {
         self.pending = self.pending.saturating_sub(1);
-        if let Some(f) = self.files.get_mut(i) {
-            match (result, &mut f.state) {
-                (
-                    Ok(n),
-                    State::Shown {
-                        tint,
-                        count,
-                        unit,
-                        bb,
-                        loading,
-                        skipped,
-                        ..
-                    },
-                ) => {
-                    (*loading, *skipped) = (false, n);
-                    let e = bb.max() - bb.min();
-                    let tag = tint.map_or_else(String::new, |[r, g, b]| format!("  color [{r:.2}, {g:.2}, {b:.2}]"));
-                    let skip = if n > 0 { format!(", {n} solids skipped") } else { String::new() };
-                    tell(
-                        &mut *self.out,
-                        format_args!("{}: {count} {unit}, extent [{:.3}, {:.3}, {:.3}]{tag}{skip}", f.name, e.x, e.y, e.z),
-                    );
-                }
-                (Err(e), state) => {
-                    warn!("{}: {:#}", f.name, eyre::Report::new(e));
-                    *state = State::Failed;
-                }
-                // a load that went well sent at least one piece
-                (Ok(_), _) => {}
+        let name = self.files.get(i).map(|f| f.name.clone()).unwrap_or_default();
+        let state = match result {
+            Ok(Ready {
+                input,
+                tint,
+                count,
+                extent: e,
+            }) => {
+                let layer = match self.show(event_loop, input) {
+                    Ok(layer) => layer,
+                    Err(e) => {
+                        self.err = Some(e);
+                        return event_loop.exit();
+                    }
+                };
+                let tag = tint.map_or_else(String::new, |[r, g, b]| format!("  color [{r:.2}, {g:.2}, {b:.2}]"));
+                tell(
+                    &mut *self.out,
+                    format_args!("{name}: {count}, extent [{:.3}, {:.3}, {:.3}]{tag}", e.x, e.y, e.z),
+                );
+                State::Shown { layer, tint, count }
             }
+            Err(e) => {
+                warn!("{name}: {:#}", eyre::Report::new(e));
+                State::Failed
+            }
+        };
+        if let Some(f) = self.files.get_mut(i) {
+            f.state = state;
         }
         if self.pending == 0 && self.gl.is_none() {
             // each file that failed was reported as it was read
@@ -474,21 +419,13 @@ impl Viewer {
         self.request_redraw();
     }
 
-    /// Puts a piece in the scene, in layer `to` if its file has one already
-    /// (a STEP file's next solid); returns the layer.
-    fn show(&mut self, event_loop: &ActiveEventLoop, to: Option<usize>, input: Input) -> eyre::Result<usize> {
+    /// Puts a file in the scene; returns its layer.
+    fn show(&mut self, event_loop: &ActiveEventLoop, input: Input) -> eyre::Result<usize> {
         let Some(gl) = self.gl.as_mut() else {
             self.gl = Some(self.open(event_loop, input)?);
             return Ok(0);
         };
-        let layer = match (to, input) {
-            (Some(layer), Input::Mesh(m)) => {
-                gl.scene.add_to(layer, &m)?;
-                layer
-            }
-            // only meshes come in pieces
-            (_, input) => gl.scene.add(input)?,
-        };
+        let layer = gl.scene.add(input)?;
         if !self.moved {
             gl.cam = gl.scene.camera(viewport(&gl.window));
         }
@@ -567,10 +504,7 @@ impl ApplicationHandler<Loaded> for Viewer {
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Loaded) {
-        match event {
-            Loaded::Part { i, ready } => self.part(event_loop, i, ready),
-            Loaded::Done { i, result } => self.done(event_loop, i, result),
-        }
+        self.loaded(event_loop, event);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
@@ -674,13 +608,10 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
             });
         });
     } else {
-        let loading = files
-            .iter()
-            .any(|f| matches!(f.state, State::Loading | State::Shown { loading: true, .. }));
         egui::Area::new(egui::Id::new("hint"))
             .anchor(egui::Align2::LEFT_BOTTOM, [12.0, -12.0])
             .interactable(false)
-            .show(ui.ctx(), |ui| ui.weak(if loading { "loading…   H  keys" } else { "H  keys" }));
+            .show(ui.ctx(), |ui| ui.weak("H  keys"));
     }
     if !legend {
         return;
@@ -689,24 +620,9 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
         egui::Grid::new("files").min_col_width(0.0).spacing([10.0, 4.0]).show(ui, |ui| {
             for (i, f) in files.iter().enumerate() {
                 let (on, tint, count) = match &f.state {
-                    State::Shown {
-                        layer,
-                        tint,
-                        count,
-                        unit,
-                        loading,
-                        skipped,
-                        ..
-                    } => {
-                        let more = match (loading, skipped) {
-                            (true, _) => ", loading…".to_owned(),
-                            (false, 0) => String::new(),
-                            (false, n) => format!(", {n} solids skipped"),
-                        };
-                        (visible.get(*layer).copied().unwrap_or(true), *tint, format!("{count} {unit}{more}"))
-                    }
-                    State::Loading => (false, None, "loading…".to_owned()),
-                    State::Failed => (false, None, "failed".to_owned()),
+                    State::Shown { layer, tint, count } => (visible.get(*layer).copied().unwrap_or(true), *tint, count.as_str()),
+                    State::Loading => (false, None, "loading…"),
+                    State::Failed => (false, None, "failed"),
                 };
                 let alpha = if on { 1.0 } else { OFF_ALPHA };
                 let fg = ui.visuals().text_color().gamma_multiply(alpha);
@@ -724,7 +640,7 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
                         .rect_stroke(r, 2.0, egui::Stroke::new(1.0_f32, fg), egui::StrokeKind::Inside);
                 }
                 ui.label(text(f.name.clone()));
-                ui.label(text(count));
+                ui.label(text(count.to_owned()));
                 ui.end_row();
             }
         });
