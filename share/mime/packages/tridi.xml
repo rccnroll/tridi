@@ -30,6 +30,10 @@
     <comment>Object File Format</comment>
     <glob pattern="*.off"/>
   </mime-type>
+  <!-- over application/x-tgif, which claims *.obj too and wins on Debian 12 -->
+  <mime-type type="model/obj">
+    <glob pattern="*.obj" weight="60"/>
+  </mime-type>
   <mime-type type="model/step">
     <comment>STEP 3D model</comment>
     <generic-icon name="image-x-generic"/>
