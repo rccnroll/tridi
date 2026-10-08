@@ -1,4 +1,4 @@
-"""The synthetic files behind docs/*.png: python3 docs/samples.py writes them
+"""The synthetic files behind docs/media/*.png: python3 scripts/samples.py writes them
 to ./samples (terrain.pcd split in four tiles is the viewer shot; Nautilus
 shows the rest, plus tests/data/assembly.step and open3d_box.glb as box.glb).
 Needs numpy."""

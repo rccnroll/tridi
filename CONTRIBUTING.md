@@ -25,8 +25,8 @@ plus `cargo check` on the oldest Rust supported, 1.92 (`rust-version` in
 
 The files in `tests/data/` are tiny and made for the tests: no real scans
 or CAD from anyone's work. The README's screenshots and GIFs come from
-synthetic files too (`python3 docs/samples.py`, recorded with
-`docs/record.sh`).
+synthetic files too (`python3 scripts/samples.py`, recorded with
+`scripts/record.sh`).
 
 ## Fuzzing
 
