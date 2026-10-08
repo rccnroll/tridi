@@ -114,9 +114,10 @@ What CI checks, fuzzing, the commit style and how a release is cut are in
 
 ## History
 
-1.0 (tag `v1.0.0`) was Python + Open3D launched by `uv`, with an f3d-drawn
-thumbnailer; 2.0 replaces it and dropped STEP, which came back in Rust
-after 2.1. Up to 2.2.0 it was called pcdview (same tags, same history).
+1.0 was Python + Open3D launched by `uv`, with an f3d-drawn thumbnailer,
+kept in dotfiles; this repository starts at 2.0, the Rust rewrite, which
+dropped STEP until it came back in Rust after 2.1. Up to 2.2.0 it was
+called pcdview (same tags, same history).
 Why and how is in [docs/history.md](docs/history.md).
 
 ## License

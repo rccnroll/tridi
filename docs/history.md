@@ -6,7 +6,7 @@ tridi was called pcdview: the sections before the rename use that name.
 
 ## 2.0 (released 25/09/2026, tag `v2.0.0`)
 
-1.0 (tag `v1.0.0`) was this: Python + Open3D via `uv`, installed by chezmoi,
+1.0 was this: Python + Open3D via `uv`, installed by chezmoi,
 local only. It costs ~1.1 s of `import open3d` with a warm cache and 1.3 GB of
 dependencies (open3d + OCP) on first launch.
 
@@ -27,7 +27,7 @@ Decided on 25 September 2026:
 
 ### three-d verdict: yes (prototype of 25 September 2026)
 
-Throwaway prototype, kept as the tag `proto-three-d` (folder `proto/`): reads
+Throwaway prototype (folder `proto/`, not kept): reads
 ascii/binary PCD (xyz only), window with orbit camera, Z ramp, white
 background, and `thumb IN OUT SIZE` without a window. Measured on two real
 files: 61k points (1.5 MB) and 3M points (59 MB), on the Intel Arc GPU (Mesa),
@@ -228,10 +228,10 @@ until step 8.
 - [x] `model/step` out of the `.desktop` MimeType and the thumbnailer entry
   (the 2.0 ones in `share/`).
 - [x] Remove `bin/`, the Python test, `chezmoi/` and 1.0's
-  `pcd.thumbnailer` from the tree (they stay in the history and in
-  `v1.0.0`); README rewritten for 2.0.
-- [x] Tag `v2.0.0`, GitHub release with the package; the prototype branch
-  becomes the tag `proto-three-d`.
+  `pcd.thumbnailer` from the tree; README rewritten for 2.0.
+- [x] Tag `v2.0.0`, GitHub release with the package. The repository's
+  public history starts here: what came before (1.0, the prototypes) is
+  only told in this file.
 
 ## After 2.0
 
@@ -261,7 +261,7 @@ package): the ticked items below.
 
 Private GitHub release with the package. Installed and checked by Rocco
 on 29/09: STEP opens, and the thumbnails and viewer follow the dark theme.
-The prototype branch is now the tag `proto-step`.
+The prototype was thrown away once STEP was in.
 
 Decided 28/09 as the step after 2.1: opening and thumbnails for CAD files,
 STEP (.step/.stp) first, in Rust and with no third-party programs (settled
@@ -269,7 +269,7 @@ on 25/09).
 
 - [x] Throwaway prototype, like the three-d one: read and tessellate a real
   STEP, e.g. with `truck`'s STEP reader, and see what fails and how fast.
-  Done 28/09 on the branch `proto-step` (now a tag), see below.
+  Done 28/09 on a throwaway branch, see below.
 
 ### STEP prototype (28/09): usable, with a watchdog and our own assemblies
 
