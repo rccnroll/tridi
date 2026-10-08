@@ -47,16 +47,18 @@ Then, once per user:
     tridi theme dark         # or: tridi theme light (both Nord)
     gsettings set org.gnome.nautilus.preferences thumbnail-limit 100
 
-`tridi theme` picks the look of both the viewer and the thumbnails, and
-clears the cached thumbnails of these formats so Nautilus redraws them. It
-also has to run once for the thumbnails to be ours: f3d, if installed, claims
-glb, stl and obj too, and `tridi theme` writes our entry where it wins
-(`~/.local/share/thumbnailers/`). It also makes tridi the default app for
-these formats (`xdg-mime default`), which a package can't do for its users;
-if an upgrade adds a format, the next time the viewer opens it brings both
-up to date. The second line lets Nautilus thumbnail
-files up to 100 MB (the default stops at 50). The package clears every
-user's cached thumbnails of these formats on install and upgrade.
+`tridi theme` sets the look of the viewer and the thumbnails, and clears
+the cached thumbnails of these formats so Nautilus redraws them. It has to
+run once either way: it writes tridi's thumbnailer entry to
+`~/.local/share/thumbnailers/`, where it wins over f3d's (f3d, if
+installed, claims glb, stl and obj too), and makes tridi the default app
+for these formats (`xdg-mime default`), which a package can't do for its
+users. When an upgrade adds a format, the viewer updates both the next
+time it opens.
+
+The `gsettings` line lets Nautilus thumbnail files up to 100 MB (the
+default stops at 50). The package itself clears every user's cached
+thumbnails of these formats on install and upgrade.
 
 ## Use
 

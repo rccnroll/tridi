@@ -397,3 +397,9 @@ history above keep the old name.
   the package keeps symlinks to our mimetype icon in Papirus's sizes. The
   app icon has a single name and falls through to hicolor: its copies
   went.
+- **A library under the binary** (2.6.0): `src/` split into a library
+  (readers, scene, rendering) and the binary on top, with typed errors,
+  `tracing` instead of prints (`TRIDI_DEBUG`, `TRIDI_LOG`; `TRIDI_TIMING`
+  went) and lints that deny what can panic or cast silently. The app id
+  became `io.github.rccnroll.tridi`, with AppStream metainfo, which a
+  Flatpak or a software center needs.
