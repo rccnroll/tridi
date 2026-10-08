@@ -9,6 +9,8 @@
 //! to f3d's entries in /usr/share, which also claim glb, stl and obj, which
 //! one wins is down to directory order; the user's directory comes first.
 
+// ========================================== Imports ========================================== {{{
+
 use eyre::{OptionExt, WrapErr};
 use std::{
     env, fs,
@@ -16,15 +18,20 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-
 use tridi::{LIGHT, Theme};
 
 use crate::tell;
 
+// }}}
+
+// ========================================= Constants ========================================= {{{
+
 /// The package's thumbnailer entry, the one installed under /usr/share.
 const ENTRY: &str = include_str!("../share/thumbnailers/tridi.thumbnailer");
+
 /// The package's desktop entry: its `MimeType`= line is what we open.
 const DESKTOP: &str = include_str!("../share/applications/tridi.desktop");
+
 /// Extensions whose cached thumbnails a theme switch (or an install) throws
 /// away: everything we draw, plus STEP, whose 1.0 thumbnails would otherwise
 /// stay forever now that nothing redraws them.
@@ -32,36 +39,9 @@ const EXTS: [&str; 12] = [
     "pcd", "ply", "xyz", "xyzrgb", "pts", "glb", "gltf", "obj", "stl", "off", "step", "stp",
 ];
 
-fn xdg(var: &str, fallback: &str) -> Option<PathBuf> {
-    env::var_os(var)
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("HOME").map(|h| Path::new(&h).join(fallback)))
-}
+// }}}
 
-fn config_file() -> Option<PathBuf> {
-    Some(xdg("XDG_CONFIG_HOME", ".config")?.join("tridi/theme"))
-}
-
-fn override_file() -> Option<PathBuf> {
-    Some(xdg("XDG_DATA_HOME", ".local/share")?.join("thumbnailers/tridi.thumbnailer"))
-}
-
-/// The viewer's theme: the one `tridi theme` saved, else light.
-pub fn current() -> &'static Theme {
-    config_file()
-        .and_then(|p| fs::read_to_string(p).ok())
-        .and_then(|s| Theme::by_name(s.trim()))
-        .unwrap_or(&LIGHT)
-}
-
-/// The package's entry, with `--theme dark` added for the dark theme.
-fn entry(theme: &Theme) -> String {
-    if theme.name == "dark" {
-        ENTRY.replace(" thumb %i", " thumb --theme dark %i")
-    } else {
-        ENTRY.to_owned()
-    }
-}
+// =========================================== Theme =========================================== {{{
 
 /// `tridi theme [light|dark]`: without a name, prints the current one to
 /// `out`.
@@ -86,21 +66,12 @@ pub fn command(name: Option<&str>, out: &mut dyn Write) -> eyre::Result<()> {
     Ok(())
 }
 
-/// The per-user half of the install, which the package can't do: our copy of
-/// the thumbnailer entry, and tridi as the default app for our types.
-fn install(theme: &Theme) -> eyre::Result<()> {
-    let ovr = override_file().ok_or_eyre("no $HOME")?;
-    write(&ovr, &entry(theme))?;
-    let types = DESKTOP.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or("");
-    let ok = Command::new("xdg-mime")
-        .args(["default", "tridi.desktop"])
-        .args(types.split(';').filter(|t| !t.is_empty()))
-        .status()
-        .is_ok_and(|s| s.success());
-    if !ok {
-        warn!("xdg-mime failed: tridi isn't the default app for our types");
-    }
-    Ok(())
+/// The viewer's theme: the one `tridi theme` saved, else light.
+pub fn current() -> &'static Theme {
+    config_file()
+        .and_then(|p| fs::read_to_string(p).ok())
+        .and_then(|s| Theme::by_name(s.trim()))
+        .unwrap_or(&LIGHT)
 }
 
 /// After a package upgrade that changed our types, the user's copy of the
@@ -123,13 +94,35 @@ pub fn refresh() {
     }
 }
 
-/// Writes `text` to `path`, making its directory first.
-fn write(path: &Path, text: &str) -> eyre::Result<()> {
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
+/// The per-user half of the install, which the package can't do: our copy of
+/// the thumbnailer entry, and tridi as the default app for our types.
+fn install(theme: &Theme) -> eyre::Result<()> {
+    let ovr = override_file().ok_or_eyre("no $HOME")?;
+    write(&ovr, &entry(theme))?;
+    let types = DESKTOP.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or("");
+    let ok = Command::new("xdg-mime")
+        .args(["default", "tridi.desktop"])
+        .args(types.split(';').filter(|t| !t.is_empty()))
+        .status()
+        .is_ok_and(|s| s.success());
+    if !ok {
+        warn!("xdg-mime failed: tridi isn't the default app for our types");
     }
-    fs::write(path, text).wrap_err_with(|| format!("cannot write {}", path.display()))
+    Ok(())
 }
+
+/// The package's entry, with `--theme dark` added for the dark theme.
+fn entry(theme: &Theme) -> String {
+    if theme.name == "dark" {
+        ENTRY.replace(" thumb %i", " thumb --theme dark %i")
+    } else {
+        ENTRY.to_owned()
+    }
+}
+
+// }}}
+
+// ====================================== Thumbnail cache ====================================== {{{
 
 /// Deletes the cached thumbnails of our formats under `dir` (a
 /// `~/.cache/thumbnails`), failed attempts included; returns how many.
@@ -179,6 +172,36 @@ fn thumb_uri(png: &[u8]) -> Option<String> {
     None
 }
 
+// }}}
+
+// ========================================== Helpers ========================================== {{{
+
+fn xdg(var: &str, fallback: &str) -> Option<PathBuf> {
+    env::var_os(var)
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|h| Path::new(&h).join(fallback)))
+}
+
+fn config_file() -> Option<PathBuf> {
+    Some(xdg("XDG_CONFIG_HOME", ".config")?.join("tridi/theme"))
+}
+
+fn override_file() -> Option<PathBuf> {
+    Some(xdg("XDG_DATA_HOME", ".local/share")?.join("thumbnailers/tridi.thumbnailer"))
+}
+
+/// Writes `text` to `path`, making its directory first.
+fn write(path: &Path, text: &str) -> eyre::Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
+    }
+    fs::write(path, text).wrap_err_with(|| format!("cannot write {}", path.display()))
+}
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,3 +249,5 @@ mod tests {
         assert_eq!(mime(&d), mime(ENTRY));
     }
 }
+
+// }}}

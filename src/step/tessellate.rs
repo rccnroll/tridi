@@ -1,6 +1,8 @@
 //! The child's work: the STEP file's solids tessellated with monstertruck,
 //! placed where the assembly puts them, as FLOATS f32 per vertex.
 
+// ========================================== Imports ========================================== {{{
+
 use monstertruck_assembly::assy::{EdgeEntity, NodeEntity};
 use monstertruck_io::step::load::Table;
 use monstertruck_io::step::load::step_p21::{ast::Name, tables::PlaceHolder};
@@ -14,6 +16,10 @@ use crate::{
         styles::{Colors, Ents, colors, entities, outer_faces},
     },
 };
+
+// }}}
+
+// ======================================= Tessellation ======================================== {{{
 
 pub(crate) fn tessellate(path: &Path) -> StepResult<Vec<f32>> {
     let raw = fs::read(path).map_err(StepError::Read)?;
@@ -149,3 +155,5 @@ fn mesh_item(table: &Table, ents: &Ents, colors: &Colors, id: u64) -> Vec<f32> {
     }
     out
 }
+
+// }}}

@@ -1,6 +1,8 @@
 //! The window: the files loaded, mouse navigation, the keys, and the legend
 //! and keys panels drawn by egui.
 
+// ========================================== Imports ========================================== {{{
+
 use eyre::{OptionExt, WrapErr, eyre};
 use glutin::{
     config::ConfigTemplateBuilder,
@@ -29,28 +31,48 @@ use winit::{
 
 use crate::{tell, window_keys};
 
+// }}}
+
+// ========================================= Constants ========================================= {{{
+
 /// The Wayland `app_id` the dock groups the window by, matching the .desktop.
 const APP_ID: &str = "tridi";
+
 /// Radians of orbit per logical pixel dragged.
 const ORBIT_SPEED: f32 = 0.008;
+
 /// Wheel zoom: the share of the distance one unit of wheel moves.
 const ZOOM_SPEED: f32 = 0.01;
+
 /// Wheel units per notch, and per logical pixel of a touchpad: the scale
 /// three-d's own window gave.
 const WHEEL_NOTCH: f32 = 24.0;
+
 const WHEEL_PIXEL: f32 = 0.24;
+
 /// Point size in logical pixels: the start, the factor of + and -, the bounds.
 const POINT_SIZE: f32 = 2.0;
+
 const POINT_STEP: f32 = 1.25;
+
 const POINT_MIN: f32 = 1.0;
+
 const POINT_MAX: f32 = 20.0;
+
 /// Zoom bounds, in scene radii: the closest stays above the near plane
 /// (radius * 0.01), or zooming in clips everything.
 const ZOOM_MIN: f32 = 0.05;
+
 const ZOOM_MAX: f32 = 15.0;
+
 /// The legend's dimming of a file turned off, and the panels' see-through.
 const OFF_ALPHA: f32 = 0.35;
+
 const PANEL_ALPHA: f32 = 0.75;
+
+// }}}
+
+// ========================================== Loading ========================================== {{{
 
 /// A file read, as the legend shows it: its tint (None when it has its own
 /// colors, or is a mesh) and how many points or triangles.
@@ -157,6 +179,10 @@ fn extent<I: Iterator<Item = Vec3>>(pts: I) -> Vec3 {
     bb.max() - bb.min()
 }
 
+// }}}
+
+// ======================================== Navigation ========================================= {{{
+
 /// Mouse navigation around the camera's target: left drag orbits, right or
 /// middle drag (or shift + left) pans, the wheel zooms. three-d's
 /// `OrbitControl` has no pan and a fixed target, so it's done here.
@@ -194,6 +220,10 @@ fn navigate(cam: &mut Camera, events: &mut [Event], dpr: f32, min: f32, max: f32
         }
     }
 }
+
+// }}}
+
+// ========================================== Viewer =========================================== {{{
 
 /// The window, its GL surface and what's drawn in it: made once the event
 /// loop starts, as winit 0.30 wants.
@@ -331,6 +361,12 @@ impl Viewer {
         true
     }
 
+    fn request_redraw(&self) {
+        if let Some(gl) = &self.gl {
+            gl.window.request_redraw();
+        }
+    }
+
     /// Draws the scene and the panels, and shows the frame.
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
         let Some(gl) = self.gl.as_mut() else { return };
@@ -357,95 +393,6 @@ impl Viewer {
             event_loop.exit();
         }
     }
-}
-
-/// What's drawn over the scene, none of it clickable (the keys toggle, the
-/// mouse moves the view). Top left, with `legend`: each file with its key,
-/// its tint and its size, the ones turned off dimmed. Top right, with
-/// `help`, the keys; else a hint bottom left that H shows them.
-fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: bool) {
-    let panel = |id: &str, at: egui::Align2, off: [f32; 2], add: &dyn Fn(&mut egui::Ui)| {
-        egui::Area::new(egui::Id::new(id))
-            .anchor(at, off)
-            .interactable(false)
-            .show(ui.ctx(), |ui| {
-                // see-through, so the scene shows under it
-                let fill = ui.visuals().window_fill.gamma_multiply(PANEL_ALPHA);
-                egui::Frame::popup(ui.style()).fill(fill).show(ui, add)
-            });
-    };
-    if help {
-        panel("help", egui::Align2::RIGHT_TOP, [-12.0, 12.0], &|ui| {
-            // the help's lines: two spaces or more between key and what it does
-            egui::Grid::new("keys").spacing([16.0, 4.0]).show(ui, |ui| {
-                for (k, d) in window_keys().lines().skip(1).filter_map(|l| l.trim().split_once("  ")) {
-                    ui.strong(k);
-                    ui.label(d.trim());
-                    ui.end_row();
-                }
-            });
-        });
-    } else {
-        egui::Area::new(egui::Id::new("hint"))
-            .anchor(egui::Align2::LEFT_BOTTOM, [12.0, -12.0])
-            .interactable(false)
-            .show(ui.ctx(), |ui| ui.weak("H  keys"));
-    }
-    if !legend {
-        return;
-    }
-    panel("legend", egui::Align2::LEFT_TOP, [12.0, 12.0], &|ui| {
-        egui::Grid::new("files").min_col_width(0.0).spacing([10.0, 4.0]).show(ui, |ui| {
-            for (i, (f, &on)) in files.iter().zip(visible).enumerate() {
-                let alpha = if on { 1.0 } else { OFF_ALPHA };
-                let fg = ui.visuals().text_color().gamma_multiply(alpha);
-                let text = |t: String| egui::RichText::new(t).color(fg);
-                ui.label(text(if i < 9 { format!("{}", i + 1) } else { String::new() }));
-                let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
-                if let Some(c) = f.tint {
-                    // the palette is written to the screen as is: sRGB
-                    let [r8, g8, b8] = c.map(byte);
-                    let c = egui::Color32::from_rgb(r8, g8, b8).gamma_multiply(alpha);
-                    ui.painter().rect_filled(r, 2.0, c);
-                } else {
-                    // own colors or a mesh: an empty square
-                    ui.painter()
-                        .rect_stroke(r, 2.0, egui::Stroke::new(1.0_f32, fg), egui::StrokeKind::Inside);
-                }
-                ui.label(text(f.name.clone()));
-                ui.label(text(f.count.clone()));
-                ui.end_row();
-            }
-        });
-    });
-}
-
-/// A 0..1 channel as a byte.
-fn byte(v: f32) -> u8 {
-    #[expect(
-        clippy::as_conversions,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "clamped to 0..255 first"
-    )]
-    let b = (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    b
-}
-
-/// The window's scale factor, for GL's float math.
-fn scale(w: &Window) -> f32 {
-    #[expect(
-        clippy::as_conversions,
-        clippy::cast_possible_truncation,
-        reason = "a scale factor is a small number"
-    )]
-    let s = w.scale_factor() as f32;
-    s
-}
-
-fn viewport(w: &Window) -> Viewport {
-    let s = w.inner_size();
-    Viewport::new_at_origo(s.width.max(1), s.height.max(1))
 }
 
 impl ApplicationHandler for Viewer {
@@ -529,13 +476,106 @@ impl ApplicationHandler for Viewer {
     }
 }
 
-impl Viewer {
-    fn request_redraw(&self) {
-        if let Some(gl) = &self.gl {
-            gl.window.request_redraw();
-        }
+// }}}
+
+// ========================================== Overlay ========================================== {{{
+
+/// What's drawn over the scene, none of it clickable (the keys toggle, the
+/// mouse moves the view). Top left, with `legend`: each file with its key,
+/// its tint and its size, the ones turned off dimmed. Top right, with
+/// `help`, the keys; else a hint bottom left that H shows them.
+fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: bool) {
+    let panel = |id: &str, at: egui::Align2, off: [f32; 2], add: &dyn Fn(&mut egui::Ui)| {
+        egui::Area::new(egui::Id::new(id))
+            .anchor(at, off)
+            .interactable(false)
+            .show(ui.ctx(), |ui| {
+                // see-through, so the scene shows under it
+                let fill = ui.visuals().window_fill.gamma_multiply(PANEL_ALPHA);
+                egui::Frame::popup(ui.style()).fill(fill).show(ui, add)
+            });
+    };
+    if help {
+        panel("help", egui::Align2::RIGHT_TOP, [-12.0, 12.0], &|ui| {
+            // the help's lines: two spaces or more between key and what it does
+            egui::Grid::new("keys").spacing([16.0, 4.0]).show(ui, |ui| {
+                for (k, d) in window_keys().lines().skip(1).filter_map(|l| l.trim().split_once("  ")) {
+                    ui.strong(k);
+                    ui.label(d.trim());
+                    ui.end_row();
+                }
+            });
+        });
+    } else {
+        egui::Area::new(egui::Id::new("hint"))
+            .anchor(egui::Align2::LEFT_BOTTOM, [12.0, -12.0])
+            .interactable(false)
+            .show(ui.ctx(), |ui| ui.weak("H  keys"));
     }
+    if !legend {
+        return;
+    }
+    panel("legend", egui::Align2::LEFT_TOP, [12.0, 12.0], &|ui| {
+        egui::Grid::new("files").min_col_width(0.0).spacing([10.0, 4.0]).show(ui, |ui| {
+            for (i, (f, &on)) in files.iter().zip(visible).enumerate() {
+                let alpha = if on { 1.0 } else { OFF_ALPHA };
+                let fg = ui.visuals().text_color().gamma_multiply(alpha);
+                let text = |t: String| egui::RichText::new(t).color(fg);
+                ui.label(text(if i < 9 { format!("{}", i + 1) } else { String::new() }));
+                let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
+                if let Some(c) = f.tint {
+                    // the palette is written to the screen as is: sRGB
+                    let [r8, g8, b8] = c.map(byte);
+                    let c = egui::Color32::from_rgb(r8, g8, b8).gamma_multiply(alpha);
+                    ui.painter().rect_filled(r, 2.0, c);
+                } else {
+                    // own colors or a mesh: an empty square
+                    ui.painter()
+                        .rect_stroke(r, 2.0, egui::Stroke::new(1.0_f32, fg), egui::StrokeKind::Inside);
+                }
+                ui.label(text(f.name.clone()));
+                ui.label(text(f.count.clone()));
+                ui.end_row();
+            }
+        });
+    });
 }
+
+/// A 0..1 channel as a byte.
+fn byte(v: f32) -> u8 {
+    #[expect(
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to 0..255 first"
+    )]
+    let b = (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    b
+}
+
+// }}}
+
+// ========================================== Helpers ========================================== {{{
+
+/// The window's scale factor, for GL's float math.
+fn scale(w: &Window) -> f32 {
+    #[expect(
+        clippy::as_conversions,
+        clippy::cast_possible_truncation,
+        reason = "a scale factor is a small number"
+    )]
+    let s = w.scale_factor() as f32;
+    s
+}
+
+fn viewport(w: &Window) -> Viewport {
+    let s = w.inner_size();
+    Viewport::new_at_origo(s.width.max(1), s.height.max(1))
+}
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
 
 #[cfg(test)]
 mod tests {
@@ -593,3 +633,5 @@ mod tests {
         assert!(include_str!("view.rs").contains(".with_name(APP_ID, APP_ID)"));
     }
 }
+
+// }}}

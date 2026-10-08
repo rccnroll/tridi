@@ -2,13 +2,23 @@
 //! hands the thumbnailer, so every byte is untrusted. The leaf of the crate:
 //! nothing here depends on the rest of tridi.
 
+// ======================================== Sub-modules ======================================== {{{
+
 mod off;
 mod pcd;
 mod ply;
 mod text;
 
+// }}}
+
+// ========================================== Imports ========================================== {{{
+
 use std::{fs, io, path::Path};
 use three_d::{Vec3, vec3};
+
+// }}}
+
+// ========================================== Errors =========================================== {{{
 
 /// Why a file isn't a cloud we can read.
 #[derive(Debug, thiserror::Error)]
@@ -26,6 +36,10 @@ pub enum FormatError {
 }
 
 pub type FormatResult<T> = Result<T, FormatError>;
+
+// }}}
+
+// =========================================== Cloud =========================================== {{{
 
 /// A cloud read from a file, before any coloring.
 pub struct Cloud {
@@ -71,6 +85,10 @@ pub fn parse_cloud(raw: &[u8], ext: &str) -> FormatResult<Cloud> {
     }
     Ok(c)
 }
+
+// }}}
+
+// ========================================== Scalar =========================================== {{{
 
 /// A binary scalar type of PCD and PLY, checked when the header is read: a
 /// reader never meets a type or size it doesn't know.
@@ -191,17 +209,18 @@ impl Scalar {
     }
 }
 
-/// f64 to f32, rounding: what the GPU gets.
-pub(crate) fn narrow(v: f64) -> f32 {
-    #[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "rounding to f32 is the point")]
-    let v = v as f32;
-    v
-}
+// }}}
 
-/// rgb packed in 32 bits (PCL writes it as a float, `Open3D` as U4) -> 0..1
-pub(crate) fn unpack_rgb(bits: u32) -> Vec3 {
-    let c = |s: u32| f32::from(u8::try_from((bits >> s) & 255).unwrap_or(0)) / 255.0;
-    vec3(c(16), c(8), c(0))
+// ========================================== Header =========================================== {{{
+
+/// One field of a point, as the header declares it.
+pub(crate) struct Field {
+    pub(crate) name: String,
+    pub(crate) kind: Scalar,
+    pub(crate) count: usize,
+    /// byte offset within a point (binary) and first column (ascii)
+    pub(crate) off: usize,
+    pub(crate) col: usize,
 }
 
 /// The first word of a header line.
@@ -235,15 +254,26 @@ pub(crate) fn split_header<'a>(raw: &'a [u8], last: &str) -> Result<(Vec<Vec<Str
     Err(format!("no {last} line: not a valid header"))
 }
 
-/// One field of a point, as the header declares it.
-pub(crate) struct Field {
-    pub(crate) name: String,
-    pub(crate) kind: Scalar,
-    pub(crate) count: usize,
-    /// byte offset within a point (binary) and first column (ascii)
-    pub(crate) off: usize,
-    pub(crate) col: usize,
+// }}}
+
+// ========================================== Helpers ========================================== {{{
+
+/// f64 to f32, rounding: what the GPU gets.
+pub(crate) fn narrow(v: f64) -> f32 {
+    #[expect(clippy::as_conversions, clippy::cast_possible_truncation, reason = "rounding to f32 is the point")]
+    let v = v as f32;
+    v
 }
+
+/// rgb packed in 32 bits (PCL writes it as a float, `Open3D` as U4) -> 0..1
+pub(crate) fn unpack_rgb(bits: u32) -> Vec3 {
+    let c = |s: u32| f32::from(u8::try_from((bits >> s) & 255).unwrap_or(0)) / 255.0;
+    vec3(c(16), c(8), c(0))
+}
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
 
 #[cfg(test)]
 mod tests {
@@ -294,3 +324,5 @@ mod tests {
         assert!(load_cloud(&tmp("lzf.pcd", &z)).is_err());
     }
 }
+
+// }}}

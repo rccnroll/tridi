@@ -18,6 +18,8 @@
 //! only if the cloud doesn't already carry its own colors. Meshes keep their
 //! materials.
 
+// ======================================= Lint Settings ======================================= {{{
+
 #![cfg_attr(
     test,
     allow(
@@ -28,12 +30,20 @@
     )
 )]
 
-#[macro_use]
-extern crate tracing;
+// }}}
+
+// ======================================== Sub-modules ======================================== {{{
 
 mod desktop;
 mod thumb;
 mod view;
+
+// }}}
+
+// ========================================== Imports ========================================== {{{
+
+#[macro_use]
+extern crate tracing;
 
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
@@ -46,6 +56,49 @@ use std::{
 };
 use tracing_subscriber::EnvFilter;
 use tridi::{LIGHT, Theme};
+
+// }}}
+
+// ========================================= Constants ========================================= {{{
+
+const AFTER_HELP: &str = "\
+Examples:
+  tridi scan.pcd                   open a point cloud
+  tridi a.pcd b.pcd part.step      open several files, one color each
+  tridi --theme dark model.glb     dark theme for this run only
+  tridi theme dark                 switch viewer and thumbnails to dark
+
+Formats:
+  point clouds  pcd, ply (no faces), xyz, xyzrgb, pts
+  meshes        glb, gltf, obj, stl, off, ply (with faces)
+  CAD           step, stp
+
+Window:
+  left drag             orbit
+  right or middle drag  pan (or shift + left drag)
+  wheel                 zoom
+  R                     reset the view
+  + and -               point size
+  1-9                   turn the N-th file off and on
+  I                     show or hide the legend (on with several files)
+  H or ?                show or hide these keys
+  Q or Esc              quit
+
+Environment:
+  TRIDI_DEBUG=1    debug output: which GPU renders, how long things take
+  TRIDI_LOG=info   a log filter instead (warnings only by default)
+
+Files:
+  ~/.config/tridi/theme
+      the theme `tridi theme` saved
+  ~/.local/share/thumbnailers/tridi.thumbnailer
+      our thumbnailer entry, which wins over f3d's
+
+Bugs: https://github.com/rccnroll/tridi/issues";
+
+// }}}
+
+// ======================================= Command line ======================================== {{{
 
 #[derive(Parser)]
 #[command(
@@ -99,78 +152,9 @@ enum Cmd {
     Generate { dir: PathBuf },
 }
 
-const AFTER_HELP: &str = "\
-Examples:
-  tridi scan.pcd                   open a point cloud
-  tridi a.pcd b.pcd part.step      open several files, one color each
-  tridi --theme dark model.glb     dark theme for this run only
-  tridi theme dark                 switch viewer and thumbnails to dark
+// }}}
 
-Formats:
-  point clouds  pcd, ply (no faces), xyz, xyzrgb, pts
-  meshes        glb, gltf, obj, stl, off, ply (with faces)
-  CAD           step, stp
-
-Window:
-  left drag             orbit
-  right or middle drag  pan (or shift + left drag)
-  wheel                 zoom
-  R                     reset the view
-  + and -               point size
-  1-9                   turn the N-th file off and on
-  I                     show or hide the legend (on with several files)
-  H or ?                show or hide these keys
-  Q or Esc              quit
-
-Environment:
-  TRIDI_DEBUG=1    debug output: which GPU renders, how long things take
-  TRIDI_LOG=info   a log filter instead (warnings only by default)
-
-Files:
-  ~/.config/tridi/theme
-      the theme `tridi theme` saved
-  ~/.local/share/thumbnailers/tridi.thumbnailer
-      our thumbnailer entry, which wins over f3d's
-
-Bugs: https://github.com/rccnroll/tridi/issues";
-
-/// The Window section of the help, which H shows in the viewer.
-fn window_keys() -> &'static str {
-    let s = AFTER_HELP.find("Window:").and_then(|i| AFTER_HELP.get(i..)).unwrap_or(AFTER_HELP);
-    s.split_once("\n\n").map_or(s, |(window, _)| window)
-}
-
-/// A line for the user on `out` (stdout): what tridi read, what it did.
-pub fn tell(out: &mut dyn Write, line: fmt::Arguments) {
-    #[expect(clippy::let_underscore_must_use, reason = "a closed stdout (a pipe to head) is no reason to stop")]
-    let _ = writeln!(out, "{line}");
-}
-
-/// `tridi generate DIR`: the man pages (tridi.1, one per subcommand), and
-/// tridi.bash, _tridi and tridi.fish, which the packages install.
-fn generate(dir: &Path) -> eyre::Result<()> {
-    let mut cmd = Cli::command();
-    fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
-    clap_mangen::generate_to(cmd.clone(), dir).wrap_err("cannot write the man pages")?;
-    for sh in [Shell::Bash, Shell::Zsh, Shell::Fish] {
-        clap_complete::generate_to(sh, &mut cmd, "tridi", dir).wrap_err_with(|| format!("cannot write the {sh} completions"))?;
-    }
-    Ok(())
-}
-
-/// Logs to stderr, stdout being the user's: warnings by default,
-/// `TRIDI_DEBUG=1` for debug, or a filter in `TRIDI_LOG` (`info`,
-/// `tridi=debug`, ...).
-fn init_logging() {
-    let default = if env::var_os("TRIDI_DEBUG").is_some() { "debug" } else { "warn" };
-    let filter = EnvFilter::try_from_env("TRIDI_LOG").unwrap_or_else(|_err| EnvFilter::new(default));
-    tracing_subscriber::fmt()
-        .with_writer(io::stderr)
-        .with_env_filter(filter)
-        .without_time()
-        .with_target(false)
-        .init();
-}
+// =========================================== Main ============================================ {{{
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -221,6 +205,52 @@ fn main() -> ExitCode {
     }
 }
 
+/// Logs to stderr, stdout being the user's: warnings by default,
+/// `TRIDI_DEBUG=1` for debug, or a filter in `TRIDI_LOG` (`info`,
+/// `tridi=debug`, ...).
+fn init_logging() {
+    let default = if env::var_os("TRIDI_DEBUG").is_some() { "debug" } else { "warn" };
+    let filter = EnvFilter::try_from_env("TRIDI_LOG").unwrap_or_else(|_err| EnvFilter::new(default));
+    tracing_subscriber::fmt()
+        .with_writer(io::stderr)
+        .with_env_filter(filter)
+        .without_time()
+        .with_target(false)
+        .init();
+}
+
+// }}}
+
+// ========================================== Helpers ========================================== {{{
+
+/// The Window section of the help, which H shows in the viewer.
+fn window_keys() -> &'static str {
+    let s = AFTER_HELP.find("Window:").and_then(|i| AFTER_HELP.get(i..)).unwrap_or(AFTER_HELP);
+    s.split_once("\n\n").map_or(s, |(window, _)| window)
+}
+
+/// A line for the user on `out` (stdout): what tridi read, what it did.
+pub fn tell(out: &mut dyn Write, line: fmt::Arguments) {
+    #[expect(clippy::let_underscore_must_use, reason = "a closed stdout (a pipe to head) is no reason to stop")]
+    let _ = writeln!(out, "{line}");
+}
+
+/// `tridi generate DIR`: the man pages (tridi.1, one per subcommand), and
+/// tridi.bash, _tridi and tridi.fish, which the packages install.
+fn generate(dir: &Path) -> eyre::Result<()> {
+    let mut cmd = Cli::command();
+    fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
+    clap_mangen::generate_to(cmd.clone(), dir).wrap_err("cannot write the man pages")?;
+    for sh in [Shell::Bash, Shell::Zsh, Shell::Fish] {
+        clap_complete::generate_to(sh, &mut cmd, "tridi", dir).wrap_err_with(|| format!("cannot write the {sh} completions"))?;
+    }
+    Ok(())
+}
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,3 +293,5 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
 }
+
+// }}}

@@ -3,8 +3,14 @@
 //! the library never finishes and its memory grows ~20 MB/s while it tries
 //! (a thread can't be stopped, a process can). A panic stays in the child too.
 
+// ======================================== Sub-modules ======================================== {{{
+
 mod styles;
 mod tessellate;
+
+// }}}
+
+// ========================================== Imports ========================================== {{{
 
 use std::{
     env,
@@ -18,7 +24,24 @@ use std::{
 use three_d::{Srgba, Vec3};
 use three_d_asset::{Indices, Positions, TriMesh};
 
-use tessellate::tessellate;
+use crate::step::tessellate::tessellate;
+
+// }}}
+
+// ========================================= Constants ========================================= {{{
+
+// ponytail: one deadline for viewer and thumbnails; the biggest real part (476 faces) takes 0.5 s
+const DEADLINE: Duration = Duration::from_secs(15);
+
+/// A vertex on the wire: position, normal, color.
+pub(crate) const FLOATS: usize = 9;
+
+/// The color of a face the file gives none: negative, as no real color is.
+pub(crate) const NONE: [f32; 3] = [-1.0; 3];
+
+// }}}
+
+// ========================================== Errors =========================================== {{{
 
 /// Why a STEP file gave no triangles.
 #[derive(Debug, thiserror::Error)]
@@ -44,13 +67,9 @@ pub enum StepError {
 
 pub type StepResult<T> = Result<T, StepError>;
 
-// ponytail: one deadline for viewer and thumbnails; the biggest real part (476 faces) takes 0.5 s
-const DEADLINE: Duration = Duration::from_secs(15);
+// }}}
 
-/// A vertex on the wire: position, normal, color (NONE, negative, when the
-/// file gives the face none).
-pub(crate) const FLOATS: usize = 9;
-pub(crate) const NONE: [f32; 3] = [-1.0; 3];
+// ========================================== Parent =========================================== {{{
 
 /// Parent side: run the child, read its triangles. `grey` stands in for the
 /// faces without a color, when others have one.
@@ -99,16 +118,6 @@ pub fn load(path: &Path, grey: [f32; 3]) -> StepResult<TriMesh> {
     Ok(mesh)
 }
 
-/// Child side: `tridi step-mesh IN`.
-pub fn mesh_to_stdout(path: &str) -> StepResult<()> {
-    // die with the parent: a viewer killed while waiting must not leave us running
-    // SAFETY: prctl with PR_SET_PDEATHSIG only sets a flag on this process
-    unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
-    let v = tessellate(Path::new(path))?;
-    let bytes: Vec<u8> = v.iter().flat_map(|f| f.to_le_bytes()).collect();
-    io::stdout().lock().write_all(&bytes).map_err(StepError::Write)
-}
-
 /// FLOATS f32 per vertex, three vertices per triangle.
 fn decode(bytes: &[u8], grey: [f32; 3]) -> TriMesh {
     let f: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect();
@@ -132,6 +141,24 @@ fn decode(bytes: &[u8], grey: [f32; 3]) -> TriMesh {
         ..Default::default()
     }
 }
+
+// }}}
+
+// =========================================== Child =========================================== {{{
+
+/// Child side: `tridi step-mesh IN`.
+pub fn mesh_to_stdout(path: &str) -> StepResult<()> {
+    // die with the parent: a viewer killed while waiting must not leave us running
+    // SAFETY: prctl with PR_SET_PDEATHSIG only sets a flag on this process
+    unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
+    let v = tessellate(Path::new(path))?;
+    let bytes: Vec<u8> = v.iter().flat_map(|f| f.to_le_bytes()).collect();
+    io::stdout().lock().write_all(&bytes).map_err(StepError::Write)
+}
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
 
 #[cfg(test)]
 mod tests {
@@ -200,3 +227,5 @@ mod tests {
         assert!(matches!(tessellate(&f), Err(StepError::NotStep)));
     }
 }
+
+// }}}

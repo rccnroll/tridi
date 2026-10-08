@@ -1,9 +1,29 @@
 //! Drawing: the scene, the headless GL context the thumbnailer uses, and the
 //! offscreen render.
 
+// ======================================== Sub-modules ======================================== {{{
+
 mod headless;
 mod offscreen;
 mod scene;
+
+// }}}
+
+// ======================================== Re-exports ========================================= {{{
+
+pub use headless::{headless, quiet_stderr};
+pub use offscreen::offscreen;
+pub use scene::{FOV, Input, Scene};
+
+// }}}
+
+// ========================================== Imports ========================================== {{{
+
+use glutin::error;
+
+// }}}
+
+// ========================================== Errors =========================================== {{{
 
 /// Why drawing couldn't start.
 #[derive(Debug, thiserror::Error)]
@@ -33,11 +53,9 @@ pub enum RenderError {
 
 pub type RenderResult<T> = Result<T, RenderError>;
 
-use glutin::error;
+// }}}
 
-pub use headless::{headless, quiet_stderr};
-pub use offscreen::offscreen;
-pub use scene::{FOV, Input, Scene};
+// ========================================== Helpers ========================================== {{{
 
 /// A pixel count as f32, for GL's float math.
 #[must_use]
@@ -46,3 +64,5 @@ pub fn px_f32(n: u32) -> f32 {
     let n = n as f32;
     n
 }
+
+// }}}

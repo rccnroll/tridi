@@ -1,8 +1,14 @@
 //! PCD: ascii, binary and `binary_compressed` (LZF), as PCL and `Open3D` write it.
 
+// ========================================== Imports ========================================== {{{
+
 use three_d::vec3;
 
 use crate::formats::{Cloud, Field, FormatError, FormatResult, Scalar, key, narrow, split_header, unpack_rgb};
+
+// }}}
+
+// ============================================ PCD ============================================ {{{
 
 pub(crate) fn read(raw: &[u8]) -> FormatResult<Cloud> {
     parse(raw).map_err(|reason| FormatError::Invalid { format: "PCD", reason })
@@ -117,6 +123,10 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
     })
 }
 
+// }}}
+
+// ========================================== Helpers ========================================== {{{
+
 /// The FIELDS, SIZE, TYPE and COUNT lines as fields, with the bytes per
 /// point (binary) and the columns per line (ascii).
 fn header_fields(names: &[String], sizes: &[String], types: &[String], counts: &[String]) -> Result<(Vec<Field>, usize, usize), String> {
@@ -183,6 +193,10 @@ fn lzf(inp: &[u8], out_len: usize) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+// }}}
+
+// =========================================== Tests =========================================== {{{
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,3 +236,5 @@ mod tests {
         assert_eq!(lzf(&packed, 9).unwrap(), b"abcabcabc");
     }
 }
+
+// }}}

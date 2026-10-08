@@ -1,9 +1,15 @@
 //! PLY: ascii and binary, vertices with optional colors, and an optional
 //! face element (polygons fan-triangulated).
 
+// ========================================== Imports ========================================== {{{
+
 use three_d::vec3;
 
 use crate::formats::{Cloud, Field, FormatError, FormatResult, Scalar, key, narrow, split_header};
+
+// }}}
+
+// ============================================ PLY ============================================ {{{
 
 pub(crate) fn read(raw: &[u8]) -> FormatResult<Cloud> {
     parse(raw).map_err(|reason| FormatError::Invalid { format: "PLY", reason })
@@ -110,6 +116,10 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
     Ok(Cloud { points, colors, faces })
 }
 
+// }}}
+
+// ========================================== Helpers ========================================== {{{
+
 /// The vertex element's properties as fields, with the bytes per vertex
 /// (binary) and the columns per line (ascii).
 fn vertex_fields(props: &[&Vec<String>]) -> Result<(Vec<Field>, usize, usize), String> {
@@ -182,6 +192,10 @@ fn ply_type(t: &str) -> Result<Scalar, String> {
     Scalar::from_ply(t).ok_or_else(|| format!("unsupported PLY type {t}"))
 }
 
+// }}}
+
+// =========================================== Tests =========================================== {{{
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -206,3 +220,5 @@ mod tests {
         assert!(close(c.points[1], [4.0, 5.0, 6.0]) && c.colors.is_none());
     }
 }
+
+// }}}

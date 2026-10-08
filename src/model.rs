@@ -2,6 +2,8 @@
 //! three-d-asset, ply/off with faces from the readers, step/stp through
 //! step), and which way is up.
 
+// ========================================== Imports ========================================== {{{
+
 use std::{panic, path::Path};
 use three_d::{CpuMaterial, CpuModel, Mat4, Srgba, Vec3};
 use three_d_asset::{Geometry, Indices, Positions, Primitive, TriMesh, io};
@@ -10,6 +12,10 @@ use crate::{
     formats::{Cloud, FormatError, load_cloud},
     step::{self, StepError},
 };
+
+// }}}
+
+// ========================================== Errors =========================================== {{{
 
 /// Why a file couldn't be opened.
 #[derive(Debug, thiserror::Error)]
@@ -32,6 +38,10 @@ pub enum LoadError {
 }
 
 pub type LoadResult<T> = Result<T, LoadError>;
+
+// }}}
+
+// =========================================== Item ============================================ {{{
 
 /// A file read: a cloud to color, or a mesh ready for the GPU.
 pub enum Item {
@@ -102,6 +112,10 @@ pub fn triangles(m: &CpuModel) -> usize {
         .sum()
 }
 
+// }}}
+
+// ========================================== Up axis ========================================== {{{
+
 /// Whether `p` is glTF, whose standard is Y-up.
 #[must_use]
 pub fn is_gltf(p: &Path) -> bool {
@@ -115,6 +129,10 @@ pub fn is_gltf(p: &Path) -> bool {
 pub fn up_for(gltf: bool) -> Vec3 {
     if gltf { Vec3::unit_y() } else { Vec3::unit_z() }
 }
+
+// }}}
+
+// ========================================== Helpers ========================================== {{{
 
 fn load_asset(path: &Path, ext: &str) -> LoadResult<CpuModel> {
     let asset = |source| LoadError::Asset {
@@ -164,6 +182,10 @@ fn model(mesh: TriMesh) -> CpuModel {
         materials: vec![],
     }
 }
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
 
 #[cfg(test)]
 mod tests {
@@ -238,3 +260,5 @@ mod tests {
         assert!(load(&tmp("coff.obj", b"d\x86\x07\x00\xff\xfe"), LIGHT.mesh).is_err());
     }
 }
+
+// }}}

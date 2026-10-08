@@ -1,9 +1,15 @@
 //! The coloring rules of 1.0: the file's own colors, else one tint per file
 //! when several are open, else the theme's height ramp.
 
+// ========================================== Imports ========================================== {{{
+
 use three_d::Vec3;
 
 use crate::{formats::Cloud, theme::Theme};
+
+// }}}
+
+// ========================================= Coloring ========================================== {{{
 
 /// The file's colors, if it has them and they're kept: with several files
 /// open (`tint` given) one color for every point (our scans' grey rgb) says
@@ -29,6 +35,10 @@ pub fn colorize(c: &Cloud, tint: Option<[f32; 3]>, theme: &Theme) -> Vec<Vec3> {
     let [a, b] = theme.ramp.map(Vec3::from);
     c.points.iter().map(|p| a + (b - a) * ((p.z - lo) / span)).collect()
 }
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
 
 #[cfg(test)]
 mod tests {
@@ -115,3 +125,5 @@ mod tests {
         );
     }
 }
+
+// }}}

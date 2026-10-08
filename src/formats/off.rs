@@ -1,8 +1,14 @@
 //! OFF and COFF meshes, read as a cloud with faces.
 
+// ========================================== Imports ========================================== {{{
+
 use three_d::vec3;
 
 use crate::formats::{Cloud, FormatError, FormatResult};
+
+// }}}
+
+// ============================================ OFF ============================================ {{{
 
 /// OFF / COFF: counts, then vertices (COFF adds r g b a, 0..255 or 0..1),
 /// then faces as `k i0 i1 ...`.
@@ -86,3 +92,5 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
         faces: Some(faces),
     })
 }
+
+// }}}

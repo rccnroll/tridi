@@ -1,8 +1,14 @@
 //! Text clouds: xyz, xyzrgb and pts, one point per line.
 
+// ========================================== Imports ========================================== {{{
+
 use three_d::vec3;
 
 use crate::formats::Cloud;
+
+// }}}
+
+// ======================================== Text clouds ======================================== {{{
 
 /// xyz: x y z; xyzrgb: x y z r g b (0..1); pts: an optional count line, then
 /// x y z [intensity] [r g b] (0..255). Spaces or commas; other lines skipped.
@@ -42,6 +48,10 @@ pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
     }
 }
 
+// }}}
+
+// =========================================== Tests =========================================== {{{
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -61,3 +71,5 @@ mod tests {
         assert!(close(c.colors.unwrap()[1], [0.0, 1.0, 0.0]));
     }
 }
+
+// }}}

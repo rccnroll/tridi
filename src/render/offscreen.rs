@@ -1,8 +1,14 @@
 //! The thumbnail: the scene drawn into textures and read back.
 
+// ========================================== Imports ========================================== {{{
+
 use three_d::{ClearState, Context, DepthTexture2D, Interpolation, RenderTarget, Texture2D, Viewport, Wrapping};
 
 use crate::render::{Scene, px_f32};
+
+// }}}
+
+// ========================================= Offscreen ========================================= {{{
 
 /// Renders `scene` to a size×size RGBA image, top row first. Drawn at twice
 /// the size and averaged down 2×2: anti-aliasing for points too, which MSAA
@@ -44,6 +50,10 @@ pub fn offscreen(ctx: &Context, scene: &Scene, size: u32, bg: [f32; 3]) -> Vec<u
     out
 }
 
+// }}}
+
+// =========================================== Tests =========================================== {{{
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,3 +90,5 @@ mod tests {
             .expect("no llvmpipe EGL device")
     }
 }
+
+// }}}

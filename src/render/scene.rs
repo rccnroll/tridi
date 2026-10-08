@@ -1,15 +1,20 @@
 //! The scene: one layer per opened file (points with eye-dome lighting, or
 //! a mesh) and the axis triad.
 
+// ========================================== Imports ========================================== {{{
+
+use std::{cell::RefCell, convert::Infallible};
 use three_d::{
     AmbientLight, AxisAlignedBoundingBox, Camera, ClearState, Context, CpuModel, DepthTest, DepthTexture2D, DirectionalLight, Geometry,
     HasContext, InnerSpace, Interpolation, Model, PhysicalMaterial, Program, RenderStates, RenderTarget, Srgba, Texture2D, Vec2, Vec3,
     VertexBuffer, Viewer, Viewport, Wrapping, context, degrees, vec2, vec3,
 };
 
-use std::{cell::RefCell, convert::Infallible};
-
 use crate::render::{RenderError, RenderResult, px_f32};
+
+// }}}
+
+// ========================================= Constants ========================================= {{{
 
 const VS: &str = "
 uniform mat4 mvp;
@@ -22,6 +27,7 @@ void main() {
     gl_PointSize = psize;
     col = color;
 }";
+
 const FS: &str = "
 in vec3 col;
 layout (location = 0) out vec4 outColor;
@@ -39,6 +45,7 @@ void main() {
     uv = corner;
     gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0);
 }";
+
 const EDL_FS: &str = "
 uniform sampler2D colorTex;
 uniform sampler2D depthTex;
@@ -66,17 +73,22 @@ void main() {
     gl_FragDepth = d;
 }";
 
-enum Layer {
-    Points {
-        pos: VertexBuffer<Vec3>,
-        col: VertexBuffer<Vec3>,
-        n: i32,
-    },
-    Mesh(Model<PhysicalMaterial>),
-}
-
 /// vertical field of view, degrees
 pub const FOV: f32 = 45.0;
+
+// }}}
+
+// =========================================== Input =========================================== {{{
+
+/// One opened file, ready for the GPU: a colored cloud or a mesh.
+pub enum Input {
+    Points(Vec<Vec3>, Vec<Vec3>),
+    Mesh(CpuModel),
+}
+
+// }}}
+
+// =========================================== Scene =========================================== {{{
 
 /// What goes on screen: one layer per opened file, plus the axis triad.
 pub struct Scene {
@@ -97,12 +109,6 @@ pub struct Scene {
     radius: f32,
     /// +Z for scans and CAD, +Y when every file is glTF (its convention)
     up: Vec3,
-}
-
-/// One opened file, ready for the GPU: a colored cloud or a mesh.
-pub enum Input {
-    Points(Vec<Vec3>, Vec<Vec3>),
-    Mesh(CpuModel),
 }
 
 impl Scene {
@@ -322,3 +328,18 @@ impl Scene {
         });
     }
 }
+
+// }}}
+
+// =========================================== Layer =========================================== {{{
+
+enum Layer {
+    Points {
+        pos: VertexBuffer<Vec3>,
+        col: VertexBuffer<Vec3>,
+        n: i32,
+    },
+    Mesh(Model<PhysicalMaterial>),
+}
+
+// }}}

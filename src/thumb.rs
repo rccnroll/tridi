@@ -1,8 +1,14 @@
 //! `tridi thumb IN OUT SIZE`: what Nautilus runs, inside its sandbox.
 
+// ========================================== Imports ========================================== {{{
+
 use eyre::WrapErr;
 use std::{env, path::Path, time::Instant};
 use tridi::{Input, Item, Scene, Theme};
+
+// }}}
+
+// ========================================= Thumbnail ========================================= {{{
 
 /// Draws `inp` into the PNG `out`, `size` pixels square.
 #[instrument(skip(theme), fields(theme = theme.name))]
@@ -31,3 +37,5 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()>
     info!(elapsed_ms, "thumbnail written");
     Ok(())
 }
+
+// }}}

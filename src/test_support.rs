@@ -1,7 +1,13 @@
 //! Fixtures shared by the tests of several modules.
 
+// ========================================== Imports ========================================== {{{
+
 use std::{env, fmt::Write, fs, path::PathBuf, process};
 use three_d::{InnerSpace, Vec3};
+
+// }}}
+
+// ========================================= Fixtures ========================================== {{{
 
 pub fn tmp(name: &str, data: &[u8]) -> PathBuf {
     let dir = env::temp_dir().join(format!("tridi-test-{}", process::id()));
@@ -25,3 +31,5 @@ pub fn ascii_pcd(pts: &[[f32; 3]]) -> Vec<u8> {
 pub fn close(a: Vec3, b: [f32; 3]) -> bool {
     (a - Vec3::from(b)).magnitude() < 1e-3
 }
+
+// }}}

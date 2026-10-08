@@ -1,33 +1,15 @@
 //! A GL context with no window and no display, on the right GPU.
 
+// ========================================== Imports ========================================== {{{
+
 use std::{env, ptr, sync::Arc};
 use three_d::{Context, context};
 
 use crate::render::{RenderError, RenderResult};
 
-/// Runs `f` with stderr closed. Mesa prints `pci id for fd N: 10de:…, driver
-/// (null)` for every GPU node it has no driver for (the NVIDIA one) while
-/// EGL starts, before any of its log settings apply. Real failures still come
-/// back through `f`'s result.
-pub fn quiet_stderr<T, F: FnOnce() -> T>(f: F) -> T {
-    if env::var_os("TRIDI_DEBUG").is_some() {
-        return f();
-    }
-    // SAFETY: plain fd juggling on 2; the saved copy is restored and closed
-    unsafe {
-        let saved = libc::dup(2);
-        let null = libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY);
-        if saved < 0 || null < 0 {
-            return f();
-        }
-        libc::dup2(null, 2);
-        libc::close(null);
-        let r = f();
-        libc::dup2(saved, 2);
-        libc::close(saved);
-        r
-    }
-}
+// }}}
+
+// ========================================= Headless ========================================== {{{
 
 /// GL context with no window and no display: EGL device + surfaceless.
 /// The second value keeps the EGL context and display alive.
@@ -96,3 +78,33 @@ fn open_headless() -> RenderResult<(Context, impl Sized)> {
     let ctx = Context::from_gl_context(Arc::new(gl)).map_err(|source| RenderError::Gl { step: "load GL", source })?;
     Ok((ctx, (gl_ctx, display)))
 }
+
+// }}}
+
+// ======================================= Quiet stderr ======================================== {{{
+
+/// Runs `f` with stderr closed. Mesa prints `pci id for fd N: 10de:…, driver
+/// (null)` for every GPU node it has no driver for (the NVIDIA one) while
+/// EGL starts, before any of its log settings apply. Real failures still come
+/// back through `f`'s result.
+pub fn quiet_stderr<T, F: FnOnce() -> T>(f: F) -> T {
+    if env::var_os("TRIDI_DEBUG").is_some() {
+        return f();
+    }
+    // SAFETY: plain fd juggling on 2; the saved copy is restored and closed
+    unsafe {
+        let saved = libc::dup(2);
+        let null = libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY);
+        if saved < 0 || null < 0 {
+            return f();
+        }
+        libc::dup2(null, 2);
+        libc::close(null);
+        let r = f();
+        libc::dup2(saved, 2);
+        libc::close(saved);
+        r
+    }
+}
+
+// }}}

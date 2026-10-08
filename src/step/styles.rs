@@ -1,7 +1,13 @@
 //! What monstertruck drops: the DATA section scanned for styles, so faces
 //! and solids get the colors the file gives them.
 
+// ========================================== Imports ========================================== {{{
+
 use std::{collections::BTreeMap, iter};
+
+// }}}
+
+// ========================================= Entities ========================================== {{{
 
 /// The DATA section as `id -> (NAME, arguments)`, simple entities only
 /// (complex ones, `#1 = ( A() B() );`, are relationships we don't need
@@ -58,6 +64,10 @@ fn refs(args: &str) -> Vec<u64> {
     }
     out
 }
+
+// }}}
+
+// ========================================== Colors =========================================== {{{
 
 /// Item id -> color, from `STYLED_ITEM` (and `OVER_RIDING_STYLED_ITEM`). An item
 /// is a face, a solid, or a representation, whose color then goes to its
@@ -122,6 +132,10 @@ fn colour(ents: &Ents, id: u64, depth: u8) -> Option<[f32; 3]> {
     }
 }
 
+// }}}
+
+// =========================================== Faces =========================================== {{{
+
 /// The faces of a solid's outer shell, `ORIENTED_FACE` resolved to the face.
 pub(crate) fn outer_faces(ents: &Ents, solid: u64) -> Vec<u64> {
     let Some((_, args)) = ents.get(&solid) else { return Vec::new() };
@@ -137,3 +151,5 @@ pub(crate) fn outer_faces(ents: &Ents, solid: u64) -> Vec<u64> {
         })
         .collect()
 }
+
+// }}}

@@ -1,15 +1,7 @@
 //! Themes, Nord light and Nord dark: the colors the viewer and the
 //! thumbnails draw with.
 
-/// The colors of a look: background, height ramp, one tint per file when
-/// several are open, and the color of meshes without a material.
-pub struct Theme {
-    pub name: &'static str,
-    pub bg: [f32; 3],
-    pub ramp: [[f32; 3]; 2],
-    pub palette: [[f32; 3]; 6],
-    pub mesh: [f32; 3],
-}
+// ========================================= Constants ========================================= {{{
 
 /// The default: Nord snow storm background, everything else dark.
 pub const LIGHT: Theme = Theme {
@@ -46,6 +38,20 @@ pub const DARK: Theme = Theme {
 
 pub const THEMES: [&Theme; 2] = [&LIGHT, &DARK];
 
+// }}}
+
+// =========================================== Theme =========================================== {{{
+
+/// The colors of a look: background, height ramp, one tint per file when
+/// several are open, and the color of meshes without a material.
+pub struct Theme {
+    pub name: &'static str,
+    pub bg: [f32; 3],
+    pub ramp: [[f32; 3]; 2],
+    pub palette: [[f32; 3]; 6],
+    pub mesh: [f32; 3],
+}
+
 impl Theme {
     /// The theme called `name`: `light` or `dark`.
     #[must_use]
@@ -53,6 +59,10 @@ impl Theme {
         THEMES.into_iter().find(|t| t.name == name)
     }
 }
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
 
 #[cfg(test)]
 mod tests {
@@ -75,3 +85,5 @@ mod tests {
         }
     }
 }
+
+// }}}
