@@ -403,3 +403,11 @@ history above keep the old name.
   went) and lints that deny what can panic or cast silently. The app id
   became `io.github.rccnroll.tridi`, with AppStream metainfo, which a
   Flatpak or a software center needs.
+- **Public** (08/10): the history before 2.0 (Python, the prototypes,
+  chezmoi) stays out, so the repository starts at the 2.0.0 commit. Rules
+  set the same day: `main` can't be deleted or force-pushed and needs CI
+  (`check`, `msrv`) green to merge, the `v*` tags can't be moved or
+  deleted, an outside contributor's workflows wait for approval, the
+  default `GITHUB_TOKEN` is read-only, and vulnerabilities are reported
+  privately. Help comes as pull requests: no collaborators with write
+  access.
