@@ -3,7 +3,7 @@
 pkgname=tridi
 pkgver=2.7.0
 pkgrel=1
-pkgdesc='Point cloud and mesh viewer, with Nautilus thumbnails'
+pkgdesc='Point cloud and mesh viewer, with file manager thumbnails'
 arch=('x86_64')
 url='https://github.com/rccnroll/tridi'
 license=('MIT OR Apache-2.0' 'OFL-1.1' 'Ubuntu-font-1.0')  # the last two: egui's fonts

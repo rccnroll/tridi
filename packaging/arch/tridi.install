@@ -14,8 +14,8 @@ post_install() {
   cat <<'MSG'
 ==> tridi: pick the theme once per user (viewer, thumbnails, default app):
       tridi theme light     or     tridi theme dark
-    Nautilus skips files over 50 MB; to get thumbnails up to 100 MB:
-      gsettings set org.gnome.nautilus.preferences thumbnail-limit 100
+    File managers skip big files (Nautilus over 50 MB); to raise the limit:
+      https://github.com/rccnroll/tridi#file-managers
 MSG
 }
 

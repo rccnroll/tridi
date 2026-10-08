@@ -2,7 +2,7 @@
 //! meshes (glb, gltf, obj, stl, off, ply with faces, step/stp).
 //!
 //!     tridi [--theme T] FILE [FILE ...]        window
-//!     tridi thumb [--theme T] IN OUT SIZE      PNG thumbnail, no window (for Nautilus)
+//!     tridi thumb [--theme T] IN OUT SIZE      PNG thumbnail, no window (for the file manager)
 //!     tridi theme [light|dark]                 show or switch the theme (viewer and thumbnails)
 //!     tridi clear-thumbnails [DIR ...]         drop cached thumbnails of our formats
 //!
@@ -105,7 +105,7 @@ Bugs: https://github.com/rccnroll/tridi/issues";
     version,
     disable_help_subcommand = true,
     override_usage = "tridi [OPTIONS] FILE...\n       tridi [OPTIONS] <COMMAND>",
-    about = "Viewer for point clouds and meshes, and their thumbnails in Nautilus",
+    about = "Viewer for point clouds and meshes, and their thumbnails in the file manager",
     after_help = AFTER_HELP
 )]
 struct Cli {
@@ -121,7 +121,7 @@ struct Cli {
 
 #[derive(clap::Subcommand)]
 enum Cmd {
-    /// Write a PNG thumbnail of IN to OUT, without a window (what Nautilus runs)
+    /// Write a PNG thumbnail of IN to OUT, without a window (what the file manager runs)
     Thumb {
         /// The file to draw
         #[arg(value_name = "IN")]

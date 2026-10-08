@@ -10,8 +10,9 @@
   </developer>
   <description>
     <p>A fast viewer for point clouds, meshes and STEP files, and the
-    thumbnails for them in GNOME Files. Open several files at once, one color
-    each, and turn them off and on from the keyboard.</p>
+    thumbnails for them in the file manager (GNOME Files, Nemo, Caja,
+    Thunar). Open several files at once, one color each, and turn them off
+    and on from the keyboard.</p>
     <p>Point clouds: PCD, PLY, XYZ, XYZRGB, PTS. Meshes: glTF/GLB, OBJ, STL,
     OFF, PLY. CAD: STEP, with assemblies and colors.</p>
   </description>

@@ -4,9 +4,10 @@
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue)](#license)
 
 A fast viewer for point clouds, meshes and STEP files on Linux, and the
-thumbnails for them in Nautilus (GNOME Files). One Rust binary does both:
-a window for looking at the files, and `tridi thumb`, which Nautilus calls
-to draw their previews without a window or a GPU.
+thumbnails for them in the file manager (Nautilus, Nemo, Caja, Thunar).
+One Rust binary does both: a window for looking at the files, and
+`tridi thumb`, which the file manager calls to draw their previews without
+a window or a GPU.
 
 ![Four point cloud tiles in the viewer, one color each, and the legend of the files](docs/media/viewer.png)
 
@@ -45,10 +46,11 @@ From the repo (builds the committed HEAD in a Debian 12 container, podman):
 Then, once per user:
 
     tridi theme dark         # or: tridi theme light (both Nord)
-    gsettings set org.gnome.nautilus.preferences thumbnail-limit 100
+
+and raise the file manager's size limit (see [File managers](#file-managers)).
 
 `tridi theme` sets the look of the viewer and the thumbnails, and clears
-the cached thumbnails of these formats so Nautilus redraws them. It has to
+the cached thumbnails of these formats so the file manager redraws them. It has to
 run once either way: it writes tridi's thumbnailer entry to
 `~/.local/share/thumbnailers/`, where it wins over f3d's (f3d, if
 installed, claims glb, stl and obj too), and makes tridi the default app
@@ -56,14 +58,31 @@ for these formats (`xdg-mime default`), which a package can't do for its
 users. When an upgrade adds a format, the viewer updates both the next
 time it opens.
 
-The `gsettings` line lets Nautilus thumbnail files up to 100 MB (the
-default stops at 50). The package itself clears every user's cached
-thumbnails of these formats on install and upgrade.
+The package itself clears every user's cached thumbnails of these formats
+on install and upgrade.
+
+## File managers
+
+Every file manager that reads the freedesktop `.thumbnailer` files shows
+tridi's thumbnails; each has its own limit on the size of the files it
+thumbnails, which point clouds easily pass:
+
+| File manager | Thumbnails | Raise the size limit to 100 MB |
+|---|---|---|
+| Nautilus (GNOME) | yes | `gsettings set org.gnome.nautilus.preferences thumbnail-limit 100` (MB; default 50) |
+| Nemo (Cinnamon) | yes | `gsettings set org.nemo.preferences thumbnail-limit 104857600` (bytes; default 1 MB) |
+| Caja (MATE) | yes | `gsettings set org.mate.caja.preferences thumbnail-limit 104857600` (bytes; default 10 MB) |
+| Thunar (Xfce) | yes, through tumbler | no limit by default (`MaxFileSize` under `[DesktopThumbnailer]` in `tumbler.rc`) |
+| Dolphin (KDE) | no | KDE doesn't read `.thumbnailer` files; it wants its own plugin |
+
+With tumbler 4.18 (Debian 12, Ubuntu 24.04) Thunar sometimes misses a
+thumbnail the first time a folder opens, and draws it the next; 4.20
+doesn't.
 
 ## Use
 
     tridi FILE [FILE ...]              # open files together
-    tridi thumb IN OUT SIZE            # what Nautilus runs
+    tridi thumb IN OUT SIZE            # what the file manager runs
     tridi theme [light|dark]           # show or switch the theme
     tridi clear-thumbnails [DIR ...]   # drop cached thumbnails of these formats
 

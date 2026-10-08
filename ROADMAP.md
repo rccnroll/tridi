@@ -30,6 +30,10 @@ why.
   has IGES code (`src/iges.rs`, a `cadmpeg-codec-iges` feature), not
   tried.
 
+- [ ] Dolphin (KDE) thumbnails (08/10): KDE ignores `.thumbnailer` files
+  (bugs.kde.org 402721) and wants a KIO ThumbnailCreator plugin, C++
+  against KF6, that would run `tridi thumb`.
+
 - [ ] A tldr page (07/10). tldr-pages takes projects maintained for at
   least a year, or notable ones: not before 25/09/2027. ~5 examples, from the help.
 - [ ] More ways to install (07/10): AUR (`tridi`, or `tridi-bin` from the
