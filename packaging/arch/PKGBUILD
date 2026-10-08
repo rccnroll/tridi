@@ -6,7 +6,7 @@ pkgrel=1
 pkgdesc='Point cloud and mesh viewer, with Nautilus thumbnails'
 arch=('x86_64')
 url='https://github.com/rccnroll/tridi'
-license=('MIT OR Apache-2.0')
+license=('MIT OR Apache-2.0' 'OFL-1.1' 'Ubuntu-font-1.0')  # the last two: egui's fonts
 # GL/EGL, Wayland and xkbcommon are dlopened at runtime
 depends=('gcc-libs' 'glibc' 'libglvnd' 'mesa' 'wayland' 'libxkbcommon' 'xdg-utils')
 makedepends=('cargo' 'git')
@@ -55,6 +55,8 @@ package() {
   # one SVG, the rest are relative symlinks to it
   cp -a share/icons "$pkgdir/usr/share/"
   install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/tridi"
+  # the fonts egui builds into the binary (the legend and keys panels)
+  install -Dm644 packaging/licenses/egui-fonts/* -t "$pkgdir/usr/share/licenses/tridi/egui-fonts"
   install -Dm644 target/assets/*.1 -t "$pkgdir/usr/share/man/man1"
   install -Dm644 target/assets/tridi.bash "$pkgdir/usr/share/bash-completion/completions/tridi"
   install -Dm644 target/assets/_tridi -t "$pkgdir/usr/share/zsh/site-functions"

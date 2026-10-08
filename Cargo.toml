@@ -52,6 +52,7 @@ assets = [
     ["share/icons/**/*", "usr/share/icons/", "644"],
     ["LICENSE-MIT", "usr/share/doc/tridi/", "644"],
     ["LICENSE-APACHE", "usr/share/doc/tridi/", "644"],
+    ["packaging/licenses/egui-fonts/*", "usr/share/doc/tridi/egui-fonts/", "644"],
     ["target/assets/*.1", "usr/share/man/man1/", "644"],
     ["target/assets/tridi.bash", "usr/share/bash-completion/completions/tridi", "644"],
     ["target/assets/_tridi", "usr/share/zsh/vendor-completions/", "644"],
