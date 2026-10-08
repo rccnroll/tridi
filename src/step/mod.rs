@@ -1,7 +1,9 @@
 //! STEP (.step/.stp) through monstertruck. Tessellation runs in a child
-//! process, `tridi step-mesh IN`, killed at DEADLINE: on some real files
-//! the library never finishes and its memory grows ~20 MB/s while it tries
-//! (a thread can't be stopped, a process can). A panic stays in the child too.
+//! process, `tridi step-mesh IN`, that hands back each solid as it's done
+//! and is killed once none has come for IDLE: on some real files the
+//! library never finishes a solid and its memory grows ~20 MB/s while it
+//! tries (a thread can't be stopped, a process can). A panic stays in the
+//! child too.
 
 // ======================================== Sub-modules ======================================== {{{
 
@@ -17,7 +19,7 @@ use std::{
     io::{self, Read, Write},
     path::Path,
     process::{Command, Stdio},
-    sync::mpsc,
+    sync::mpsc::{self, RecvTimeoutError, Sender},
     thread,
     time::{Duration, Instant},
 };
@@ -30,8 +32,9 @@ use crate::step::tessellate::tessellate;
 
 // ========================================= Constants ========================================= {{{
 
-// ponytail: one deadline for viewer and thumbnails; the biggest real part (476 faces) takes 0.5 s
-const DEADLINE: Duration = Duration::from_secs(15);
+// ponytail: a guess. Slow and stuck look the same from here: an 84 MB assembly parses in 7 s,
+// then goes 34 s between two solids that do come, and 5 never do
+const IDLE: Duration = Duration::from_secs(60);
 
 /// A vertex on the wire: position, normal, color.
 pub(crate) const FLOATS: usize = 9;
@@ -71,11 +74,20 @@ pub type StepResult<T> = Result<T, StepError>;
 
 // ========================================== Parent =========================================== {{{
 
-/// Parent side: run the child, read its triangles. `grey` stands in for the
-/// faces without a color, when others have one.
-#[instrument(skip(grey))]
-pub fn load(path: &Path, grey: [f32; 3]) -> StepResult<TriMesh> {
+/// What comes out of the child: how many solids, then each one's triangles.
+enum Frame {
+    Total(usize),
+    Solid(Vec<u8>),
+}
+
+/// Parent side: run the child, hand each solid's triangles to `part` as it
+/// comes. `grey` stands in for the faces without a color, when others have
+/// one. Gives up on the rest once no solid has come for IDLE, or `budget`
+/// is spent; returns how many solids it gave up on.
+#[instrument(skip(grey, part))]
+pub fn load<F: FnMut(TriMesh)>(path: &Path, grey: [f32; 3], budget: Option<Duration>, mut part: F) -> StepResult<usize> {
     let start = Instant::now();
+    let until = budget.and_then(|b| start.checked_add(b));
     let exe = env::current_exe().map_err(StepError::Spawn)?;
     let mut child = Command::new(exe)
         .arg("step-mesh")
@@ -85,37 +97,84 @@ pub fn load(path: &Path, grey: [f32; 3]) -> StepResult<TriMesh> {
         .stderr(Stdio::piped())
         .spawn()
         .map_err(StepError::Spawn)?;
-    let (Some(mut out), Some(mut err)) = (child.stdout.take(), child.stderr.take()) else {
+    let (Some(out), Some(mut err)) = (child.stdout.take(), child.stderr.take()) else {
         return Err(StepError::Spawn(io::Error::other("the tessellator has no pipes")));
     };
     let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let (mut o, mut e) = (Vec::new(), String::new());
-        // a pipe that breaks means a child that died: its status says how
-        #[expect(clippy::let_underscore_must_use, reason = "the exit status reports the failure")]
-        let _ = (out.read_to_end(&mut o), err.read_to_string(&mut e));
-        #[expect(clippy::let_underscore_must_use, reason = "the parent stopped waiting: nobody to tell")]
-        let _ = tx.send((o, e));
+    thread::spawn(move || read_frames(out, &tx));
+    // on its own thread: a child stuck on a full stderr would stop sending
+    let errs = thread::spawn(move || {
+        let mut e = String::new();
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "a pipe that breaks means a child that died: its status says how"
+        )]
+        let _ = err.read_to_string(&mut e);
+        e
     });
-    let Ok((bytes, msg)) = rx.recv_timeout(DEADLINE) else {
-        #[expect(clippy::let_underscore_must_use, reason = "it may be gone already; the timeout is the news")]
-        let _ = (child.kill(), child.wait());
-        return Err(StepError::Timeout { secs: DEADLINE.as_secs() });
-    };
-    let status = child.wait().map_err(StepError::Spawn)?;
-    if !status.success() {
-        let msg = msg.trim();
-        let message = if msg.is_empty() {
-            format!("tessellation failed ({status})")
-        } else {
-            msg.to_owned()
-        };
-        return Err(StepError::Failed { message });
+    let (mut total, mut done, mut shown, mut timed_out) = (0, 0, 0, false);
+    loop {
+        let wait = until.map_or(IDLE, |u| IDLE.min(u.saturating_duration_since(Instant::now())));
+        match rx.recv_timeout(wait) {
+            Ok(Frame::Total(n)) => total = n,
+            Ok(Frame::Solid(bytes)) => {
+                done += 1;
+                if !bytes.is_empty() {
+                    shown += 1;
+                    part(decode(&bytes, grey));
+                }
+            }
+            // the child closed its stdout: done, or dead
+            Err(RecvTimeoutError::Disconnected) => break,
+            Err(RecvTimeoutError::Timeout) => {
+                timed_out = true;
+                #[expect(clippy::let_underscore_must_use, reason = "it may be gone already; the timeout is the news")]
+                let _ = child.kill();
+                break;
+            }
+        }
     }
-    let mesh = decode(&bytes, grey);
+    let status = child.wait().map_err(StepError::Spawn)?;
+    let msg = errs.join().unwrap_or_default();
+    let skipped = total.saturating_sub(done);
     let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-    debug!(elapsed_ms, triangles = mesh.triangle_count(), "tessellated");
-    Ok(mesh)
+    debug!(elapsed_ms, total, done, skipped, "tessellated");
+    // whatever came is shown; only a file that gave nothing is an error
+    if shown > 0 {
+        return Ok(skipped);
+    }
+    if timed_out {
+        return Err(StepError::Timeout {
+            secs: start.elapsed().as_secs(),
+        });
+    }
+    let msg = msg.trim();
+    let message = if msg.is_empty() {
+        format!("tessellation failed ({status})")
+    } else {
+        msg.to_owned()
+    };
+    Err(StepError::Failed { message })
+}
+
+/// The child's stdout as frames, until it ends: a u32 count of solids, then
+/// per solid a u32 byte length and the bytes.
+fn read_frames(mut r: impl Read, tx: &Sender<Frame>) {
+    fn word(r: &mut impl Read) -> Option<usize> {
+        let mut w = [0; 4];
+        r.read_exact(&mut w).ok()?;
+        usize::try_from(u32::from_le_bytes(w)).ok()
+    }
+    let Some(n) = word(&mut r) else { return };
+    if tx.send(Frame::Total(n)).is_err() {
+        return;
+    }
+    while let Some(len) = word(&mut r) {
+        let mut bytes = vec![0; len];
+        if r.read_exact(&mut bytes).is_err() || tx.send(Frame::Solid(bytes)).is_err() {
+            return;
+        }
+    }
 }
 
 /// FLOATS f32 per vertex, three vertices per triangle.
@@ -146,14 +205,32 @@ fn decode(bytes: &[u8], grey: [f32; 3]) -> TriMesh {
 
 // =========================================== Child =========================================== {{{
 
-/// Child side: `tridi step-mesh IN`.
+/// Child side: `tridi step-mesh IN`, frames as `read_frames` reads them.
 pub fn mesh_to_stdout(path: &str) -> StepResult<()> {
     // die with the parent: a viewer killed while waiting must not leave us running
     // SAFETY: prctl with PR_SET_PDEATHSIG only sets a flag on this process
     unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) };
-    let v = tessellate(Path::new(path))?;
+    tessellate(
+        Path::new(path),
+        |n| write_word(&mut io::stdout().lock(), n),
+        |v| write_solid(&mut io::stdout().lock(), v),
+    )
+}
+
+fn write_word(w: &mut impl Write, n: usize) -> io::Result<()> {
+    let n = u32::try_from(n).map_err(io::Error::other)?;
+    w.write_all(&n.to_le_bytes())?;
+    // stdout is line-buffered: a frame waits for no newline
+    w.flush()
+}
+
+/// One solid's frame, whole: the threads take turns on the lock.
+fn write_solid(w: &mut impl Write, v: &[f32]) -> io::Result<()> {
     let bytes: Vec<u8> = v.iter().flat_map(|f| f.to_le_bytes()).collect();
-    io::stdout().lock().write_all(&bytes).map_err(StepError::Write)
+    let n = u32::try_from(bytes.len()).map_err(io::Error::other)?;
+    w.write_all(&n.to_le_bytes())?;
+    w.write_all(&bytes)?;
+    w.flush()
 }
 
 // }}}
@@ -164,12 +241,34 @@ pub fn mesh_to_stdout(path: &str) -> StepResult<()> {
 mod tests {
     use super::*;
     use crate::test_support::tmp;
+    use std::sync::Mutex;
 
-    // the child path only: `load` runs current_exe, which under cargo test is
-    // the test binary; the process and the deadline were checked by hand
+    // the child and the wire, not the process: `load` runs current_exe,
+    // which under cargo test is the test binary; the process and IDLE were
+    // checked by hand. The solids that come back, in one mesh
     fn mesh(name: &str) -> TriMesh {
-        let v = tessellate(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name)).unwrap();
-        decode(&v.iter().flat_map(|f| f.to_le_bytes()).collect::<Vec<u8>>(), [0.5; 3])
+        let wire = Mutex::new(Vec::new());
+        tessellate(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name),
+            |n| write_word(&mut *wire.lock().unwrap(), n),
+            |v| write_solid(&mut *wire.lock().unwrap(), v),
+        )
+        .unwrap();
+        let (tx, rx) = mpsc::channel();
+        read_frames(&wire.into_inner().unwrap()[..], &tx);
+        drop(tx);
+        let (mut total, mut bytes) = (0, Vec::new());
+        for f in rx {
+            match f {
+                Frame::Total(n) => total = n,
+                Frame::Solid(b) => {
+                    total -= 1;
+                    bytes.extend(b);
+                }
+            }
+        }
+        assert_eq!(total, 0, "every solid came back");
+        decode(&bytes, [0.5; 3])
     }
 
     fn bbox(m: &TriMesh) -> ([f32; 3], [f32; 3]) {
@@ -224,7 +323,7 @@ mod tests {
     #[test]
     fn not_step_is_error() {
         let f = tmp("bad.step", b"ISO-10303-21;\ngarbage");
-        assert!(matches!(tessellate(&f), Err(StepError::NotStep)));
+        assert!(matches!(tessellate(&f, |_| Ok(()), |_| Ok(())), Err(StepError::NotStep)));
     }
 }
 

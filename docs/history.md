@@ -421,3 +421,19 @@ history above keep the old name.
   file from the start, `loading…` or `failed` until it's in, and the keys
   1–9 follow the command line, so a file that fails doesn't shift the
   others. The view reframes as files come in, until the user moves it.
+
+## After 2.7
+
+- **STEP solid by solid** (08/10): an 84 MB Creo assembly (97 solids,
+  24k faces) opened to nothing and its thumbnail broke: one solid the
+  library never finishes, and the child sent its triangles all at the end,
+  so the 15 s deadline threw away the 51 done before it and the 41 queued
+  behind it. Now the child spreads the solids over the cores and sends
+  each, placed, as soon as it's done; the viewer adds it to the file's
+  layer and the legend counts `loading…` until the last. The child is
+  killed once no solid has come for 60 s (that file goes 34 s between two
+  real ones: slow and stuck look the same), and what it never sent is
+  `N solids skipped`. Thumbnails keep a 15 s budget and draw what came:
+  71 of 97 there. Measured on that file: 7 s to parse, 1.9M triangles
+  in 56 s, 5 solids skipped, 6.8 GB at the peak (the solids in flight at
+  once).

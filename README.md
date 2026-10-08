@@ -18,7 +18,8 @@ a window or a GPU.
 - Meshes: `.glb`/`.gltf` (materials and textures), `.obj`, `.stl`, `.off`,
   `.ply` with faces.
 - CAD: `.step`/`.stp` (assemblies and colors), tessellated in Rust with
-  monstertruck. A file the library can't finish in 15 s is an error.
+  monstertruck. Its solids show up as they're tessellated; one the
+  library can't finish is left out (the thumbnail draws what came in 15 s).
 
 ## Features
 
