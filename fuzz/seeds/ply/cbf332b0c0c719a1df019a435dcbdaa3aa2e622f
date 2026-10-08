@@ -1,0 +1,16 @@
+ply
+normat ascii 1.0
+element vertex 4
+property float x
+property float y
+propoperty uchar red
+pr$perty uchar green
+property uchar blue
+element face 2
+property list uchar int ver„šx_indice+
+end_headeõÏé0 0 255 0 0
+1 0 0 255 0 0
+0 1 0 255 0 0
+0 0 1 255 0 0
+3 0 1 2
+4 0 1 2 3

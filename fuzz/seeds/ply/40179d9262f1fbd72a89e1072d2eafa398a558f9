@@ -1,0 +1,18 @@
+ply
+f00 1 ²55 0ply
+format ascii 1.0
+elescii 1.0
+element vertex 4
+ 0
+3 0 1 2
+4 0property flo 1ment vertex 4
+ 0
+3 0 1 2
+4 0property flo1 2 3att y
+property float z
+ 0 ;
+1 0 0 255 0 0
+0 1 0 255000
+ 0   1 255 0 0
+t vertex_inidecs
+end_header

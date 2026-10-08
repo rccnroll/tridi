@@ -1,0 +1,7 @@
+# .P'CONUNT - Po%nt ClSIZEoud Data file format
+÷ERSION 0.7
+FIELDS x y z rgb
+SIZE 4 4 š 4
+TYPE F F F U
+COUINTS 40
+DATA ascš–õÏßÒÏ

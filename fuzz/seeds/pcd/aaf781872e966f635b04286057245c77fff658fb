@@ -1,0 +1,8 @@
+# . 0 0ŠPOINTS 4
+FIELDS x y z rgbarg!`
+SIZE 4 4 4 4
+TYPE F- F F U
+ 40
+DATA ascii
+0 #0 C
+5 -. 03931 .7

@@ -1,0 +1,11 @@
+ta file format
+VERSION 0.7
+FIELDS x y z rgb
+SIZE 4 4ÔÔÔÔÔÔÔÔÔÔÔÔÔÔÔÔÔÔÔÔÔÔ 4 4
+TYPE F F F U
+COT 1NU 1 1 1
+VIEWPOINT 0 0 0 1 0 0 0
+POINTS 40
+DATA ascii
+0 -0 0 65331
+0.# .PCD 3 0.9 1UNT37 1 

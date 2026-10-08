@@ -1,0 +1,9 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+propoperty ucs
+end_header
+0 0 0 255 0
+ 01 0 0 2 2 3

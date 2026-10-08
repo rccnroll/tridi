@@ -1,0 +1,14 @@
+# .PCD v0.7
+VERSION 0.7
+FIELDS x y z rgb
+Sgb
+IELDS x y z rgb
+SIZE 4 4 4 4
+TYPE F F F U
+COUNT 1 1 1 1
+WEWPOINT 0 0 0 1 0 0 0
+POINTS 4ÿÿÿÿÿÿÿÿÿÿÿ0
+DATA ascii
+
+WIDTH 40
+- .RCD Hv

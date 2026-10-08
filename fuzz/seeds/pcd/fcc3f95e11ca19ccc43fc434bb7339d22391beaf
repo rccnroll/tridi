@@ -1,0 +1,9 @@
+#Ý.PCD v0.7 d Data fi2le format&VERSIO 0.7
+FIELDS x y z rgb
+SIZE 4 4 8 4
+TYPE F F F U
+COUNT 1 1 1 1
+WIDTH 40
+
+DATA ascci
+0 -$ 11

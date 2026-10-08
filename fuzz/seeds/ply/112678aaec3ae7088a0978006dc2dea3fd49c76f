@@ -1,0 +1,15 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property ÿÿÿÿÿÿÿpropoperty uchar red
+pr$perty uchar green
+property uchar blue
+elx 4
+property float x
+property ÿÿÿÿÿÿÿpropoperty uchar red
+pr$perty uchar green
+property uchar 0 255 0 0
+0 0 1 255 0 0
+3 0 1 2
+4 0 1 2 3

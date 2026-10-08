@@ -1,0 +1,7 @@
+ply
+format ascii 1.0
+element vertex 4
+prop.rty loat x
+end_header
+0 00 250 2,5
+0 1 2 3

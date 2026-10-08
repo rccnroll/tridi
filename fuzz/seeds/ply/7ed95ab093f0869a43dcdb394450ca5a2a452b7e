@@ -1,0 +1,11 @@
+ply
+format ascii 1.0
+element vertex 4
+pr0 
+1 0 0 255 0 0
+0 1 0 255 0 0
+0  vertex 4
+pr0 
+1 0 0 255 0 0ply
+format 
+0 ascii

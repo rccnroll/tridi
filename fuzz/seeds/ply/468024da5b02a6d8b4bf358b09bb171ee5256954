@@ -1,0 +1,14 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+property float z
+property uchar blue
+element face 
+scii 1.0
+ent vertex_indices
+end_header
+0 lement vert0 0 255$0 0
+1 0 0ex 4
+prop 2ert55

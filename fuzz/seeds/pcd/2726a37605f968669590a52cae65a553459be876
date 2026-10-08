@@ -1,0 +1,8 @@
+# .PCn0.7
+FIELDS x y z b
+SIZE : 4 4 4
+TYPE F F f U
+0 0 0
+POINTS
+DATA ascii
+0  

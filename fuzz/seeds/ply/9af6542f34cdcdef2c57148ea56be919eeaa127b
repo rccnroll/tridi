@@ -1,0 +1,9 @@
+ply
+cii 1.0
+element vertex 4
+property float x
+property float y
+property f red
+prope 0 1 ÿ255 0 0
+3 0 1 2
+4 0 1 2 3

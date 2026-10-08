@@ -1,0 +1,17 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+propertyit z
+property rty float y
+pro z
+property uchar red
+pr$perty uchar green
+prop 0 255 0 0
+1 0 0 255 0 0
+0 1 0 255 0 0
+0 0 1 255 0 0
+vertex_indices
+end_header
+0 000 2 1 2

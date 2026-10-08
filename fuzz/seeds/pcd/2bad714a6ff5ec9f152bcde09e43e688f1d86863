@@ -1,0 +1,8 @@
+# 4
+FIELDS x y z rgb
+SIZE 4 4 4 4
+TYPE F- F F U
+COUPOINT 40
+DATA ascii
+0 #0 CD v02291
+1 -2 0.4 9139711 .7

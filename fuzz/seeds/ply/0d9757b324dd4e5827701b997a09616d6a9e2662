@@ -1,0 +1,16 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+property float z
+property uchar red
+property uchar green
+property uchar blue
+elet uchar int 6ertex_indices
+end_header
+0 0 0 255 0 0
+ 10 r int 6ertex_i0 25( 0 0
+0 0 1 255 0 0
+3 0 1 2
+4 0 1 2 3

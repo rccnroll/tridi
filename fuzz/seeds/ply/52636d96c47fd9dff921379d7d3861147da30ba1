@@ -1,0 +1,13 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+property float z
+property uchar red
+pr$perty uchar greeces
+end_header
+0 0 plp55 0 01
+ 
+element ve 2
+4 0 1 2 3

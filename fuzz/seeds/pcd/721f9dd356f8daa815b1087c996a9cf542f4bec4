@@ -1,0 +1,13 @@
+# .PCD v0.7 - Pointud Data file format
+VERSION 0.7
+FIELDS x y z rgb
+SIZE 4 4 4 4
+TYPE F F F U
+COKQT 1 1 1 1
+WIDTH 40
+HEIGHT T 0 0 0 1 0 0 0
+POINTS 40
+DATA ascii
+0 -0 0 65331
+0.52-1 0.1 52# .PCD v02291
+1 -2 0.4 913971ÿ.5 -3 0.9 13.7

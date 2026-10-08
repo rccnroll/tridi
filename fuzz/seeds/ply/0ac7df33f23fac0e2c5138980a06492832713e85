@@ -1,0 +1,14 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+property float z
+propertchar int vertex_indices
+end_header
+0 0 0 255 0 0plyply
+
+
+1
+end_heade 0
+0 1 0 255 0 pr0operty 

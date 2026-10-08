@@ -1,0 +1,15 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+property float z
+property uchar red
+pty uchar b face 2
+property liply
+format bint vertex_indices
+end_header
+0 0 0 255 0 0
+1ittle_endian 1.0
+element vertex 4
+pro 

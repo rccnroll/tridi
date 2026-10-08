@@ -1,0 +1,15 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+property float z
+property uchar red
+pr$pert
+end_header
+0 0 plp55 0 0
+1 0 0 25‡ œ‰0
+0 1 0 255 0 0
+0 0 1 255 0 0
+3 0 1 2
+4 0 1 2 3

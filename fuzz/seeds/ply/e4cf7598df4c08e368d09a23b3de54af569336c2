@@ -1,0 +1,15 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+propeloat y
+proper„† float z
+property uchar red
+property$uchar green
+property uchar blue
+element face 2
+property list uÿÿÿchar int vertex_i0ndices
+end_header
+0 0 0 255 0255grte
+ÐßÏä5 0 0
+3 0 1Forfmaly 2 3

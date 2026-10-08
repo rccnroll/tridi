@@ -1,12 +1,10 @@
 #![no_main]
-// tridi is a binary, not a library: its parser comes in by path
+// only the readers, the leaf of the crate: the library would pull in the
+// whole window stack, which does not build with the sanitizers
 #[allow(dead_code)]
-#[path = "../../src/cloud.rs"]
-mod cloud;
-#[allow(dead_code)]
-#[path = "../../src/theme.rs"]
-mod theme;
+#[path = "../../src/formats/mod.rs"]
+mod formats;
 
 libfuzzer_sys::fuzz_target!(|data: &[u8]| {
-    let _ = cloud::parse(data, "ply");
+    let _ = formats::parse_cloud(data, "ply");
 });

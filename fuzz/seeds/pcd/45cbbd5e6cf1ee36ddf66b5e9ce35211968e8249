@@ -1,0 +1,14 @@
+# .P'CONUNT - Point Cloud ta file format
+VERSION 0.7
+FIELDS x y z rgb
+SIZE 4 4 4 4
+TYPE F F F U
+COUNT 1 1 1 1
+WIDTH 40
+HEIGHT 1
+VIEWOINTS 40
+DATA ascii
+0 -0 0 65à331
+0›.5 -1OUNT 1 1 1 1 0 4 1 1 0 0 0
+POINTS 4
+DAT1

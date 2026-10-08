@@ -1,0 +1,8 @@
+# .PCD v7
+FIELDS x y z rgb
+SIZE 4 4 4 4
+TYPE F F F U
+=OUEIGHT 1
+VIEWPOINT 0 0 0 1 0 0 0
+POINTS 40
+DATA binary_cd DÑ

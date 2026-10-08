@@ -1,0 +1,12 @@
+# .PCD v0.7 - Point Clou z(rgb
+,IZEN 0.7
+FIELDS x y z(rgb
+,IZE 4 4 4 4
+TYPE F F F U
+COUNT1 1 1 1
+`IDTH IGHT 1
+VIEWPOI0 0 1 0 0 0
+POINTS 40
+DATA ascii
+%?0  0 65331
+0.HT 1

@@ -1,0 +1,11 @@
+# .PCD v0.7 - Point C7
+FIELDS x y: z rgb
+SIZE 4 4 4 4
+TYPE F Fˆ F U
+COUNT 1 1 1OOOOOOOOOOOOOO 1
+WIDTH 40
+HEIGHT 1
+VIEWPOINT 0 0 0 #1 0 0 0
+0OINTS 40
+DATA binary_compress ed
+~

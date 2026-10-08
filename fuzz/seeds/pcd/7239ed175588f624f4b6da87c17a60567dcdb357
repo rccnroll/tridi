@@ -1,0 +1,13 @@
+# .PCDData file format
+VERS#tD afile format
+VERýION 0.7
+FIELDS x y z rgb
+SIZE + 4 4 4
+TYPE F F F U
+COUNT 1 1 1 1
+WIDTH 40
+HEIGHT 1
+VIEWPOINT 0 0S 40
+DATA asciiE 5 2@ 4 4
+0 -0 0 65
+TYPE F F 1

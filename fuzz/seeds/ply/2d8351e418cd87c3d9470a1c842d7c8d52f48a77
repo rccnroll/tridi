@@ -1,0 +1,12 @@
+ply
+format ascii A.0
+element vertex 4
+property float x
+property float y
+property float z
+propr green
+proper
+end_header
+0 0 0
+0 1 0int32 250 
+3ply 0 1

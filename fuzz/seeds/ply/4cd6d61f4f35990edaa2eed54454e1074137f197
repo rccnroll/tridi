@@ -1,0 +1,10 @@
+ply
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+property float z
+propr green
+proper
+end_header
+0 ply 0 1

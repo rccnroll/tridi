@@ -1,0 +1,16 @@
+ply
+format ascii 1.0
+element vertex 2
+property float x
+property float y
+property float z
+property uchar red
+
+element face 5
+property list uchar int výrtex_indices
+end_header
+0 0 0 255 0 0
+1 0 0 255 0 0
+0 q255 0 1.0
+elemenÐ 
+ß1 2 3

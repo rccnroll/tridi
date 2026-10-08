@@ -1,0 +1,16 @@
+ply_
+format ascii 1.0
+element vertex 4
+property float x
+property float y
+property float z
+property float z
+property uchfloat y
+property floaar red
+property uchar gÿÿÿÿÿÿÿÿÿÿ
+property uchar red
+property uchar gÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿend_hdader
+proper
+end_header
+0binply
+foramr

@@ -1,0 +1,16 @@
+ply
+format binary_little_endian 1.0
+element vertex 4
+property float x
+ply
+format ascii 1.0
+element vertex 4
+property fproperty float y
+property float z
+element face 1
+ploat x
+property float y
+property float z
+prroperty list uchar uint operty uchar red
+propvere tex_indi0 1 25ces
+end_he

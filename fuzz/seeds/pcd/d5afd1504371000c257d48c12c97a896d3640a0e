@@ -1,0 +1,13 @@
+# .PCD v0.7 - Point Cloud Data fickmmentrmat
+VERSION 0.7
+FIELDS x y z rgb
+SIZE 000000000000004 4 4 4
+TYPE F F F U
+COU# .3CD0vp.NT 2 1 1 1
+WIDTH 40
+HEIGHT 1
+VIEWPOINT 0 0 0 1 0 NTS 40
+DATA ascii
+5 -0 Â - 0 653 ÃÑÎßÌÆÎÉ851
+5 -1 file  5614131
+7P 

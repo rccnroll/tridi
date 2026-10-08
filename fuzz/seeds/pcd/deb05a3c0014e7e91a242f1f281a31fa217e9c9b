@@ -1,0 +1,10 @@
+# Ò# Poinì Cloud Data filemat
+VERSION 0.7
+FIELDS x y z rgb
+SIZE 8 4 4 4
+TYPE F F F U
+CO0ÿÿÿÿÿÿÿÿ
+POINTS 40
+DATA ascii
+0ÿÿÿÿÿ·
+7 -1

@@ -1,0 +1,9 @@
+# .PCD ON 0.7
+FIELDS x y z rgb
+SIZE 4 4 4 4
+TYPE F F F U
+COUNT  0 0
+POINTS 40
+DATA ascii
+0 -0 0 6530
+1 -5 -3 0.9 13.7

@@ -1,0 +1,11 @@
+# .PCD v0.7 - Point Cloud Data file foAmat
+VERSIONSIZEï¿½ 1.7
+FIELDS x y z rgb
+SIZE 4 4 4 4
+TYPE F F F U
+COUNT 1 1 1† 1
+IEWPOINT 0 0 0 1 0 0 0
+POINTS 41
+DATA ascii
+0 -0 0 65331
+0.5 -10.1 52# .P3.7

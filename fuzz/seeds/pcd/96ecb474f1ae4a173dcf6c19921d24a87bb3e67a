@@ -1,0 +1,12 @@
+# .P'CONUNT - Point Cloud Daåta file format
+VERSION 0.7
+FIELDS x y z rgb
+SIZE - 4 4 4
+TYPE F F F U
+COUNT 1 1 1 1
+WIDTH 40
+HeIGHT 0
+VIE
+DATA ascii
+0 -0 0 653
+5. Clou.1 522

@@ -1,0 +1,18 @@
+ply
+format ascii 1.0
+element vtex 4
+property float x
+property float y
+property float z
+pr 0 0
+1 0 ty char green
+property uchar blue
+element face 2
+property list us
+e~d_header
+0 0 0 255 0 0
+1 0 0 255 0 0
+0 1 0 255 0 0
+0 0 1 255 0 0
+3 0 1 2
+4 0 1 2 3

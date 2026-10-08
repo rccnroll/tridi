@@ -1,0 +1,14 @@
+ply_
+format ascii 0.0
+element vertex 4
+property float x
+property float y
+property float z
+property uchar rad
+property uchar gÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿr
+end_header
+0binary_littl._endian55 0 0
+0 1 0 255 0 0
+0 0 1 255 0 
+3 0 1 2
+4 0 1 2 3

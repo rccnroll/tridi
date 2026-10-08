@@ -1,15 +1,5 @@
-//! Themes (Nord light and Nord dark) and `tridi theme`, which switches the
-//! viewer and the thumbnails together.
-//!
-//! The thumbnailer runs in Nautilus's sandbox, which sees neither `$HOME` nor
-//! the session bus and clears the environment: the only way in is the `Exec=`
-//! line of a `.thumbnailer` file, read outside the sandbox. So the theme is a
-//! copy of the package's entry in `~/.local/share/thumbnailers/`, with
-//! `--theme dark` for the dark one. The copy is written for light too: next
-//! to f3d's entries in /usr/share, which also claim glb, stl and obj, which
-//! one wins is down to directory order; the user's directory comes first.
-
-use std::path::{Path, PathBuf};
+//! Themes, Nord light and Nord dark: the colors the viewer and the
+//! thumbnails draw with.
 
 /// The colors of a look: background, height ramp, one tint per file when
 /// several are open, and the color of meshes without a material.
@@ -56,197 +46,34 @@ pub const DARK: Theme = Theme {
 
 pub const THEMES: [&Theme; 2] = [&LIGHT, &DARK];
 
-pub fn by_name(name: &str) -> Result<&'static Theme, String> {
-    THEMES
-        .into_iter()
-        .find(|t| t.name == name)
-        .ok_or(format!("unknown theme {name}: light or dark"))
-}
-
-/// The package's thumbnailer entry, the one installed under /usr/share.
-const ENTRY: &str = include_str!("../share/thumbnailers/tridi.thumbnailer");
-/// The package's desktop entry: its MimeType= line is what we open.
-const DESKTOP: &str = include_str!("../share/applications/tridi.desktop");
-/// Extensions whose cached thumbnails a theme switch (or an install) throws
-/// away: everything we draw, plus STEP, whose 1.0 thumbnails would otherwise
-/// stay forever now that nothing redraws them.
-const EXTS: [&str; 12] = [
-    "pcd", "ply", "xyz", "xyzrgb", "pts", "glb", "gltf", "obj", "stl", "off", "step", "stp",
-];
-
-fn xdg(var: &str, fallback: &str) -> Option<PathBuf> {
-    std::env::var_os(var)
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(fallback)))
-}
-
-fn config_file() -> Option<PathBuf> {
-    Some(xdg("XDG_CONFIG_HOME", ".config")?.join("tridi/theme"))
-}
-
-fn override_file() -> Option<PathBuf> {
-    Some(xdg("XDG_DATA_HOME", ".local/share")?.join("thumbnailers/tridi.thumbnailer"))
-}
-
-/// The viewer's theme: the one `tridi theme` saved, else light.
-pub fn current() -> &'static Theme {
-    config_file()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|s| by_name(s.trim()).ok())
-        .unwrap_or(&LIGHT)
-}
-
-/// The package's entry, with `--theme dark` added for the dark theme.
-fn entry(theme: &Theme) -> String {
-    if theme.name == "dark" {
-        ENTRY.replace(" thumb %i", " thumb --theme dark %i")
-    } else {
-        ENTRY.to_owned()
+impl Theme {
+    /// The theme called `name`: `light` or `dark`.
+    pub fn by_name(name: &str) -> Result<&'static Theme, String> {
+        THEMES
+            .into_iter()
+            .find(|t| t.name == name)
+            .ok_or(format!("unknown theme {name}: light or dark"))
     }
-}
-
-/// `tridi theme [light|dark]`: without a name, prints the current one.
-pub fn command(name: Option<&str>) -> Result<(), String> {
-    let Some(name) = name else {
-        println!("{}", current().name);
-        return Ok(());
-    };
-    let theme = by_name(name)?;
-    let cfg = config_file().ok_or("no $HOME")?;
-    std::fs::create_dir_all(cfg.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(&cfg, format!("{}\n", theme.name)).map_err(|e| e.to_string())?;
-    install(theme)?;
-    let cache = xdg("XDG_CACHE_HOME", ".cache").ok_or("no $HOME")?.join("thumbnails");
-    let n = clear_thumbnails(&cache);
-    println!(
-        "theme {}: viewer and thumbnails; {n} cached thumbnails cleared, Nautilus redraws them",
-        theme.name
-    );
-    Ok(())
-}
-
-/// The per-user half of the install, which the package can't do: our copy of
-/// the thumbnailer entry, and tridi as the default app for our types.
-fn install(theme: &Theme) -> Result<(), String> {
-    let ovr = override_file().ok_or("no $HOME")?;
-    std::fs::create_dir_all(ovr.parent().unwrap()).map_err(|e| e.to_string())?;
-    std::fs::write(&ovr, entry(theme)).map_err(|e| e.to_string())?;
-    let types = DESKTOP.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or("");
-    let ok = std::process::Command::new("xdg-mime")
-        .args(["default", "tridi.desktop"])
-        .args(types.split(';').filter(|t| !t.is_empty()))
-        .status()
-        .is_ok_and(|s| s.success());
-    if !ok {
-        eprintln!("[tridi] xdg-mime failed: tridi isn't the default app for our types");
-    }
-    Ok(())
-}
-
-/// After a package upgrade that changed our types, the user's copy of the
-/// entry is stale: the viewer redoes the install when it sees that. Only for
-/// users who ran `tridi theme`; errors are ignored, the viewer comes first.
-/// The cached thumbnails go too: until now the new types were drawn by the
-/// package's entry, which is the light theme.
-pub fn refresh() {
-    let theme = current();
-    if let Some(ovr) = override_file()
-        && std::fs::read_to_string(&ovr).is_ok_and(|s| s != entry(theme))
-    {
-        let _ = install(theme);
-        if let Some(cache) = xdg("XDG_CACHE_HOME", ".cache") {
-            clear_thumbnails(&cache.join("thumbnails"));
-        }
-    }
-}
-
-/// Deletes the cached thumbnails of our formats under `dir` (a
-/// `~/.cache/thumbnails`), failed attempts included; returns how many.
-pub fn clear_thumbnails(dir: &Path) -> usize {
-    let mut n = 0;
-    let mut dirs = vec![dir.to_path_buf()];
-    while let Some(d) = dirs.pop() {
-        let Ok(rd) = std::fs::read_dir(&d) else { continue };
-        for e in rd.flatten() {
-            let p = e.path();
-            if e.file_type().is_ok_and(|t| t.is_dir()) {
-                dirs.push(p);
-            } else if p.extension().is_some_and(|x| x == "png")
-                && std::fs::read(&p).ok().and_then(|b| thumb_uri(&b)).is_some_and(|u| ours(&u))
-                && std::fs::remove_file(&p).is_ok()
-            {
-                n += 1;
-            }
-        }
-    }
-    n
-}
-
-fn ours(uri: &str) -> bool {
-    let ext = uri.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
-    EXTS.contains(&ext.as_str())
-}
-
-/// The `Thumb::URI` text chunk of a thumbnail PNG (freedesktop thumbnail spec).
-fn thumb_uri(png: &[u8]) -> Option<String> {
-    let mut i = 8;
-    while i + 8 <= png.len() {
-        let len = u32::from_be_bytes(png[i..i + 4].try_into().ok()?) as usize;
-        let kind = &png[i + 4..i + 8];
-        let data = png.get(i + 8..i + 8 + len)?;
-        if kind == b"tEXt"
-            && let Some(uri) = data.strip_prefix(b"Thumb::URI\0")
-        {
-            return Some(String::from_utf8_lossy(uri).into_owned());
-        }
-        if kind == b"IEND" {
-            break;
-        }
-        i += 12 + len;
-    }
-    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn png(uri: &str) -> Vec<u8> {
-        let mut b = b"\x89PNG\r\n\x1a\n".to_vec();
-        let text = [b"Thumb::URI\0".as_slice(), uri.as_bytes()].concat();
-        b.extend((text.len() as u32).to_be_bytes());
-        b.extend(b"tEXt");
-        b.extend(&text);
-        b.extend([0u8; 4]); // CRC, not checked
-        b.extend([0, 0, 0, 0]);
-        b.extend(b"IEND");
-        b.extend([0u8; 4]);
-        b
+    fn mean(c: [f32; 3]) -> f32 {
+        c.iter().sum::<f32>() / 3.0
     }
 
+    // 2. the ramp, the tints and the mesh color must read on the background,
+    //    in every theme
     #[test]
-    fn clears_only_our_thumbnails() {
-        let dir = std::env::temp_dir().join(format!("tridi-thumbs-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        for (sub, name, uri) in [
-            ("normal", "a.png", "file:///home/x/scan.pcd"),
-            ("large", "b.png", "file:///home/x/car%20body.GLB"),
-            ("fail/gnome-thumbnail-factory", "c.png", "file:///home/x/part.step"),
-            ("normal", "d.png", "file:///home/x/photo.jpg"),
-        ] {
-            std::fs::create_dir_all(dir.join(sub)).unwrap();
-            std::fs::write(dir.join(sub).join(name), png(uri)).unwrap();
+    fn readable_on_the_background() {
+        assert!(mean(LIGHT.bg) > 0.9, "the default is no longer a light background");
+        for t in THEMES {
+            let far = |c: [f32; 3]| (mean(c) - mean(t.bg)).abs() > 0.2;
+            assert!(t.ramp.iter().all(|&c| far(c)), "{}: ramp too close to the background", t.name);
+            assert!(t.palette.iter().all(|&c| far(c)), "{}: tint too close to the background", t.name);
+            assert!(far(t.mesh), "{}: mesh color too close to the background", t.name);
         }
-        assert_eq!(clear_thumbnails(&dir), 3);
-        assert!(dir.join("normal/d.png").exists(), "a photo's thumbnail must stay");
-    }
-
-    #[test]
-    fn dark_entry_only_adds_the_theme() {
-        assert_eq!(entry(&LIGHT), ENTRY);
-        let d = entry(&DARK);
-        assert!(d.contains("Exec=/usr/bin/tridi thumb --theme dark %i %o %s"), "{d}");
-        let mime = |s: &str| s.lines().find(|l| l.starts_with("MimeType=")).map(str::to_owned);
-        assert_eq!(mime(&d), mime(ENTRY));
     }
 }

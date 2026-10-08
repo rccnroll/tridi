@@ -1,0 +1,9 @@
+# .ÁPCDH 4
+0HEIG 
+V 0 0 0 1 0.7
+FIELDS x y z rgb
+SIZE 4 4 4 4
+TYPE F F F U
+CO-N~T 1
+5.5 -11  
+DATA ascin

@@ -1,0 +1,17 @@
+# .PCD v0.7 - Pointormat
+VERSION 0.7
+FIELDS x y z r€€€€€€€€€€€€€€€€€€€€€€€€€€€gb
+SIZE 4 4 4 4
+TYPE F F F U
+COUNT 1 1 1 1
+WIDTH 40
+HEIGHT1
+VIEWPOINT 0 0 0 1 0 0 0
+POINTS 6821ÿ
+4 -8 6.4 3459891
+40
+DATA ascii
+0 -0 0 65331
+0.5 -1 0.1 522291
+1
+WIDT1731

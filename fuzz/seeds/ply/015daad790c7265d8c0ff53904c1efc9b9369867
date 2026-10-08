@@ -1,0 +1,10 @@
+ply
+format ascii 1.0
+element vertex 4
+property float 
+0 0 0 255 0 0
+1 0 0 255 0 0
+0 1 0 255 0 0
+0 0 1 255 0 0
+3 0 1 2
+4 0 1 2 3

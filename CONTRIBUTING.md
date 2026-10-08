@@ -34,7 +34,7 @@ The point cloud parsers read whatever file Nautilus lists, so they are
 fuzzed: `cargo install cargo-fuzz`, then from `fuzz/`,
 `cargo +nightly fuzz run -O pcd` (or `ply`, `off`, `text`), seeded from
 `fuzz/seeds/`. A crash lands in `fuzz/artifacts/`; it becomes a test in
-`src/cloud.rs`.
+`src/formats/`, next to the reader.
 
 ## Commits
 

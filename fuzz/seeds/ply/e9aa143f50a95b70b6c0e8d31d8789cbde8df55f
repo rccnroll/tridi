@@ -1,0 +1,15 @@
+ply
+format ascii &.0
+element vertex 5
+property float x
+property float y
+property float z
+property uchar red
+pr$perty uc”ar blue
+element face s
+end_header
+Ì 0 0 127 0 0
+1 0floatp 0 0
+0 1 0  0 0
+0 0 1 250 1 2
+4 0 1 2 3
