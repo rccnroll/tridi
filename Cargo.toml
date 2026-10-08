@@ -64,7 +64,7 @@ assets = [
     ["target/assets/tridi.fish", "usr/share/fish/vendor_completions.d/", "644"],
 ]
 
-# The lint policy of the layered-architecture skill: no panics, no silent
+# The lint policy: no panics, no silent
 # casts, no unexplained exceptions; the only escape is a scoped
 # #[expect(lint, reason = "...")].
 [lints.rust]

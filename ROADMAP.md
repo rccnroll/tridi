@@ -15,12 +15,12 @@ its date and why.
   0-4, which clash with our 1-9 file toggles: Shift+0-4 or a C cycle),
   `[`/`]` field of view, Alt+Enter fullscreen. If meshes are opened often: W
   wireframe, S flat/smooth, L lighting, B back faces. Harder: N normals
-  (our scans have them), Ctrl+C/V copy the view. Clash: Open3D rolls on
+  (scanners often save them), Ctrl+C/V copy the view. Clash: Open3D rolls on
   Shift+left, ours pans. Skipped: line width, depth capture, render
   options, image modes.
 
 - [ ] STEP files load one after the other in the viewer: a file that hangs
-  (the Voron pinion, of the twelve tried) keeps the window empty for the
+  (one of twelve real parts tried) keeps the window empty for the
   whole 15 s. Loading them in parallel, or opening the window first, would
   hide that.
 

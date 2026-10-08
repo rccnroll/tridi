@@ -93,7 +93,9 @@ ROADMAP.md (open), not in the commit.
 ## Releases
 
 1. Set the version in `Cargo.toml` and the PKGBUILD's `pkgver`, then
-   `cargo check` (for `Cargo.lock`).
+   `cargo check` (for `Cargo.lock`), and add
+   `<release version="X.Y.Z" date="YYYY-MM-DD"/>` on top of `<releases>` in
+   `share/metainfo/io.github.rccnroll.tridi.metainfo.xml`.
 2. Add this release under the changelog's header (`--prepend` would
    repeat the header, and regenerating the whole file would empty 2.0.0,
    where the history starts):

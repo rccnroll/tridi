@@ -6,7 +6,7 @@ tridi was called pcdview: the sections before the rename use that name.
 
 ## 2.0 (released 25/09/2026, tag `v2.0.0`)
 
-1.0 was this: Python + Open3D via `uv`, installed by chezmoi,
+1.0 was this: Python + Open3D via `uv`, installed by chezmoi (from the author's dotfiles),
 local only. It costs ~1.1 s of `import open3d` with a warm cache and 1.3 GB of
 dependencies (open3d + OCP) on first launch.
 

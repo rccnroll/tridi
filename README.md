@@ -30,14 +30,14 @@ to draw their previews without a window or a GPU.
 
 ## Install (Arch)
 
-From a release: download `tridi-*.pkg.tar.zst` and `sudo pacman -U` it.
+From [a release](https://github.com/rccnroll/tridi/releases/latest): download `tridi-*.pkg.tar.zst` and `sudo pacman -U` it.
 From the repo (builds the committed HEAD):
 
     cd packaging/arch && makepkg -si
 
 ## Install (Ubuntu 24.04, Debian 12+)
 
-From a release: download `tridi_*.deb` and `sudo apt install ./tridi_*.deb`.
+From [a release](https://github.com/rccnroll/tridi/releases/latest): download `tridi_*.deb` and `sudo apt install ./tridi_*.deb`.
 From the repo (builds the committed HEAD in a Debian 12 container, podman):
 
     packaging/deb/build.sh
@@ -71,7 +71,8 @@ and keys.
 
 In the window: left drag orbits, right or middle drag (or shift + left drag)
 pans, the wheel zooms; `R` resets the view, `+`/`-` change the point size,
-`1`–`9` turn the N-th file off and on, `Q` or `Esc` quits.
+`1`–`9` turn the N-th file off and on, `I` hides the legend, `H` or `?`
+shows the keys, `Q` or `Esc` quits.
 
 One file is colored by height (Z); several files get one color each, so
 they tell apart. A file's own colors always win, and meshes keep their
