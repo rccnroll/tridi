@@ -94,8 +94,12 @@ ROADMAP.md (open), not in the commit.
 
 1. Set the version in `Cargo.toml` and the PKGBUILD's `pkgver`, then
    `cargo check` (for `Cargo.lock`).
-2. Add this release on top of the changelog:
-   `git cliff --unreleased --tag vX.Y.Z --prepend CHANGELOG.md`.
+2. Add this release under the changelog's header (`--prepend` would
+   repeat the header, and regenerating the whole file would empty 2.0.0,
+   where the history starts):
+
+       { sed -n 1,5p CHANGELOG.md; git cliff --unreleased --tag vX.Y.Z --strip header; sed -n '6,$p' CHANGELOG.md; } > CHANGELOG.new
+       mv CHANGELOG.new CHANGELOG.md
 3. Commit `chore(release): X.Y.Z`, then
    `git tag vX.Y.Z && git push origin main vX.Y.Z`.
 4. The Release workflow builds both packages and opens a draft release
