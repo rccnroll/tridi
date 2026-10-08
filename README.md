@@ -83,31 +83,13 @@ the NVIDIA one: waking it costs seconds), and thumbnails fall back to
 llvmpipe inside Nautilus's sandbox, which has no GPU. `TRIDI_DEBUG=1`
 prints which device is used.
 
-## What's here
-
-- `src/main.rs` — command line, window and navigation.
-- `src/cloud.rs` — point cloud readers (pcd, ply, xyz/pts, off) and the
-  coloring rules.
-- `src/mesh.rs` — meshes (through `three-d-asset`, plus ply/off faces), and
-  which files are clouds and which meshes.
-- `src/render.rs` — the scene, eye-dome lighting, the headless EGL context
-  and the offscreen thumbnail.
-- `src/theme.rs` — the two themes, `tridi theme` and the thumbnail cache.
-- `share/` — thumbnailer entry, MIME types, `.desktop`, icons (one SVG, the
-  rest symlinks to it).
-- `packaging/arch/` — PKGBUILD and install script.
-- `packaging/deb/` — `.deb` build (cargo-deb, metadata in `Cargo.toml`) and `postinst`.
-- `tests/data/` — small fixtures written by Open3D.
-- `fuzz/` — cargo-fuzz targets for the point cloud parsers, and their seeds.
-- `docs/` — the README's screenshots and GIFs, the script that makes their
-  files (`samples.py`) and the one that records the GIFs on niri (`record.sh`).
-
 ## Develop
 
     cargo test                   # one test renders on llvmpipe (Mesa, no GPU)
     cargo run --release -- FILE
 
-What CI checks, fuzzing, the commit style and how a release is cut are in
+How the code is laid out, what CI checks, fuzzing, the commit style and how
+a release is cut are in
 [CONTRIBUTING.md](CONTRIBUTING.md); what changed in each release in
 [CHANGELOG.md](CHANGELOG.md). Security issues go through
 [SECURITY.md](SECURITY.md), not the issues.
