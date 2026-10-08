@@ -30,7 +30,7 @@ use crate::tell;
 const ENTRY: &str = include_str!("../share/thumbnailers/tridi.thumbnailer");
 
 /// The package's desktop entry: its `MimeType`= line is what we open.
-const DESKTOP: &str = include_str!("../share/applications/tridi.desktop");
+const DESKTOP: &str = include_str!("../share/applications/io.github.rccnroll.tridi.desktop");
 
 /// Extensions whose cached thumbnails a theme switch (or an install) throws
 /// away: everything we draw, plus STEP, whose 1.0 thumbnails would otherwise
@@ -101,7 +101,7 @@ fn install(theme: &Theme) -> eyre::Result<()> {
     write(&ovr, &entry(theme))?;
     let types = DESKTOP.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap_or("");
     let ok = Command::new("xdg-mime")
-        .args(["default", "tridi.desktop"])
+        .args(["default", "io.github.rccnroll.tridi.desktop"])
         .args(types.split(';').filter(|t| !t.is_empty()))
         .status()
         .is_ok_and(|s| s.success());

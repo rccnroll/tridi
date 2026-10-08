@@ -6,6 +6,13 @@ if [ "$1" = configure ]; then
   for d in /home/*/.cache/thumbnails /root/.cache/thumbnails; do
     [ -d "$d" ] && tridi clear-thumbnails "$d" >/dev/null || true
   done
+  # 2.6.0 renamed the .desktop: a default app set by `tridi theme` points
+  # to the old name until the user runs it again
+  if [ -n "$2" ] && dpkg --compare-versions "$2" lt 2.6.0; then
+    echo '==> tridi: the app id is now io.github.rccnroll.tridi: run'
+    echo '      tridi theme light     or     tridi theme dark'
+    echo '    once per user, or double click stops opening tridi'
+  fi
   [ -n "$2" ] || cat <<'MSG'
 ==> tridi: pick the theme once per user (viewer, thumbnails, default app):
       tridi theme light     or     tridi theme dark

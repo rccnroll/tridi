@@ -50,8 +50,9 @@ package() {
   cd tridi
   install -Dm755 target/release/tridi "$pkgdir/usr/bin/tridi"
   install -Dm644 share/thumbnailers/tridi.thumbnailer -t "$pkgdir/usr/share/thumbnailers"
-  install -Dm644 share/mime/packages/pointcloud.xml -t "$pkgdir/usr/share/mime/packages"
-  install -Dm644 share/applications/tridi.desktop -t "$pkgdir/usr/share/applications"
+  install -Dm644 share/mime/packages/tridi.xml -t "$pkgdir/usr/share/mime/packages"
+  install -Dm644 share/applications/io.github.rccnroll.tridi.desktop -t "$pkgdir/usr/share/applications"
+  install -Dm644 share/metainfo/io.github.rccnroll.tridi.metainfo.xml -t "$pkgdir/usr/share/metainfo"
   # one SVG, the rest are relative symlinks to it
   cp -a share/icons "$pkgdir/usr/share/"
   install -Dm644 LICENSE-MIT LICENSE-APACHE -t "$pkgdir/usr/share/licenses/tridi"

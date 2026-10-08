@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.rccnroll.tridi</id>
+  <name>tridi</name>
+  <summary>View point clouds, meshes and STEP files</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <developer id="io.github.rccnroll">
+    <name>Rocco Caccioppoli</name>
+  </developer>
+  <description>
+    <p>A fast viewer for point clouds, meshes and STEP files, and the
+    thumbnails for them in GNOME Files. Open several files at once, one color
+    each, and turn them off and on from the keyboard.</p>
+    <p>Point clouds: PCD, PLY, XYZ, XYZRGB, PTS. Meshes: glTF/GLB, OBJ, STL,
+    OFF, PLY. CAD: STEP, with assemblies and colors.</p>
+  </description>
+  <launchable type="desktop-id">io.github.rccnroll.tridi.desktop</launchable>
+  <url type="homepage">https://github.com/rccnroll/tridi</url>
+  <url type="bugtracker">https://github.com/rccnroll/tridi/issues</url>
+  <url type="vcs-browser">https://github.com/rccnroll/tridi</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Four point cloud tiles, one color each, and the legend</caption>
+      <image>https://raw.githubusercontent.com/rccnroll/tridi/main/docs/media/viewer.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Thumbnails in GNOME Files</caption>
+      <image>https://raw.githubusercontent.com/rccnroll/tridi/main/docs/media/nautilus.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <binary>tridi</binary>
+  </provides>
+  <releases>
+    <release version="2.6.0" date="2026-10-08"/>
+    <release version="2.5.1" date="2026-10-07"/>
+  </releases>
+</component>

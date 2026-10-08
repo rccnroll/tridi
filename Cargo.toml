@@ -51,8 +51,9 @@ maintainer-scripts = "packaging/deb/"
 assets = [
     ["target/release/tridi", "usr/bin/", "755"],
     ["share/thumbnailers/tridi.thumbnailer", "usr/share/thumbnailers/", "644"],
-    ["share/mime/packages/pointcloud.xml", "usr/share/mime/packages/", "644"],
-    ["share/applications/tridi.desktop", "usr/share/applications/", "644"],
+    ["share/mime/packages/tridi.xml", "usr/share/mime/packages/", "644"],
+    ["share/applications/io.github.rccnroll.tridi.desktop", "usr/share/applications/", "644"],
+    ["share/metainfo/io.github.rccnroll.tridi.metainfo.xml", "usr/share/metainfo/", "644"],
     ["share/icons/**/*", "usr/share/icons/", "644"],
     ["LICENSE-MIT", "usr/share/doc/tridi/", "644"],
     ["LICENSE-APACHE", "usr/share/doc/tridi/", "644"],

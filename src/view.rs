@@ -36,7 +36,7 @@ use crate::{tell, window_keys};
 // ========================================= Constants ========================================= {{{
 
 /// The Wayland `app_id` the dock groups the window by, matching the .desktop.
-const APP_ID: &str = "tridi";
+const APP_ID: &str = "io.github.rccnroll.tridi";
 
 /// Radians of orbit per logical pixel dragged.
 const ORBIT_SPEED: f32 = 0.008;
@@ -625,12 +625,21 @@ mod tests {
         assert!(cam.position().distance(cam.target()) >= 1.0 - 1e-3);
     }
 
-    // 7. the dock's app_id is a constant: if it follows the title or the file
-    //    name, the dock goes back to "unknown"
+    // 7. the dock's app_id is a constant matching the .desktop and the
+    //    metainfo: if it follows the title or the file name, the dock goes
+    //    back to "unknown"; the title says tridi, not the app id
     #[test]
     fn app_id_is_fixed() {
-        assert_eq!(super::APP_ID, "tridi");
-        assert!(include_str!("view.rs").contains(".with_name(APP_ID, APP_ID)"));
+        assert_eq!(super::APP_ID, "io.github.rccnroll.tridi");
+        let src = include_str!("view.rs");
+        assert!(src.contains(".with_name(APP_ID, APP_ID)"), "the window's app_id");
+        assert!(src.contains(r#".with_title(format!("tridi — {}""#), "the title");
+        let meta = include_str!("../share/metainfo/io.github.rccnroll.tridi.metainfo.xml");
+        assert!(meta.contains("<id>io.github.rccnroll.tridi</id>"), "the metainfo id");
+        assert!(
+            meta.contains(r#"<launchable type="desktop-id">io.github.rccnroll.tridi.desktop</launchable>"#),
+            "the metainfo's desktop entry"
+        );
     }
 }
 
