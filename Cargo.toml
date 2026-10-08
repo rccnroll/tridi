@@ -12,6 +12,7 @@ homepage = "https://github.com/rccnroll/tridi"
 readme = "README.md"
 keywords = ["point-cloud", "pcd", "mesh", "viewer", "thumbnailer"]
 categories = ["graphics", "visualization", "command-line-utilities"]
+exclude = ["docs/", "fuzz/", ".github/", "packaging/", "scripts/"]
 
 [dependencies]
 glutin = { version = "0.32", default-features = false, features = ["egl", "wayland", "x11"] }
