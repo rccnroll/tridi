@@ -110,9 +110,10 @@ ROADMAP.md (open), not in the commit.
 
 1. Set the version in `Cargo.toml`, in `[workspace.package]` and in the
    `version = "..."` of the internal crates in `[workspace.dependencies]`
-   (one sed changes both), and the PKGBUILD's `pkgver`:
+   (one sed changes both, OLD being the current version), and the
+   PKGBUILD's `pkgver`:
 
-       sed -i 's/version = "2.8.0"/version = "3.0.0"/' Cargo.toml
+       sed -i 's/version = "OLD"/version = "X.Y.Z"/' Cargo.toml
 
    then `cargo check` (for `Cargo.lock`), and add
    `<release version="X.Y.Z" date="YYYY-MM-DD"/>` on top of `<releases>` in
@@ -128,7 +129,7 @@ ROADMAP.md (open), not in the commit.
 4. The Release workflow builds both packages and opens a draft release
    with them and this version's changelog. Edit the notes, publish.
 5. `cargo publish --workspace --locked` publishes `tridi-formats`,
-   `tridi-step`, `tridi` and `tridi-cli`, dependencies first. CI's dry run has already packaged and built
-   them.
+   `tridi-step`, `tridi` and `tridi-cli`, dependencies first. CI's dry run
+   has already packaged and built them.
 6. In `packaging/aur/PKGBUILD`, set `pkgver` and run `updpkgsums` (the
    tag's tarball now exists), commit `build(aur): X.Y.Z`.

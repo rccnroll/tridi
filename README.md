@@ -71,9 +71,12 @@ builds the `tridi` binary into `~/.cargo/bin`. It needs OpenCASCADE's
 headers and libraries for STEP, 7.6 or later: `opencascade` on Arch and
 Fedora, `libocct-data-exchange-dev libocct-ocaf-dev
 libocct-modeling-algorithms-dev libocct-modeling-data-dev
-libocct-foundation-dev` on Debian/Ubuntu. That is the viewer only: no
-thumbnails, desktop entry, MIME types or man pages, which only the packages
-install.
+libocct-foundation-dev` on Debian/Ubuntu. cargo installs the binary only:
+no MIME types, `.desktop` entry, man pages or shell completions. Without
+the MIME types the file manager doesn't know `.pcd`, `.xyz` and the
+others, and Nautilus's thumbnail sandbox doesn't see `$HOME`, so it can't
+run `~/.cargo/bin/tridi`. For thumbnails and the desktop entry, use the
+Arch or Debian package.
 
 ## File managers
 

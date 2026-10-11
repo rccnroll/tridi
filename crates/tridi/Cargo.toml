@@ -3,13 +3,13 @@ name = "tridi"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-description = "Viewer for point clouds, meshes and STEP, with file manager thumbnails"
+description = "A viewer window for point clouds, meshes and STEP files, callable from any Rust program"
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 readme = "README.md"
-keywords = ["point-cloud", "pcd", "mesh", "viewer", "thumbnailer"]
+keywords = ["point-cloud", "pcd", "mesh", "viewer", "step"]
 categories = ["graphics", "visualization"]
 
 [dependencies]
