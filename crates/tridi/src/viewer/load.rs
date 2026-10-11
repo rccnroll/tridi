@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
     thread,
 };
@@ -56,38 +56,78 @@ pub(crate) struct Ready {
     pub(crate) bb: AxisAlignedBoundingBox,
 }
 
+/// Which `show()` a loader thread works for: the event loop outlives a
+/// window, and a slow STEP file may still send pieces after it closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Generation(u64);
+
+impl Generation {
+    /// A new one for each window, never seen before in this process.
+    pub(crate) fn next() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        Self(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
 /// What a loader thread sends the event loop.
 pub(crate) enum Loaded {
     /// the i-th file, or one of its solids if it's STEP
-    Part { i: usize, ready: Ready },
+    Part { generation: Generation, i: usize, ready: Ready },
     /// the i-th file is all in: how many solids were given up on, or why
     /// nothing came
-    Done { i: usize, result: LoadResult<usize> },
+    Done {
+        generation: Generation,
+        i: usize,
+        result: LoadResult<usize>,
+    },
+}
+
+impl Loaded {
+    /// Whether it was sent for the window of generation `g`.
+    pub(crate) fn is_for(&self, g: Generation) -> bool {
+        match self {
+            Self::Part { generation, .. } | Self::Done { generation, .. } => *generation == g,
+        }
+    }
 }
 
 /// Reads the files on as many threads as there are cores, each sent to the
 /// event loop as it's ready. A file's tint is its place on the command line,
-/// so it doesn't change with the order they finish in.
-pub(crate) fn load_all(paths: &[PathBuf], theme: &'static Theme, proxy: &EventLoopProxy<Loaded>) {
+/// so it doesn't change with the order they finish in. Once `stop` is set
+/// (the window closed) each thread ends: before its next file, or within a
+/// STEP file, whose helper is killed.
+pub(crate) fn load_all(
+    paths: &[PathBuf],
+    theme: &'static Theme,
+    generation: Generation,
+    stop: &Arc<AtomicBool>,
+    proxy: &EventLoopProxy<Loaded>,
+) {
     let paths: Arc<[PathBuf]> = paths.into();
     let next = Arc::new(AtomicUsize::new(0));
     let workers = thread::available_parallelism().map_or(1, NonZeroUsize::get).min(paths.len());
     for _ in 0..workers {
-        let (paths, next, proxy) = (Arc::clone(&paths), Arc::clone(&next), proxy.clone());
+        let (paths, next, stop, proxy) = (Arc::clone(&paths), Arc::clone(&next), Arc::clone(stop), proxy.clone());
         thread::spawn(move || {
-            loop {
+            while !stop.load(Ordering::Relaxed) {
                 let i = next.fetch_add(1, Ordering::Relaxed);
                 let Some(p) = paths.get(i) else { break };
                 let tint = theme.palette.iter().cycle().nth(i).copied().filter(|_| paths.len() > 1);
-                let result = load(p, theme.mesh, Purpose::View, &|| false, &mut |item| {
+                let result = load(p, theme.mesh, Purpose::View, &|| stop.load(Ordering::Relaxed), &mut |item| {
                     #[expect(clippy::let_underscore_must_use, reason = "a closed window is found out below")]
                     let _ = proxy.send_event(Loaded::Part {
+                        generation,
                         i,
                         ready: ready(item, tint, theme),
                     });
                 });
-                // the window was closed: nobody waits for the rest
-                if proxy.send_event(Loaded::Done { i, result }).is_err() {
+                // the window is gone (a STEP load says Cancelled): nobody to tell
+                if stop.load(Ordering::Relaxed) {
+                    debug!("{}: window closed, not shown", label(p));
+                    break;
+                }
+                // the event loop is gone (the thread that ran it ended)
+                if proxy.send_event(Loaded::Done { generation, i, result }).is_err() {
                     break;
                 }
             }
@@ -146,6 +186,39 @@ pub(crate) fn label(p: &Path) -> String {
     p.file_name()
         .map_or_else(|| p.to_string_lossy(), |n| n.to_string_lossy())
         .into_owned()
+}
+
+// }}}
+
+// =========================================== Tests =========================================== {{{
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // a window's late pieces never reach the next one
+    #[test]
+    fn stale_events_are_dropped() {
+        let ours = Generation::next();
+        let old = Generation::next();
+        assert_ne!(ours, old);
+        assert!(
+            Loaded::Done {
+                generation: ours,
+                i: 0,
+                result: Ok(0)
+            }
+            .is_for(ours)
+        );
+        assert!(
+            !Loaded::Done {
+                generation: old,
+                i: 0,
+                result: Ok(0)
+            }
+            .is_for(ours)
+        );
+    }
 }
 
 // }}}

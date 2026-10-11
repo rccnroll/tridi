@@ -5,23 +5,32 @@
 
 use glutin::prelude::*;
 use glutin_winit::GlWindow;
-use std::{error::Error, fmt, io::Write, iter};
+use std::{
+    error::Error,
+    fmt,
+    io::Write,
+    iter,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 use three_d::{ClearState, Event, Modifiers, MouseButton, PhysicalPoint, RenderTarget, Vec3};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, MouseButton as WinitButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::ActiveEventLoop,
     keyboard::{Key, NamedKey},
-    platform::wayland::EventLoopBuilderExtWayland,
+    platform::run_on_demand::EventLoopExtRunOnDemand,
     window::WindowId,
 };
 
 use super::{
     Shown, ViewError, ViewResult, Viewer,
-    load::{File, Loaded, Ready, State, label, load_all},
+    load::{File, Generation, Loaded, Ready, State, label, load_all},
     navigate::{WHEEL_NOTCH, WHEEL_PIXEL, ZOOM_MAX, ZOOM_MIN, navigate},
     overlay::overlay,
-    window::{Gl, scale, viewport},
+    window::{Gl, scale, viewport, with_event_loop},
 };
 use crate::{Input, LoadError, LoadResult, Theme, is_gltf, up_for};
 
@@ -69,13 +78,10 @@ pub(crate) fn run(v: Viewer) -> ViewResult<Shown> {
             .collect();
         tell(&mut *out, format_args!("keys: {}", keys.join(", ")));
     }
-    let mut builder = EventLoop::<Loaded>::with_user_event();
-    // a library may be called off the main thread (a test is): Linux allows it
-    EventLoopBuilderExtWayland::with_any_thread(&mut builder, true);
-    let event_loop = builder.build().map_err(ViewError::NoDisplay)?;
     let up = up_for(paths.iter().all(|p| is_gltf(p)));
-    load_all(&paths, theme, &event_loop.create_proxy());
+    let generation = Generation::next();
     let mut app = App {
+        generation,
         pending: files.len(),
         legend: files.len() > 1,
         files,
@@ -93,7 +99,15 @@ pub(crate) fn run(v: Viewer) -> ViewResult<Shown> {
         button: None,
         mods: Modifiers::default(),
     };
-    event_loop.run_app(&mut app).map_err(ViewError::EventLoop)?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let ran = with_event_loop(|events| {
+        load_all(&paths, theme, generation, &stop, &events.create_proxy());
+        let ran = events.run_app_on_demand(&mut app).map_err(ViewError::EventLoop);
+        // the window is gone, however it went: its loaders stop, a STEP helper is killed
+        stop.store(true, Ordering::Relaxed);
+        ran
+    });
+    ran?;
     app.err.map_or(Ok(Shown { failed: app.failed }), Err)
 }
 
@@ -102,6 +116,8 @@ pub(crate) fn run(v: Viewer) -> ViewResult<Shown> {
 /// that one sends a 45 px high buffer and the compositor kills the window.
 /// three-d only gets the GL context.
 struct App {
+    /// the `show()` this window is: a loader event of another is dropped
+    generation: Generation,
     files: Vec<File>,
     /// files not read yet
     pending: usize,
@@ -305,10 +321,19 @@ impl ApplicationHandler<Loaded> for App {
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Loaded) {
-        match event {
-            Loaded::Part { i, ready } => self.part(event_loop, i, ready),
-            Loaded::Done { i, result } => self.done(event_loop, i, result),
+        // a closed window's loader, late: the loop outlived it
+        if !event.is_for(self.generation) {
+            return;
         }
+        match event {
+            Loaded::Part { i, ready, .. } => self.part(event_loop, i, ready),
+            Loaded::Done { i, result, .. } => self.done(event_loop, i, result),
+        }
+    }
+
+    // run_app_on_demand returns with the loop alive: the window must go now
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        self.gl = None;
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {

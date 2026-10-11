@@ -10,14 +10,50 @@ use glutin::{
     surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
 };
 use glutin_winit::{DisplayBuilder, GlWindow};
-use std::{num::NonZeroU32, sync::Arc, time::Instant};
+use std::{cell::RefCell, num::NonZeroU32, sync::Arc, time::Instant};
 use three_d::{Camera, Context, GUI, HasContext, Vec3, Viewport, context, egui};
 use winit::{
-    event_loop::ActiveEventLoop, platform::wayland::WindowAttributesExtWayland, raw_window_handle::HasWindowHandle, window::Window,
+    error::EventLoopError,
+    event_loop::{ActiveEventLoop, EventLoop},
+    platform::wayland::{EventLoopBuilderExtWayland, WindowAttributesExtWayland},
+    raw_window_handle::HasWindowHandle,
+    window::Window,
 };
 
-use super::{ViewError, ViewResult, load::File};
+use super::{
+    ViewError, ViewResult,
+    load::{File, Loaded},
+};
 use crate::{Input, RenderError, Scene, Theme, quiet_stderr};
+
+// }}}
+
+// ======================================== Event loop ========================================= {{{
+
+thread_local! {
+    /// winit makes one event loop per process; it lives with the thread that
+    /// first showed a window, and every later window reuses it.
+    static EVENTS: RefCell<Option<EventLoop<Loaded>>> = const { RefCell::new(None) };
+}
+
+/// Runs `f` on this thread's event loop, made on first use; another thread
+/// than the one that made it gets [`ViewError::OtherThread`].
+pub(crate) fn with_event_loop<T, F: FnOnce(&mut EventLoop<Loaded>) -> ViewResult<T>>(f: F) -> ViewResult<T> {
+    EVENTS.with_borrow_mut(|slot| {
+        let events = if let Some(e) = slot {
+            e
+        } else {
+            let mut b = EventLoop::<Loaded>::with_user_event();
+            // a library may be called off the main thread (a test is): Linux allows it
+            EventLoopBuilderExtWayland::with_any_thread(&mut b, true);
+            slot.insert(b.build().map_err(|e| match e {
+                EventLoopError::RecreationAttempt => ViewError::OtherThread,
+                e @ (EventLoopError::NotSupported(_) | EventLoopError::Os(_) | EventLoopError::ExitFailure(_)) => ViewError::NoDisplay(e),
+            })?)
+        };
+        f(events)
+    })
+}
 
 // }}}
 

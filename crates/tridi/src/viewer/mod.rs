@@ -64,6 +64,10 @@ pub enum ViewError {
     },
     #[error(transparent)]
     Render(#[from] RenderError),
+    /// winit allows one event loop per process: show windows from the
+    /// thread that showed the first one.
+    #[error("windows can only be shown from the thread that showed the first one")]
+    OtherThread,
     #[error("the window's event loop failed")]
     EventLoop(#[source] EventLoopError),
     /// every file failed; each one's error is in the log
@@ -167,7 +171,7 @@ pub fn show<I: IntoIterator<Item = P>, P: AsRef<Path>>(paths: I) -> ViewResult<S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+    use std::{env, thread};
 
     #[test]
     fn empty_viewer_is_an_error() {
@@ -182,6 +186,22 @@ mod tests {
         }
         let r = Viewer::new().file("x.pcd").show();
         assert!(matches!(r, Err(ViewError::NoDisplay(_))), "{r:?}");
+    }
+
+    // winit allows one event loop per process: the thread that made it owns
+    // it, another thread gets an error it can match
+    #[test]
+    fn second_thread_is_an_error() {
+        if env::var_os("WAYLAND_DISPLAY").is_none() && env::var_os("DISPLAY").is_none() {
+            return;
+        }
+        // made here, on this test's thread, and kept for the process
+        assert!(
+            matches!(window::with_event_loop(|_| Ok(())), Ok(())),
+            "the first thread gets the loop"
+        );
+        let r = thread::spawn(|| window::with_event_loop(|_| Ok(()))).join().unwrap();
+        assert!(matches!(r, Err(ViewError::OtherThread)), "{r:?}");
     }
 
     #[test]
