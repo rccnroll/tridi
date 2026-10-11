@@ -134,8 +134,8 @@ pub fn is_gltf(p: &Path) -> bool {
     ext == "glb" || ext == "gltf"
 }
 
-/// glTF is Y-up by its standard (decided 25/09: we follow it, even though
-/// `Open3D` writes scan GLBs Z-up); scans and CAD are Z-up.
+/// glTF is Y-up by its standard (followed even though `Open3D`
+/// writes scan GLBs Z-up); scans and CAD are Z-up.
 #[must_use]
 pub fn up_for(gltf: bool) -> Vec3 {
     if gltf { Vec3::unit_y() } else { Vec3::unit_z() }

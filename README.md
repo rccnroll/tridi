@@ -122,7 +122,7 @@ a release is cut are in
 
 1.0 was Python + Open3D launched by `uv`, with an f3d-drawn thumbnailer,
 kept in dotfiles; this repository starts at 2.0, the Rust rewrite, which
-dropped STEP until it came back in Rust after 2.1. Up to 2.2.0 it was
+dropped STEP until 2.2 brought it back (through OpenCASCADE since 2.8). Up to 2.2.0 it was
 called pcdview (same tags, same history).
 Why and how is in [docs/history.md](docs/history.md).
 
