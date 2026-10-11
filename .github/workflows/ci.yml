@@ -29,6 +29,8 @@ jobs:
       - run: cargo test --workspace --locked
       # the viewer without OpenCASCADE
       - run: cargo check -p tridi --no-default-features --locked
+      # every crate packages and builds from what crates.io would get
+      - run: cargo publish --workspace --dry-run --locked
 
   # the oldest Rust Cargo.toml's rust-version promises
   msrv:
