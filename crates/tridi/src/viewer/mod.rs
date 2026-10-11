@@ -52,6 +52,8 @@ Window:
 pub enum ViewError {
     #[error("no file to show")]
     Empty,
+    /// No display to open a window on. It holds for the rest of the
+    /// process: winit allows one event loop per process, and counts this try.
     #[error("no display")]
     NoDisplay(#[source] EventLoopError),
     #[error("cannot open the window: {message}")]
@@ -65,7 +67,8 @@ pub enum ViewError {
     #[error(transparent)]
     Render(#[from] RenderError),
     /// winit allows one event loop per process: show windows from the
-    /// thread that showed the first one.
+    /// thread that showed the first one. Once that thread has ended, no
+    /// thread can show a window again in this process.
     #[error("windows can only be shown from the thread that showed the first one")]
     OtherThread,
     #[error("the window's event loop failed")]
@@ -186,10 +189,17 @@ mod tests {
         }
         let r = Viewer::new().file("x.pcd").show();
         assert!(matches!(r, Err(ViewError::NoDisplay(_))), "{r:?}");
+        // winit counted the failed try: a second one, on any thread, is still no display
+        let r = Viewer::new().file("x.pcd").show();
+        assert!(matches!(r, Err(ViewError::NoDisplay(_))), "{r:?}");
+        let r = thread::spawn(|| Viewer::new().file("x.pcd").show()).join().unwrap();
+        assert!(matches!(r, Err(ViewError::NoDisplay(_))), "{r:?}");
     }
 
     // winit allows one event loop per process: the thread that made it owns
-    // it, another thread gets an error it can match
+    // it, another thread gets an error it can match. This claims the process's
+    // one loop for the lib test binary: it must stay the only lib unit test
+    // that builds the loop when a display is present.
     #[test]
     fn second_thread_is_an_error() {
         if env::var_os("WAYLAND_DISPLAY").is_none() && env::var_os("DISPLAY").is_none() {

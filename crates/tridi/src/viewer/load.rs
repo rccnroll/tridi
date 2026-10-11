@@ -114,6 +114,10 @@ pub(crate) fn load_all(
                 let Some(p) = paths.get(i) else { break };
                 let tint = theme.palette.iter().cycle().nth(i).copied().filter(|_| paths.len() > 1);
                 let result = load(p, theme.mesh, Purpose::View, &|| stop.load(Ordering::Relaxed), &mut |item| {
+                    // the window closed, the helper not killed yet: nobody to show it to
+                    if stop.load(Ordering::Relaxed) {
+                        return;
+                    }
                     #[expect(clippy::let_underscore_must_use, reason = "a closed window is found out below")]
                     let _ = proxy.send_event(Loaded::Part {
                         generation,

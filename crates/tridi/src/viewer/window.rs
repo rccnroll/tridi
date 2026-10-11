@@ -10,7 +10,15 @@ use glutin::{
     surface::{Surface, SurfaceAttributesBuilder, SwapInterval, WindowSurface},
 };
 use glutin_winit::{DisplayBuilder, GlWindow};
-use std::{cell::RefCell, num::NonZeroU32, sync::Arc, time::Instant};
+use std::{
+    cell::RefCell,
+    num::NonZeroU32,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Instant,
+};
 use three_d::{Camera, Context, GUI, HasContext, Vec3, Viewport, context, egui};
 use winit::{
     error::EventLoopError,
@@ -36,6 +44,11 @@ thread_local! {
     static EVENTS: RefCell<Option<EventLoop<Loaded>>> = const { RefCell::new(None) };
 }
 
+/// The first build failed for want of a display. winit counts it as made all
+/// the same, and answers every later build `RecreationAttempt`: that's still
+/// no display, not another thread.
+static NO_DISPLAY: AtomicBool = AtomicBool::new(false);
+
 /// Runs `f` on this thread's event loop, made on first use; another thread
 /// than the one that made it gets [`ViewError::OtherThread`].
 pub(crate) fn with_event_loop<T, F: FnOnce(&mut EventLoop<Loaded>) -> ViewResult<T>>(f: F) -> ViewResult<T> {
@@ -47,8 +60,12 @@ pub(crate) fn with_event_loop<T, F: FnOnce(&mut EventLoop<Loaded>) -> ViewResult
             // a library may be called off the main thread (a test is): Linux allows it
             EventLoopBuilderExtWayland::with_any_thread(&mut b, true);
             slot.insert(b.build().map_err(|e| match e {
+                EventLoopError::RecreationAttempt if NO_DISPLAY.load(Ordering::Relaxed) => ViewError::NoDisplay(e),
                 EventLoopError::RecreationAttempt => ViewError::OtherThread,
-                e @ (EventLoopError::NotSupported(_) | EventLoopError::Os(_) | EventLoopError::ExitFailure(_)) => ViewError::NoDisplay(e),
+                e @ (EventLoopError::NotSupported(_) | EventLoopError::Os(_) | EventLoopError::ExitFailure(_)) => {
+                    NO_DISPLAY.store(true, Ordering::Relaxed);
+                    ViewError::NoDisplay(e)
+                }
             })?)
         };
         f(events)
