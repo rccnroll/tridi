@@ -12,7 +12,7 @@ use std::{
     io::{self, Read},
     iter,
     path::Path,
-    process::Stdio,
+    process::{Child, Stdio},
     sync::mpsc::{self, Receiver, RecvTimeoutError, Sender},
     thread,
     time::{Duration, Instant},
@@ -98,14 +98,6 @@ enum Quality {
     Coarse,
 }
 
-/// One run of the helper: how fine, and how long a quiet helper is waited
-/// for between two solids.
-#[derive(Debug, Clone, Copy)]
-struct Pass {
-    quality: Quality,
-    idle: Duration,
-}
-
 // }}}
 
 // ========================================= StepMesh ========================================== {{{
@@ -124,6 +116,18 @@ pub struct StepMesh {
 // }}}
 
 // ========================================== Parent =========================================== {{{
+
+/// The helper's process, killed and reaped however `run` ends: an early
+/// return, or a panic in the host's `part`. The normal path takes the
+/// status first; then the kill is a no-op and the wait gives it again.
+struct Reaped(Child);
+
+impl Drop for Reaped {
+    fn drop(&mut self) {
+        #[expect(clippy::let_underscore_must_use, reason = "nothing to do about a helper that won't die")]
+        let _ = (self.0.kill(), self.0.wait());
+    }
+}
 
 /// What comes out of the helper: the ids of the solids it'll do, then each
 /// one's id and triangles.
@@ -151,19 +155,9 @@ pub fn load<F: FnMut(StepMesh)>(path: &Path, grey: [f32; 3], purpose: Purpose, s
     // OpenCASCADE tells a missing file from a bad one only on its console
     fs::File::open(path).map_err(StepError::Read)?;
     let start = Instant::now();
-    let (fine, coarse) = (
-        Pass {
-            quality: Quality::Fine,
-            idle: IDLE,
-        },
-        Pass {
-            quality: Quality::Coarse,
-            idle: IDLE,
-        },
-    );
-    let (passes, until): (&[Pass], _) = match purpose {
-        Purpose::View => (&[fine, coarse], None),
-        Purpose::Thumbnail => (&[coarse], start.checked_add(THUMB_BUDGET)),
+    let (passes, until): (&[Quality], _) = match purpose {
+        Purpose::View => (&[Quality::Fine, Quality::Coarse], None),
+        Purpose::Thumbnail => (&[Quality::Coarse], start.checked_add(THUMB_BUDGET)),
     };
     let mut shown = 0;
     let mut part = |m| {
@@ -172,11 +166,11 @@ pub fn load<F: FnMut(StepMesh)>(path: &Path, grey: [f32; 3], purpose: Purpose, s
     };
     // None until a helper has listed the solids
     let (mut missing, mut failure): (Option<Vec<u64>>, Option<StepError>) = (None, None);
-    for &pass in passes {
+    for &quality in passes {
         if missing.as_ref().is_some_and(Vec::is_empty) {
             break;
         }
-        match run(path, pass, missing.as_deref().unwrap_or_default(), until, grey, stop, &mut part) {
+        match run(path, quality, missing.as_deref().unwrap_or_default(), until, grey, stop, &mut part) {
             // stopped, or not STEP: the next pass would fail the same way
             Err(e @ (StepError::Cancelled | StepError::NotStep)) => return Err(e),
             // no list: the next pass would parse the same file the same way
@@ -185,7 +179,7 @@ pub fn load<F: FnMut(StepMesh)>(path: &Path, grey: [f32; 3], purpose: Purpose, s
                 break;
             }
             Ok((left, f)) => {
-                debug!(?pass, ?left, "pass done");
+                debug!(?quality, ?left, "pass done");
                 (missing, failure) = (Some(left), f);
             }
         }
@@ -205,7 +199,7 @@ pub fn load<F: FnMut(StepMesh)>(path: &Path, grey: [f32; 3], purpose: Purpose, s
 /// it never listed them or was cancelled.
 fn run(
     path: &Path,
-    pass: Pass,
+    quality: Quality,
     only: &[u64],
     until: Option<Instant>,
     grey: [f32; 3],
@@ -215,20 +209,21 @@ fn run(
     let start = Instant::now();
     let mut cmd = helper::command().map_err(StepError::Helper)?;
     cmd.arg(path);
-    if pass.quality == Quality::Coarse {
+    if quality == Quality::Coarse {
         cmd.arg("--coarse");
     }
     if !only.is_empty() {
         let ids: Vec<String> = only.iter().map(u64::to_string).collect();
         cmd.arg("--only").arg(ids.join(","));
     }
-    let mut child = cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(StepError::Spawn)?;
-    let (Some(out), Some(mut err)) = (child.stdout.take(), child.stderr.take()) else {
+    let mut child = Reaped(
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(StepError::Spawn)?,
+    );
+    let (Some(out), Some(mut err)) = (child.0.stdout.take(), child.0.stderr.take()) else {
         return Err(StepError::Spawn(io::Error::other("the helper has no pipes")));
     };
     let (tx, rx) = mpsc::channel();
@@ -243,13 +238,13 @@ fn run(
         let _ = err.read_to_string(&mut e);
         e
     });
-    let (missing, ended) = receive(&rx, pass.idle, until, grey, stop, part);
+    let (missing, ended) = receive(&rx, until, grey, stop, part);
     if ended != Ended::Closed {
         debug!(?ended, "killing the helper");
         #[expect(clippy::let_underscore_must_use, reason = "it may be gone already; `ended` is the news")]
-        let _ = child.kill();
+        let _ = child.0.kill();
     }
-    let status = child.wait().map_err(StepError::Spawn)?;
+    let status = child.0.wait().map_err(StepError::Spawn)?;
     let msg = errs.join().unwrap_or_default();
     let failure = match ended {
         Ended::Cancelled => return Err(StepError::Cancelled),
@@ -279,12 +274,11 @@ fn run(
 }
 
 /// The frames, until the helper is done, quiet too long (PARSE for the
-/// list, `idle` between two solids, and never past `until`) or `stop` says
+/// list, IDLE between two solids, and never past `until`) or `stop` says
 /// so. Returns the listed solids that didn't come (None if no list came),
 /// and how it ended.
 fn receive(
     rx: &Receiver<Frame>,
-    idle: Duration,
     until: Option<Instant>,
     grey: [f32; 3],
     stop: &dyn Fn() -> bool,
@@ -296,7 +290,7 @@ fn receive(
         if stop() {
             return (missing, Ended::Cancelled);
         }
-        let limit = if missing.is_some() { idle } else { PARSE };
+        let limit = if missing.is_some() { IDLE } else { PARSE };
         let deadline = until.map_or(last + limit, |u| u.min(last + limit));
         let Some(left) = deadline.checked_duration_since(Instant::now()) else {
             return (missing, Ended::TimedOut);

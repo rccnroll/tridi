@@ -34,6 +34,8 @@ pub use model::{Item, LoadError, LoadResult, Purpose, is_gltf, load, triangles, 
 pub use render::{FOV, Input, RenderError, RenderResult, Scene, headless, offscreen, px_f32, quiet_stderr};
 pub use theme::{DARK, LIGHT, THEMES, Theme};
 pub use tridi_formats::{Cloud, FormatError, FormatResult, load_cloud, parse_cloud};
+#[cfg(feature = "step")]
+pub use tridi_step::{StepError, StepResult};
 
 // }}}
 

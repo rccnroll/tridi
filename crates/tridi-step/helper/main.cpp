@@ -6,6 +6,7 @@
 // parent stopped reading, 64 bad arguments.
 
 #include <sys/prctl.h>
+#include <unistd.h>
 
 #include <csignal>
 #include <cstdint>
@@ -24,25 +25,31 @@ namespace {
 
 // bad arguments (sysexits.h's EX_USAGE)
 constexpr int USAGE = 64;
+// the parent stopped reading (occt.cpp's WRITE)
+constexpr int WRITE = 3;
 
 std::mutex out;
 
-// whole frames only: the parts come from several threads
-bool put(const void *p, size_t n) { return std::fwrite(p, 1, n, stdout) == n; }
+// the frames' own stream, on what was fd 1: fd 1 itself goes to stderr, so
+// whatever OpenCASCADE's messenger prints to std::cout can't break a frame
+std::FILE *wire = nullptr;
 
-// stdout to a pipe is fully buffered: each frame is flushed as it's done
+// whole frames only: the parts come from several threads
+bool put(const void *p, size_t n) { return std::fwrite(p, 1, n, wire) == n; }
+
+// a pipe is fully buffered: each frame is flushed as it's done
 int on_ids(void *, const uint64_t *ids, size_t n) {
     std::lock_guard<std::mutex> lock(out);
     auto count = static_cast<uint32_t>(n);
     bool ok = put(&count, 4) && (n == 0 || put(ids, n * 8));
-    return ok && std::fflush(stdout) == 0 ? 0 : 1;
+    return ok && std::fflush(wire) == 0 ? 0 : 1;
 }
 
 int on_part(void *, uint64_t id, const float *v, size_t n) {
     std::lock_guard<std::mutex> lock(out);
     auto bytes = static_cast<uint32_t>(n * 4);
     bool ok = put(&id, 8) && put(&bytes, 4) && (n == 0 || put(v, n * 4));
-    return ok && std::fflush(stdout) == 0 ? 0 : 1;
+    return ok && std::fflush(wire) == 0 ? 0 : 1;
 }
 
 // "1,2,3" into `ids`; false on anything but decimal ids and commas
@@ -79,6 +86,11 @@ int main(int argc, char **argv) {
             std::fprintf(stderr, "tridi-step-helper: bad argument %s\n", argv[i]);
             return USAGE;
         }
+    }
+    int fd = dup(1);
+    if (fd < 0 || dup2(2, 1) < 0 || (wire = fdopen(fd, "wb")) == nullptr) {
+        std::perror("tridi-step-helper: stdout");
+        return WRITE;
     }
     return tridi_step_tessellate(argv[1], coarse, only.data(), only.size(), nullptr, on_ids, on_part);
 }

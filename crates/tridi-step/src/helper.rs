@@ -7,12 +7,12 @@
 use std::{
     env,
     ffi::CStr,
-    fs::{self, File, Permissions},
+    fs::{self, DirBuilder, File, OpenOptions},
     hash::{DefaultHasher, Hash, Hasher},
     io::{self, Write},
     os::{
         fd::{AsRawFd, FromRawFd, OwnedFd},
-        unix::fs::PermissionsExt,
+        unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt},
     },
     path::{Path, PathBuf},
     process::{self, Command},
@@ -57,7 +57,8 @@ pub(crate) fn command() -> io::Result<Command> {
     }
 }
 
-/// Memory first; the cache, then the temp dir, where memory can't run.
+/// Memory first; the cache, then our own directory in the temp dir, where
+/// memory can't run.
 fn place() -> io::Result<Place> {
     match memory() {
         Ok(fd) if runs(Path::new(&fd_path(&fd))) => return Ok(Place::Memory(fd)),
@@ -68,9 +69,12 @@ fn place() -> io::Result<Place> {
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|h| Path::new(&h).join(".cache")))
         .map(|c| c.join("tridi"));
+    // the temp dir is everyone's: only a directory of ours alone will do
+    let shared = env::temp_dir().join(format!("tridi-{}", uid()));
     let mut last = io::Error::other("no cache or temp dir");
-    for dir in cache.into_iter().chain([env::temp_dir().join("tridi")]) {
-        match cache_copy(&dir) {
+    for (dir, private) in cache.map(|c| (c, false)).into_iter().chain([(shared, true)]) {
+        let ready = if private { private_dir(&dir, uid()) } else { Ok(()) };
+        match ready.and_then(|()| cache_copy(&dir)) {
             Ok(p) if runs(&p) => {
                 debug!("the helper runs from {}", p.display());
                 return Ok(Place::Disk(p));
@@ -117,10 +121,40 @@ fn cache_copy(dir: &Path) -> io::Result<PathBuf> {
     }
     fs::create_dir_all(dir)?;
     let tmp = dir.join(format!(".tridi-step-helper-{}", process::id()));
-    fs::write(&tmp, HELPER)?;
-    fs::set_permissions(&tmp, Permissions::from_mode(0o755))?;
+    // a leftover of a run that died with our pid: a symlink is removed, not followed
+    #[expect(
+        clippy::let_underscore_must_use,
+        reason = "mostly there is none; create_new says if it's in the way"
+    )]
+    let _ = fs::remove_file(&tmp);
+    // O_EXCL: never through a link someone else put there
+    let mut f = OpenOptions::new().write(true).create_new(true).mode(0o700).open(&tmp)?;
+    f.write_all(HELPER)?;
+    // closed before it runs, or exec says ETXTBSY
+    drop(f);
     fs::rename(&tmp, &path)?;
     Ok(path)
+}
+
+/// `dir` as ours alone, made 0700 if missing: refused unless it's a real
+/// directory (no symlink), owned by `uid`, mode 0700, since in a directory
+/// every user writes to another one could have put a helper of theirs there.
+fn private_dir(dir: &Path, uid: u32) -> io::Result<()> {
+    if let Err(e) = DirBuilder::new().mode(0o700).create(dir)
+        && e.kind() != io::ErrorKind::AlreadyExists
+    {
+        return Err(e);
+    }
+    let m = fs::symlink_metadata(dir)?;
+    if !m.file_type().is_dir() || m.uid() != uid || m.mode() & 0o7777 != 0o700 {
+        return Err(io::Error::other(format!("{} isn't a directory of ours alone", dir.display())));
+    }
+    Ok(())
+}
+
+fn uid() -> u32 {
+    // SAFETY: getuid always succeeds and touches no memory
+    unsafe { libc::getuid() }
 }
 
 /// Whether the helper starts from `exe`: without arguments it prints its
@@ -136,7 +170,12 @@ fn runs(exe: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{env, fs, process};
+    use std::{
+        env,
+        fs::{self, Permissions},
+        os::unix::fs::{PermissionsExt, symlink},
+        process,
+    };
 
     // where memfd exec is forbidden (vm.memfd_noexec = 2) the cache copy runs
     #[test]
@@ -149,6 +188,26 @@ mod tests {
         // a second call reuses the file
         assert_eq!(cache_copy(&dir).unwrap(), exe);
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    // a planted directory in the temp dir is not used
+    #[test]
+    fn shared_dir_must_be_private() {
+        let base = env::temp_dir().join(format!("tridi-private-test-{}", process::id()));
+        fs::create_dir_all(&base).unwrap();
+        let ours = base.join("ours");
+        private_dir(&ours, uid()).unwrap();
+        // again, now that it's there
+        private_dir(&ours, uid()).unwrap();
+        private_dir(&ours, uid() + 1).unwrap_err(); // someone else's
+        let open = base.join("open");
+        fs::create_dir_all(&open).unwrap();
+        fs::set_permissions(&open, Permissions::from_mode(0o777)).unwrap();
+        private_dir(&open, uid()).unwrap_err(); // 0777
+        let link = base.join("link");
+        symlink(&ours, &link).unwrap();
+        private_dir(&link, uid()).unwrap_err(); // a symlink
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[test]
