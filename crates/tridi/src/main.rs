@@ -36,7 +36,6 @@
 
 mod desktop;
 mod thumb;
-mod view;
 
 // }}}
 
@@ -61,29 +60,21 @@ use tridi::{LIGHT, Theme};
 
 // ========================================= Constants ========================================= {{{
 
-const AFTER_HELP: &str = "\
+const EXAMPLES: &str = "\
 Examples:
   tridi scan.pcd                   open a point cloud
   tridi a.pcd b.pcd part.step      open several files, one color each
   tridi --theme dark model.glb     dark theme for this run only
-  tridi theme dark                 switch viewer and thumbnails to dark
+  tridi theme dark                 switch viewer and thumbnails to dark";
 
+const FORMATS: &str = "\
 Formats:
   point clouds  pcd, ply (no faces), xyz, xyzrgb, pts
   meshes        glb, gltf, obj, stl, off, ply (with faces)
-  CAD           step, stp
+  CAD           step, stp";
 
-Window:
-  left drag             orbit
-  right or middle drag  pan (or shift + left drag)
-  wheel                 zoom
-  R                     reset the view
-  + and -               point size
-  1-9                   turn the N-th file off and on
-  I                     show or hide the legend (on with several files)
-  H or ?                show or hide these keys
-  Q or Esc              quit
-
+/// Environment, Files and Bugs: the end of the help.
+const ENVIRONMENT: &str = "\
 Environment:
   TRIDI_DEBUG=1    debug output: which GPU renders, how long things take
   TRIDI_LOG=info   a log filter instead (warnings only by default)
@@ -106,7 +97,7 @@ Bugs: https://github.com/rccnroll/tridi/issues";
     disable_help_subcommand = true,
     override_usage = "tridi [OPTIONS] FILE...\n       tridi [OPTIONS] <COMMAND>",
     about = "Viewer for point clouds and meshes, and their thumbnails in the file manager",
-    after_help = AFTER_HELP
+    after_help = after_help()
 )]
 struct Cli {
     /// Files to open together in one window
@@ -176,7 +167,14 @@ fn main() -> ExitCode {
         }
         None => {
             desktop::refresh();
-            view::view(&cli.files, t.unwrap_or_else(desktop::current), Box::new(out))
+            // each file that failed was logged by the viewer
+            tridi::Viewer::new()
+                .files(&cli.files)
+                .theme(t.unwrap_or_else(desktop::current))
+                .output(Box::new(io::stdout()))
+                .show()
+                .map(|_shown| ())
+                .map_err(eyre::Report::new)
         }
     };
     match r {
@@ -207,10 +205,9 @@ fn init_logging() {
 
 // ========================================== Helpers ========================================== {{{
 
-/// The Window section of the help, which H shows in the viewer.
-fn window_keys() -> &'static str {
-    let s = AFTER_HELP.find("Window:").and_then(|i| AFTER_HELP.get(i..)).unwrap_or(AFTER_HELP);
-    s.split_once("\n\n").map_or(s, |(window, _)| window)
+/// The help's end: examples, formats, the window's keys, the environment.
+fn after_help() -> String {
+    format!("{EXAMPLES}\n\n{FORMATS}\n\n{}\n\n{ENVIRONMENT}", tridi::KEYS)
 }
 
 /// A line for the user on `out` (stdout): what tridi read, what it did.
@@ -254,9 +251,11 @@ mod tests {
         assert_eq!((c.files.len(), c.theme.as_deref()), (2, Some("dark")));
         assert!(Cli::try_parse_from(["tridi", "--help"]).is_err_and(|e| e.exit_code() == 0));
         assert!(Cli::try_parse_from(["tridi", "-x"]).is_err_and(|e| e.exit_code() == 2));
-        // H shows the Window section, all of it and nothing after
-        let k = window_keys();
-        assert!(k.starts_with("Window:") && k.ends_with("quit") && k.contains("H or ?"), "{k}");
+        // the help lists the keys H shows in the window
+        assert!(
+            Cli::command().render_long_help().to_string().contains(tridi::KEYS),
+            "the keys in the help"
+        );
     }
 
     #[test]

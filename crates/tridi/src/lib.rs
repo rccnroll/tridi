@@ -24,6 +24,7 @@ mod render;
 #[cfg(test)]
 mod test_support;
 mod theme;
+mod viewer;
 
 // }}}
 
@@ -36,6 +37,7 @@ pub use theme::{DARK, LIGHT, THEMES, Theme};
 pub use tridi_formats::{Cloud, FormatError, FormatResult, load_cloud, parse_cloud};
 #[cfg(feature = "step")]
 pub use tridi_step::{StepError, StepResult};
+pub use viewer::{APP_ID, KEYS, Shown, ViewError, ViewResult, Viewer, show};
 
 // }}}
 
