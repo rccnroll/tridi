@@ -1,20 +1,19 @@
-[package]
-name = "tridi"
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
 version = "2.8.0"
 edition = "2024"
 # egui 0.34 (the legend, through three-d) needs 1.92; CI checks it
 rust-version = "1.92"
-description = "Viewer for point clouds, meshes and STEP, with file manager thumbnails"
 authors = ["Rocco Caccioppoli <caccioppolirocco@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rccnroll/tridi"
 homepage = "https://github.com/rccnroll/tridi"
-readme = "README.md"
-keywords = ["point-cloud", "pcd", "mesh", "viewer", "thumbnailer"]
-categories = ["graphics", "visualization", "command-line-utilities"]
-exclude = ["docs/", "fuzz/", ".github/", "packaging/", "scripts/"]
 
-[dependencies]
+# every third-party dependency once, with its features
+[workspace.dependencies]
 glutin = { version = "0.32", default-features = false, features = ["egl", "wayland", "x11"] }
 glutin-winit = { version = "0.5", default-features = false, features = ["egl", "wayland", "x11"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
@@ -30,9 +29,6 @@ thiserror = "2"
 eyre = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std"] }
-
-# the STEP child's OpenCASCADE side (build.rs)
-[build-dependencies]
 cc = "1.2"
 
 [profile.release]
@@ -40,40 +36,14 @@ strip = true
 lto = true
 codegen-units = 1
 
-# `packaging/deb/build.sh`; same files as the PKGBUILD's package(). target/assets
-# is `tridi generate`'s output: man pages and completions
-[package.metadata.deb]
-maintainer = "Rocco Caccioppoli <caccioppolirocco@gmail.com>"
-extended-description = "Point cloud and mesh viewer, with file manager thumbnails."
-section = "graphics"
-# GL/EGL, Wayland and xkbcommon are dlopened at runtime; $auto is what's
-# linked: OpenCASCADE (STEP), libstdc++
-depends = "$auto, libc6 (>= 2.34), libgcc-s1, libegl1, libgl1-mesa-dri, libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, xdg-utils"
-maintainer-scripts = "packaging/deb/"
-assets = [
-    ["target/release/tridi", "usr/bin/", "755"],
-    ["share/thumbnailers/tridi.thumbnailer", "usr/share/thumbnailers/", "644"],
-    ["share/mime/packages/tridi.xml", "usr/share/mime/packages/", "644"],
-    ["share/applications/io.github.rccnroll.tridi.desktop", "usr/share/applications/", "644"],
-    ["share/metainfo/io.github.rccnroll.tridi.metainfo.xml", "usr/share/metainfo/", "644"],
-    ["share/icons/**/*", "usr/share/icons/", "644"],
-    ["LICENSE-MIT", "usr/share/doc/tridi/", "644"],
-    ["LICENSE-APACHE", "usr/share/doc/tridi/", "644"],
-    ["packaging/licenses/egui-fonts/*", "usr/share/doc/tridi/egui-fonts/", "644"],
-    ["target/assets/*.1", "usr/share/man/man1/", "644"],
-    ["target/assets/tridi.bash", "usr/share/bash-completion/completions/tridi", "644"],
-    ["target/assets/_tridi", "usr/share/zsh/vendor-completions/", "644"],
-    ["target/assets/tridi.fish", "usr/share/fish/vendor_completions.d/", "644"],
-]
-
 # The lint policy: no panics, no silent
 # casts, no unexplained exceptions; the only escape is a scoped
 # #[expect(lint, reason = "...")].
-[lints.rust]
+[workspace.lints.rust]
 unused_must_use = "deny"
 unused_imports  = "warn"
 
-[lints.clippy]
+[workspace.lints.clippy]
 correctness = { level = "deny", priority = -1 }
 suspicious  = { level = "warn", priority = -1 }
 complexity  = { level = "warn", priority = -1 }

@@ -824,7 +824,7 @@ mod tests {
         let src = include_str!("view.rs");
         assert!(src.contains(".with_name(APP_ID, APP_ID)"), "the window's app_id");
         assert!(src.contains(r#".with_title(format!("tridi — {}""#), "the title");
-        let meta = include_str!("../share/metainfo/io.github.rccnroll.tridi.metainfo.xml");
+        let meta = include_str!("../../../share/metainfo/io.github.rccnroll.tridi.metainfo.xml");
         assert!(meta.contains("<id>io.github.rccnroll.tridi</id>"), "the metainfo id");
         assert!(
             meta.contains(r#"<launchable type="desktop-id">io.github.rccnroll.tridi.desktop</launchable>"#),

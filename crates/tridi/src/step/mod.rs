@@ -364,7 +364,7 @@ mod tests {
     fn mesh_with(name: &str, quality: Quality) -> TriMesh {
         let wire = Mutex::new(Vec::new());
         tessellate(
-            &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(name),
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data").join(name),
             quality,
             &[],
             |ids| write_ids(&mut *wire.lock().unwrap(), ids),
@@ -438,7 +438,7 @@ mod tests {
     // the file's values, not OpenCASCADE's linear ones (0.5 would be 0.214)
     #[test]
     fn colors_as_in_file() {
-        let src = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/colors.step")).unwrap();
+        let src = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/colors.step")).unwrap();
         let grey = src.replace("COLOUR_RGB('red, with a comma', 1., 0.E+00, 0.)", "COLOUR_RGB('', 0.5, 0.5, 0.5)");
         assert_ne!(grey, src, "the fixture's red is where the test expects it");
         let f = tmp("grey.step", grey.as_bytes());

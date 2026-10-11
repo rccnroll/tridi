@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn own_colors_untouched() {
         for f in ["rgb_ascii.pcd", "rgb_compressed.pcd"] {
-            let c = load_cloud(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data").join(f)).unwrap();
+            let c = load_cloud(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data").join(f)).unwrap();
             assert_eq!(c.points.len(), 40, "{f}");
             assert!(
                 close(c.points[1], [0.5, -1.0, 0.1]) && close(c.points[39], [19.5, -39.0, 152.1]),

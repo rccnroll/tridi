@@ -23,10 +23,10 @@ Arch), as in CI.
 Before pushing, what CI checks on every push and PR:
 
     cargo fmt --check
-    cargo clippy --all-targets --locked -- -D warnings
-    cargo test --locked
+    cargo clippy --workspace --all-targets --locked -- -D warnings
+    cargo test --workspace --locked
 
-plus `cargo check` on the oldest Rust supported, 1.92 (`rust-version` in
+plus `cargo check --workspace` on the oldest Rust supported, 1.92 (`rust-version` in
 `Cargo.toml`).
 
 The lints in `Cargo.toml` deny what can panic or lose data silently:
@@ -41,22 +41,23 @@ synthetic files too (`python3 scripts/samples.py`, recorded with
 
 ## Layout
 
-The crate is a library (`src/lib.rs`: readers, scene, rendering) and a
-binary on top of it (`src/main.rs`: the window, the thumbnailer command,
+The repository is a Cargo workspace; for now one member, `crates/tridi`.
+The crate is a library (`crates/tridi/src/lib.rs`: readers, scene, rendering) and a
+binary on top of it (`crates/tridi/src/main.rs`: the window, the thumbnailer command,
 the desktop integration). Dependencies go one way, down this list:
 
-- `src/formats/` — the point cloud readers, one file per format (pcd, ply,
+- `crates/tridi/src/formats/` — the point cloud readers, one file per format (pcd, ply,
   off, xyz/xyzrgb/pts). Every byte is untrusted, and nothing here uses the
   rest of tridi, so the fuzz targets include this folder alone.
-- `src/step/` — STEP: the child process with its deadline (`mod.rs`), the
+- `crates/tridi/src/step/` — STEP: the child process with its deadline (`mod.rs`), the
   OpenCASCADE side that reads, heals and meshes the parts (`occt.cpp`,
-  built by `build.rs`), and its Rust end (`tessellate.rs`).
-- `src/model.rs` — what a file is: a cloud, or a mesh (three-d-asset,
+  built by `crates/tridi/build.rs`), and its Rust end (`tessellate.rs`).
+- `crates/tridi/src/model.rs` — what a file is: a cloud, or a mesh (three-d-asset,
   ply/off faces, STEP), and which way is up.
-- `src/color.rs`, `src/theme.rs` — the coloring rules and the two themes.
-- `src/render/` — the scene with eye-dome lighting, the headless EGL
+- `crates/tridi/src/color.rs`, `crates/tridi/src/theme.rs` — the coloring rules and the two themes.
+- `crates/tridi/src/render/` — the scene with eye-dome lighting, the headless EGL
   context on the right GPU, the offscreen thumbnail.
-- `src/view.rs`, `src/thumb.rs`, `src/desktop.rs` — the binary's parts:
+- `crates/tridi/src/view.rs`, `crates/tridi/src/thumb.rs`, `crates/tridi/src/desktop.rs` — the binary's parts:
   the window (navigation, keys, legend), `tridi thumb`, and `tridi theme`
   with the thumbnail cache.
 - `share/` — what the packages install: thumbnailer entry, MIME types,
@@ -86,7 +87,7 @@ fuzzed: `cargo install cargo-fuzz`, then from `fuzz/`,
 `mkdir -p corpus/pcd && cargo +nightly fuzz run -O pcd corpus/pcd seeds/pcd`
 (or `ply`, `off`, `text`). New inputs go to the first folder, `corpus/`
 (ignored), so the seeds stay as committed. A crash lands in
-`fuzz/artifacts/`; it becomes a test in `src/formats/`, next to the reader.
+`fuzz/artifacts/`; it becomes a test in `crates/tridi/src/formats/`, next to the reader.
 
 ## Commits
 

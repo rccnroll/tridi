@@ -18,4 +18,4 @@ podman run --rm -v "$src:/src" -v "$out:/out" -v tridi-cargo:/usr/local/cargo/re
     cargo install --locked cargo-deb --root /tmp/cd -q
     cargo build --locked --release
     target/release/tridi generate target/assets
-    /tmp/cd/bin/cargo-deb --no-build --output /out/'
+    /tmp/cd/bin/cargo-deb -p tridi --no-build --output /out/'

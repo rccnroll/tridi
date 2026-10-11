@@ -27,10 +27,10 @@ use crate::tell;
 // ========================================= Constants ========================================= {{{
 
 /// The package's thumbnailer entry, the one installed under /usr/share.
-const ENTRY: &str = include_str!("../share/thumbnailers/tridi.thumbnailer");
+const ENTRY: &str = include_str!("../../../share/thumbnailers/tridi.thumbnailer");
 
 /// The package's desktop entry: its `MimeType`= line is what we open.
-const DESKTOP: &str = include_str!("../share/applications/io.github.rccnroll.tridi.desktop");
+const DESKTOP: &str = include_str!("../../../share/applications/io.github.rccnroll.tridi.desktop");
 
 /// Extensions whose cached thumbnails a theme switch (or an install) throws
 /// away: everything we draw, plus STEP, whose 1.0 thumbnails would otherwise
@@ -279,7 +279,7 @@ mod tests {
     // Fedora define only these, and ply, pts and off came from f3d's package
     #[test]
     fn every_type_has_a_definition() {
-        let xml = include_str!("../share/mime/packages/tridi.xml");
+        let xml = include_str!("../../../share/mime/packages/tridi.xml");
         let system = ["model/gltf-binary", "model/gltf+json", "model/obj", "model/stl"];
         let types = ENTRY.lines().find_map(|l| l.strip_prefix("MimeType=")).unwrap();
         for t in types.split(';').filter(|t| !t.is_empty()) {

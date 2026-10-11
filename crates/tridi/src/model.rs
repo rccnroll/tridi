@@ -224,7 +224,7 @@ mod tests {
     //    must be a mesh with its 12 box triangles
     #[test]
     fn open3d_glb() {
-        let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/open3d_box.glb");
+        let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/open3d_box.glb");
         let raw = fs::read(&f).unwrap();
         let json_len = usize::try_from(u32::from_le_bytes(raw[12..16].try_into().unwrap())).unwrap();
         assert!(20 + json_len >= raw.len(), "the fixture has a BIN chunk: the case isn't tested");

@@ -64,7 +64,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let out = dir.join("cache-entry");
         // not a STEP file: those run `current_exe() step-mesh`, the test binary under cargo test
-        let inp = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/rgb_ascii.pcd");
+        let inp = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/data/rgb_ascii.pcd");
         thumb(inp, out.to_str().unwrap(), 64, &tridi::LIGHT).unwrap();
         assert_eq!(&fs::read(&out).unwrap()[..8], b"\x89PNG\r\n\x1a\n");
     }
