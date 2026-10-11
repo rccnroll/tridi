@@ -6,6 +6,15 @@ that shipped it.
 
 ## Medium
 
+- [ ] The viewer as a crate (3.0): `tridi::show(["scan.pcd", "part.step"])`
+  from any Rust program, Open3D's `draw_geometries` style, with clouds
+  from memory too. The repo becomes a workspace: `tridi-formats` (the
+  readers, no dependencies, also usable next to rerun), `tridi-step`
+  (OpenCASCADE and its child process, started through `tridi::init()`
+  rather than `current_exe step-mesh`), `tridi` (the viewer) and
+  `tridi-cli` (the `tridi` binary, thumbnails, packaging). Thumbnails stay
+  out of the public API.
+
 - [ ] Keys from Open3D's viewer (its `PrintVisualizerHelp`), one by one. H help is done (2.5); picked next: P screenshot (the
   thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
   0-4, which clash with our 1-9 file toggles: Shift+0-4 or a C cycle),
