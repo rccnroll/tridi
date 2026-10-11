@@ -41,7 +41,7 @@ libocct-foundation-dev` on Debian/Ubuntu. Elsewhere, point `OCCT_INCLUDE_DIR`
 and `OCCT_LIB_DIR` at them. With `default-features = false` there is no STEP
 and no OpenCASCADE:
 
-    tridi = { version = "2", default-features = false }
+    tridi = { version = "3", default-features = false }
 
 ## Reading without a window
 

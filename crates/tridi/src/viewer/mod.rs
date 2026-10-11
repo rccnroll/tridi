@@ -75,6 +75,8 @@ pub enum ViewError {
     OtherThread,
     #[error("the window's event loop failed")]
     EventLoop(#[source] EventLoopError),
+    #[error("{name}: no points")]
+    EmptyCloud { name: String },
     /// a cloud given with more or fewer colors than points
     #[error("{name}: {colors} colors for {points} points")]
     ColorCount { name: String, points: usize, colors: usize },
@@ -173,9 +175,16 @@ impl Viewer {
     }
 
     /// Opens the window and blocks until it's closed. The files load in
-    /// parallel and show up as they're read, a STEP file solid by solid.
+    /// parallel and show up as they're read, a STEP file solid by solid;
+    /// the clouds from memory show at once. A cloud with no points, or with
+    /// colors that don't match its points, is an error before any window opens.
     pub fn show(self) -> ViewResult<Shown> {
         for s in &self.sources {
+            if let Source::Cloud { name, cloud } = s
+                && cloud.points.is_empty()
+            {
+                return Err(ViewError::EmptyCloud { name: name.clone() });
+            }
             if let Source::Cloud {
                 name,
                 cloud:
@@ -222,6 +231,12 @@ mod tests {
             matches!(&r, Err(ViewError::ColorCount { name, points: 3, colors: 2 }) if name == "c"),
             "{r:?}"
         );
+    }
+
+    #[test]
+    fn empty_cloud_is_an_error() {
+        let r = Viewer::new().cloud("x", &[], None).show();
+        assert!(matches!(&r, Err(ViewError::EmptyCloud { name }) if name == "x"), "{r:?}");
     }
 
     #[test]
