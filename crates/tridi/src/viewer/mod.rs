@@ -198,6 +198,8 @@ mod tests {
         use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
         let p = Path::new(OsStr::from_bytes(b"/tmp/\xff.pcd"));
         assert_eq!(load::label(p), "\u{fffd}.pcd");
+        // no file name at all: the path itself
+        assert_eq!(load::label(Path::new("/")), "/");
     }
 }
 

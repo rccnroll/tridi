@@ -66,7 +66,7 @@ impl Gl {
         // glutin-winit's error is a Box<dyn Error> without Send: keep its text
         .map_err(|e| ViewError::Window { message: e.to_string() })?;
         let window = window.ok_or_else(|| ViewError::Window {
-            message: "winit made none".to_owned(),
+            message: "no window was made".to_owned(),
         })?;
         let display = config.display();
         let handle = window
@@ -85,11 +85,11 @@ impl Gl {
         // SAFETY: the config, the window handle and the surface attributes
         // all come from this display and this window, which outlive them
         let (ctx, surface) = unsafe {
-            let ctx = display.create_context(&config, &attrs).map_err(gl_err("create the GL context"))?;
+            let ctx = display.create_context(&config, &attrs).map_err(gl_err("create the context"))?;
             let surface = display
                 .create_window_surface(&config, &sattrs)
-                .map_err(gl_err("create the GL surface"))?;
-            (ctx.make_current(&surface).map_err(gl_err("make the GL context current"))?, surface)
+                .map_err(gl_err("create the surface"))?;
+            (ctx.make_current(&surface).map_err(gl_err("make the context current"))?, surface)
         };
         if let Err(e) = surface.set_swap_interval(&ctx, SwapInterval::Wait(NonZeroU32::MIN)) {
             debug!("no vsync: {e}");
