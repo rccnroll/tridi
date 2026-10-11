@@ -63,6 +63,18 @@ time it opens.
 The package itself clears every user's cached thumbnails of these formats
 on install and upgrade.
 
+## Install with cargo
+
+    cargo install tridi-cli
+
+builds the `tridi` binary into `~/.cargo/bin`. It needs OpenCASCADE's
+headers and libraries for STEP, 7.6 or later: `opencascade` on Arch and
+Fedora, `libocct-data-exchange-dev libocct-ocaf-dev
+libocct-modeling-algorithms-dev libocct-modeling-data-dev
+libocct-foundation-dev` on Debian/Ubuntu. That is the viewer only: no
+thumbnails, desktop entry, MIME types or man pages, which only the packages
+install.
+
 ## File managers
 
 Every file manager that reads the freedesktop `.thumbnailer` files shows
@@ -107,6 +119,19 @@ the NVIDIA one: waking it costs seconds), and thumbnails fall back to
 llvmpipe inside Nautilus's sandbox, which has no GPU. `TRIDI_DEBUG=1`
 prints which device is used.
 
+## As a library
+
+The window is a crate too, for any Rust program on Linux, Open3D's
+`draw_geometries` style:
+
+    tridi::show(["scan.pcd", "part.step"])?;
+
+Clouds a program computed go in through `tridi::Viewer`; how, and how to
+build without STEP and OpenCASCADE, is in
+[crates/tridi/README.md](crates/tridi/README.md).
+The point cloud readers alone, with no window, are
+[tridi-formats](crates/tridi-formats).
+
 ## Develop
 
     cargo test                   # one test renders on llvmpipe (Mesa, no GPU)
@@ -122,8 +147,9 @@ a release is cut are in
 
 1.0 was Python + Open3D launched by `uv`, with an f3d-drawn thumbnailer,
 kept in dotfiles; this repository starts at 2.0, the Rust rewrite, which
-dropped STEP until 2.2 brought it back (through OpenCASCADE since 2.8). Up to 2.2.0 it was
-called pcdview (same tags, same history).
+dropped STEP until 2.2 brought it back (through OpenCASCADE since 2.8);
+3.0 split it into crates, so the viewer works from other programs. Up to
+2.2.0 it was called pcdview (same tags, same history).
 Why and how is in [docs/history.md](docs/history.md).
 
 ## License

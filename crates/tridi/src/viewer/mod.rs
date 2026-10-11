@@ -75,6 +75,7 @@ pub enum ViewError {
     OtherThread,
     #[error("the window's event loop failed")]
     EventLoop(#[source] EventLoopError),
+    /// a cloud given with no points
     #[error("{name}: no points")]
     EmptyCloud { name: String },
     /// a cloud given with more or fewer colors than points

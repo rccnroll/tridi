@@ -108,8 +108,9 @@ impl Loaded {
 }
 
 /// Hands the clouds to the event loop at once and reads the files on as many
-/// threads as there are cores, each sent to the event loop as it's ready. A file's tint is its place on the command line,
-/// so it doesn't change with the order they finish in. Once `stop` is set
+/// threads as there are cores, each sent to the event loop as it's ready. A
+/// file's tint is its place on the command line, so it doesn't change with
+/// the order they finish in. Once `stop` is set
 /// (the window closed) each thread ends: before its next file, or within a
 /// STEP file, whose helper is killed.
 pub(crate) fn load_all(

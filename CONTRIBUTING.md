@@ -25,6 +25,7 @@ Before pushing, what CI checks on every push and PR:
     cargo fmt --check
     cargo clippy --workspace --all-targets --locked -- -D warnings
     cargo test --workspace --locked
+    cargo publish --workspace --dry-run --locked
 
 plus `cargo check --workspace` on the oldest Rust supported, 1.92 (`rust-version` in
 `Cargo.toml`).
@@ -74,8 +75,8 @@ way, down this list, and nothing depends on `tridi-cli`:
   ones included, in the current theme before hicolor, so without them
   Papirus users get its generic file icon.
 - `packaging/` — the PKGBUILD and the `.deb` build (cargo-deb, metadata in
-  `Cargo.toml`) with their install scripts, and the licenses of the fonts
-  egui builds into the binary.
+  `crates/tridi-cli/Cargo.toml`) with their install scripts, and the
+  licenses of the fonts egui builds into the binary.
 - `tests/data/` — tiny fixtures: PCD and GLB written by Open3D, STEP by
   hand.
 - `fuzz/` — cargo-fuzz targets for the readers, and their seeds.
@@ -107,8 +108,13 @@ ROADMAP.md (open), not in the commit.
 
 ## Releases
 
-1. Set the version in `Cargo.toml` and the PKGBUILD's `pkgver`, then
-   `cargo check` (for `Cargo.lock`), and add
+1. Set the version in `Cargo.toml`, in `[workspace.package]` and in the
+   `version = "..."` of the internal crates in `[workspace.dependencies]`
+   (one sed changes both), and the PKGBUILD's `pkgver`:
+
+       sed -i 's/version = "2.8.0"/version = "3.0.0"/' Cargo.toml
+
+   then `cargo check` (for `Cargo.lock`), and add
    `<release version="X.Y.Z" date="YYYY-MM-DD"/>` on top of `<releases>` in
    `share/metainfo/io.github.rccnroll.tridi.metainfo.xml`.
 2. Add this release under the changelog's header (`--prepend` would
@@ -121,5 +127,8 @@ ROADMAP.md (open), not in the commit.
    `git tag vX.Y.Z && git push origin main vX.Y.Z`.
 4. The Release workflow builds both packages and opens a draft release
    with them and this version's changelog. Edit the notes, publish.
-5. In `packaging/aur/PKGBUILD`, set `pkgver` and run `updpkgsums` (the
+5. `cargo publish --workspace --locked` publishes `tridi-formats`,
+   `tridi-step`, `tridi` and `tridi-cli`, dependencies first. CI's dry run has already packaged and built
+   them.
+6. In `packaging/aur/PKGBUILD`, set `pkgver` and run `updpkgsums` (the
    tag's tarball now exists), commit `build(aur): X.Y.Z`.
