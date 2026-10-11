@@ -10,8 +10,9 @@ that shipped it.
   from any Rust program, Open3D's `draw_geometries` style, with clouds
   from memory too. The repo becomes a workspace: `tridi-formats` (the
   readers, no dependencies, also usable next to rerun), `tridi-step`
-  (OpenCASCADE and its child process, started through `tridi::init()`
-  rather than `current_exe step-mesh`), `tridi` (the viewer) and
+  (OpenCASCADE in a small helper program embedded in the crate and run
+  from memory, so a host program has nothing to call or install),
+  `tridi` (the viewer) and
   `tridi-cli` (the `tridi` binary, thumbnails, packaging). Thumbnails stay
   out of the public API.
 
