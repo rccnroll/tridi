@@ -82,7 +82,7 @@ pub const FOV: f32 = 45.0;
 
 /// One opened file, ready for the GPU: a colored cloud or a mesh.
 pub enum Input {
-    Points(Vec<Vec3>, Vec<Vec3>),
+    Points(Vec<[f32; 3]>, Vec<[f32; 3]>),
     Mesh(CpuModel),
 }
 
@@ -146,6 +146,8 @@ impl Scene {
         let layer = match input {
             Input::Points(p, c) => {
                 let ctx = &self.ctx;
+                let p: Vec<Vec3> = p.into_iter().map(Vec3::from).collect();
+                let c: Vec<Vec3> = c.into_iter().map(Vec3::from).collect();
                 self.bb.expand(&p);
                 let n = i32::try_from(p.len()).map_err(|_err| RenderError::TooManyPoints { count: p.len() })?;
                 Layer::Points {

@@ -60,7 +60,7 @@ mod tests {
     use crate::render::{Input, headless, quiet_stderr};
     use glutin::api::egl::device::Device;
     use std::env;
-    use three_d::{Vec3, vec3};
+    use three_d::Vec3;
 
     // a thumbnail on llvmpipe (no GPU needed): right size, not all
     // background, and not upside down (a heavy blob at the top, Z up)
@@ -69,11 +69,11 @@ mod tests {
         // SAFETY: tests in this binary don't read this variable concurrently
         unsafe { env::set_var("TRIDI_EGL_DEVICE", software_device().to_string()) };
         let (ctx, _keep) = headless().unwrap();
-        let mut pts: Vec<Vec3> = (0..50_u16)
-            .flat_map(|row| (0..40_u16).map(move |col| vec3(f32::from(col) / 40.0 - 0.5, f32::from(row) / 50.0 - 0.5, 1.0)))
+        let mut pts: Vec<[f32; 3]> = (0..50_u16)
+            .flat_map(|row| (0..40_u16).map(move |col| [f32::from(col) / 40.0 - 0.5, f32::from(row) / 50.0 - 0.5, 1.0]))
             .collect();
-        pts.extend((0..20_u16).map(|i| vec3(0.0, 0.0, f32::from(i) / 20.0)));
-        let cols = vec![vec3(0.0, 0.0, 0.0); pts.len()];
+        pts.extend((0..20_u16).map(|i| [0.0, 0.0, f32::from(i) / 20.0]));
+        let cols = vec![[0.0; 3]; pts.len()];
         let scene = Scene::new(&ctx, vec![Input::Points(pts, cols)], false, Vec3::unit_z()).unwrap();
         let img = offscreen(&ctx, &scene, 64, [1.0, 1.0, 1.0]);
         assert_eq!(img.len(), 64 * 64 * 4);

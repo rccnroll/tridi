@@ -3,9 +3,7 @@
 
 // ========================================== Imports ========================================== {{{
 
-use three_d::vec3;
-
-use crate::formats::{Cloud, Field, FormatError, FormatResult, Scalar, key, narrow, split_header};
+use crate::{Cloud, Field, FormatError, FormatResult, Scalar, key, narrow, split_header};
 
 // }}}
 
@@ -58,9 +56,9 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
     let mut points = Vec::with_capacity(cap);
     let mut colors = rgb.map(|_| Vec::with_capacity(cap));
     let mut push = |v: &dyn Fn(&Field) -> f64| {
-        points.push(vec3(narrow(v(fx)), narrow(v(fy)), narrow(v(fz))));
+        points.push([narrow(v(fx)), narrow(v(fy)), narrow(v(fz))]);
         if let (Some([r, g, b]), Some(cols)) = (rgb, &mut colors) {
-            cols.push(vec3(unit(r, v(r)), unit(g, v(g)), unit(b, v(b))));
+            cols.push([unit(r, v(r)), unit(g, v(g)), unit(b, v(b))]);
         }
     };
     // faces: an optional `element face M` right after vertex, whose only
@@ -199,7 +197,7 @@ fn ply_type(t: &str) -> Result<Scalar, String> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        formats::load_cloud,
+        load_cloud,
         test_support::{close, tmp},
     };
 

@@ -2,9 +2,7 @@
 
 // ========================================== Imports ========================================== {{{
 
-use three_d::vec3;
-
-use crate::formats::Cloud;
+use crate::Cloud;
 
 // }}}
 
@@ -28,11 +26,11 @@ pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
             Err(_) => continue,
         };
         let [x, y, z, ref rest @ ..] = *t.as_slice() else { continue };
-        points.push(vec3(x, y, z));
+        points.push([x, y, z]);
         let c = match (ext, rest) {
-            ("xyzrgb", &[r, g, b, ..]) => Some(vec3(r, g, b)),
+            ("xyzrgb", &[r, g, b, ..]) => Some([r, g, b]),
             // x y z intensity r g b, or x y z r g b
-            ("pts", &([_, r, g, b, ..] | [r, g, b])) => Some(vec3(r, g, b) / 255.0),
+            ("pts", &([_, r, g, b, ..] | [r, g, b])) => Some([r, g, b].map(|v| v / 255.0)),
             _ => None,
         };
         match c {
@@ -55,7 +53,7 @@ pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
 #[cfg(test)]
 mod tests {
     use crate::{
-        formats::load_cloud,
+        load_cloud,
         test_support::{close, tmp},
     };
 

@@ -2,9 +2,7 @@
 
 // ========================================== Imports ========================================== {{{
 
-use three_d::vec3;
-
-use crate::formats::{Cloud, FormatError, FormatResult};
+use crate::{Cloud, FormatError, FormatResult};
 
 // }}}
 
@@ -56,13 +54,13 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
         let [x, y, z, ref rgb @ ..] = *t.as_slice() else {
             return Err("OFF vertex line too short".into());
         };
-        points.push(vec3(x, y, z));
+        points.push([x, y, z]);
         if let Some(cols) = &mut colors {
             let [r, g, b, ..] = *rgb else {
                 return Err("COFF vertex without color".into());
             };
             let k = if [r, g, b].iter().any(|&v| v > 1.0) { 255.0 } else { 1.0 };
-            cols.push(vec3(r, g, b) / k);
+            cols.push([r, g, b].map(|v| v / k));
         }
     }
     if points.len() < n {

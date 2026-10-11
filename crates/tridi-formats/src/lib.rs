@@ -1,12 +1,29 @@
-//! Point cloud readers for pcd, ply, off and xyz/xyzrgb/pts: what Nautilus
-//! hands the thumbnailer, so every byte is untrusted. The leaf of the crate:
-//! nothing here depends on the rest of tridi.
+//! Point cloud readers: PCD (ascii, binary, `binary_compressed`), PLY with or
+//! without faces, OFF/COFF, and the text formats xyz, xyzrgb, pts. Every byte
+//! is untrusted: the readers are fuzzed (`fuzz/` in the repository), never
+//! panic, and never allocate past what the file's size allows.
+
+// ======================================= Lint Settings ======================================= {{{
+
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        reason = "a test may panic: that is its failure"
+    )
+)]
+
+// }}}
 
 // ======================================== Sub-modules ======================================== {{{
 
 mod off;
 mod pcd;
 mod ply;
+#[cfg(test)]
+mod test_support;
 mod text;
 
 // }}}
@@ -14,7 +31,6 @@ mod text;
 // ========================================== Imports ========================================== {{{
 
 use std::{fs, io, path::Path};
-use three_d::{Vec3, vec3};
 
 // }}}
 
@@ -43,9 +59,9 @@ pub type FormatResult<T> = Result<T, FormatError>;
 
 /// A cloud read from a file, before any coloring.
 pub struct Cloud {
-    pub points: Vec<Vec3>,
+    pub points: Vec<[f32; 3]>,
     /// 0..1, one per point, only if the file has them
-    pub colors: Option<Vec<Vec3>>,
+    pub colors: Option<Vec<[f32; 3]>>,
     /// triangles as index triples, for ply/off files that have faces
     pub faces: Option<Vec<u32>>,
 }
@@ -67,11 +83,7 @@ pub fn parse_cloud(raw: &[u8], ext: &str) -> FormatResult<Cloud> {
     };
     // NaNs: PCL organized clouds mark missing points that way (a mesh keeps
     // them, or its indices would shift)
-    let keep: Vec<bool> = c
-        .points
-        .iter()
-        .map(|p| p.x.is_finite() && p.y.is_finite() && p.z.is_finite())
-        .collect();
+    let keep: Vec<bool> = c.points.iter().map(|p| p.iter().all(|v| v.is_finite())).collect();
     if c.faces.is_none() && keep.contains(&false) {
         let mut k = keep.iter();
         c.points.retain(|_| k.next().is_some_and(|&kept| kept));
@@ -266,9 +278,9 @@ pub(crate) fn narrow(v: f64) -> f32 {
 }
 
 /// rgb packed in 32 bits (PCL writes it as a float, `Open3D` as U4) -> 0..1
-pub(crate) fn unpack_rgb(bits: u32) -> Vec3 {
+pub(crate) fn unpack_rgb(bits: u32) -> [f32; 3] {
     let c = |s: u32| f32::from(u8::try_from((bits >> s) & 255).unwrap_or(0)) / 255.0;
-    vec3(c(16), c(8), c(0))
+    [c(16), c(8), c(0)]
 }
 
 // }}}

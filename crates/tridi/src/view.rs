@@ -209,7 +209,7 @@ fn load_all(paths: &[String], theme: &'static Theme, proxy: &EventLoopProxy<Load
 fn ready(item: Item, tint: Option<[f32; 3]>, theme: &Theme) -> Ready {
     match item {
         Item::Cloud(c) => Ready {
-            bb: bbox(c.points.iter().copied()),
+            bb: bbox(c.points.iter().copied().map(Vec3::from)),
             // the legend shows the tint only if it's what the points get
             tint: tint.filter(|_| tridi::own_colors(&c, tint).is_none()),
             count: c.points.len(),

@@ -4,8 +4,9 @@
 // ========================================== Imports ========================================== {{{
 
 use three_d::Vec3;
+use tridi_formats::Cloud;
 
-use crate::{formats::Cloud, theme::Theme};
+use crate::theme::Theme;
 
 // }}}
 
@@ -15,7 +16,7 @@ use crate::{formats::Cloud, theme::Theme};
 /// open (`tint` given) one color for every point (our scans' grey rgb) says
 /// nothing, and two of them overlapping would look like one cloud.
 #[must_use]
-pub fn own_colors(c: &Cloud, tint: Option<[f32; 3]>) -> Option<&[Vec3]> {
+pub fn own_colors(c: &Cloud, tint: Option<[f32; 3]>) -> Option<&[[f32; 3]]> {
     c.colors
         .as_deref()
         .filter(|v| tint.is_none() || !(v.len() > 1 && v.windows(2).all(|w| w.first() == w.last())))
@@ -23,17 +24,20 @@ pub fn own_colors(c: &Cloud, tint: Option<[f32; 3]>) -> Option<&[Vec3]> {
 
 /// The file's colors if kept (see `own_colors`), else `tint` flat, else the Z ramp.
 #[must_use]
-pub fn colorize(c: &Cloud, tint: Option<[f32; 3]>, theme: &Theme) -> Vec<Vec3> {
+pub fn colorize(c: &Cloud, tint: Option<[f32; 3]>, theme: &Theme) -> Vec<[f32; 3]> {
     if let Some(cols) = own_colors(c, tint) {
         return cols.to_vec();
     }
     if let Some(t) = tint {
-        return vec![Vec3::from(t); c.points.len()];
+        return vec![t; c.points.len()];
     }
-    let (lo, hi) = c.points.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| (lo.min(p.z), hi.max(p.z)));
+    let (lo, hi) = c
+        .points
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(lo, hi), p| (lo.min(p[2]), hi.max(p[2])));
     let span = if hi > lo { hi - lo } else { 1.0 };
     let [a, b] = theme.ramp.map(Vec3::from);
-    c.points.iter().map(|p| a + (b - a) * ((p.z - lo) / span)).collect()
+    c.points.iter().map(|&p| (a + (b - a) * ((p[2] - lo) / span)).into()).collect()
 }
 
 // }}}
@@ -44,11 +48,11 @@ pub fn colorize(c: &Cloud, tint: Option<[f32; 3]>, theme: &Theme) -> Vec<Vec3> {
 mod tests {
     use super::*;
     use crate::{
-        formats::load_cloud,
         test_support::{ascii_pcd, close, tmp},
         theme::LIGHT,
     };
     use std::path::Path;
+    use tridi_formats::load_cloud;
 
     // 1. a single file, no colors -> height ramp, bottom to top
     #[test]
@@ -118,11 +122,7 @@ mod tests {
     #[test]
     fn flat_cloud() {
         let c = load_cloud(&tmp("flat.pcd", &ascii_pcd(&[[0.0; 3]; 10]))).unwrap();
-        assert!(
-            colorize(&c, None, &LIGHT)
-                .iter()
-                .all(|v| v.x.is_finite() && v.y.is_finite() && v.z.is_finite())
-        );
+        assert!(colorize(&c, None, &LIGHT).iter().all(|v| v.iter().all(|x| x.is_finite())));
     }
 }
 

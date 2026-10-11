@@ -9,8 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-three-d = { version = "0.19", default-features = false }
-thiserror = "2"
+tridi-formats = { path = "../crates/tridi-formats" }
 
 # its own workspace: the fuzz build (nightly, sanitizers) stays out of tridi's
 [workspace]

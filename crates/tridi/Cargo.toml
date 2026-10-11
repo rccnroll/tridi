@@ -27,6 +27,7 @@ thiserror.workspace = true
 eyre.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+tridi-formats.workspace = true
 
 # the STEP child's OpenCASCADE side (build.rs)
 [build-dependencies]

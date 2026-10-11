@@ -3,7 +3,6 @@
 // ========================================== Imports ========================================== {{{
 
 use std::{env, fmt::Write, fs, path::PathBuf, process};
-use three_d::{InnerSpace, Vec3};
 
 // }}}
 
@@ -28,8 +27,8 @@ pub fn ascii_pcd(pts: &[[f32; 3]]) -> Vec<u8> {
     s.into_bytes()
 }
 
-pub fn close(a: Vec3, b: [f32; 3]) -> bool {
-    (a - Vec3::from(b)).magnitude() < 1e-3
+pub fn close(a: [f32; 3], b: [f32; 3]) -> bool {
+    a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum::<f32>().sqrt() < 1e-3
 }
 
 // }}}

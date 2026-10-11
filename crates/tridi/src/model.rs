@@ -7,11 +7,9 @@
 use std::{panic, path::Path};
 use three_d::{CpuMaterial, CpuModel, Mat4, Srgba, Vec3};
 use three_d_asset::{Geometry, Indices, Positions, Primitive, TriMesh, io};
+use tridi_formats::{Cloud, FormatError, load_cloud};
 
-use crate::{
-    formats::{Cloud, FormatError, load_cloud},
-    step::{self, Purpose, StepError},
-};
+use crate::step::{self, Purpose, StepError};
 
 // }}}
 
@@ -171,9 +169,9 @@ fn load_asset(path: &Path, ext: &str) -> LoadResult<CpuModel> {
 }
 
 fn from_faces(c: Cloud) -> CpuModel {
-    let colors = c.colors.map(|v| v.iter().map(|c| Srgba::from([c.x, c.y, c.z, 1.0])).collect());
+    let colors = c.colors.map(|v| v.iter().map(|c| Srgba::from([c[0], c[1], c[2], 1.0])).collect());
     model(TriMesh {
-        positions: Positions::F32(c.points),
+        positions: Positions::F32(c.points.into_iter().map(Vec3::from).collect()),
         indices: Indices::U32(c.faces.unwrap_or_default()),
         colors,
         ..Default::default()

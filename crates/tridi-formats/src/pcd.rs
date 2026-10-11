@@ -2,9 +2,7 @@
 
 // ========================================== Imports ========================================== {{{
 
-use three_d::vec3;
-
-use crate::formats::{Cloud, Field, FormatError, FormatResult, Scalar, key, narrow, split_header, unpack_rgb};
+use crate::{Cloud, Field, FormatError, FormatResult, Scalar, key, narrow, split_header, unpack_rgb};
 
 // }}}
 
@@ -54,7 +52,7 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
                     continue;
                 }
                 let v = |f: &Field| t.get(f.col).and_then(|s| s.parse::<f32>().ok()).unwrap_or(f32::NAN);
-                points.push(vec3(v(fx), v(fy), v(fz)));
+                points.push([v(fx), v(fy), v(fz)]);
                 if let (Some(f), Some(cols)) = (frgb, &mut colors) {
                     let word = t.get(f.col).copied().unwrap_or("");
                     let bits = if f.kind.is_float() {
@@ -101,7 +99,7 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
             };
             for i in 0..n {
                 let v = |f: &Field| f.kind.read(at(i, f), false).map_or(f32::NAN, narrow);
-                points.push(vec3(v(fx), v(fy), v(fz)));
+                points.push([v(fx), v(fy), v(fz)]);
                 if let (Some(f), Some(cols)) = (frgb, &mut colors) {
                     let b = at(i, f);
                     // a 4-byte rgb is the packed bits, whatever its TYPE says
@@ -201,7 +199,7 @@ fn lzf(inp: &[u8], out_len: usize) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
     use crate::{
-        formats::load_cloud,
+        load_cloud,
         test_support::{close, tmp},
     };
 
