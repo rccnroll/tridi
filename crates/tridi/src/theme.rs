@@ -44,6 +44,7 @@ pub const THEMES: [&Theme; 2] = [&LIGHT, &DARK];
 
 /// The colors of a look: background, height ramp, one tint per file when
 /// several are open, and the color of meshes without a material.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Theme {
     pub name: &'static str,
     pub bg: [f32; 3],
@@ -57,6 +58,13 @@ impl Theme {
     #[must_use]
     pub fn by_name(name: &str) -> Option<&'static Theme> {
         THEMES.into_iter().find(|t| t.name == name)
+    }
+
+    /// Whether the background is dark, by its luminance (Rec. 709 weights):
+    /// it picks the panels' dark or light look, a custom theme's too.
+    pub(crate) fn is_dark(&self) -> bool {
+        let [r, g, b] = self.bg;
+        0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5
     }
 }
 
@@ -83,6 +91,13 @@ mod tests {
             assert!(t.palette.iter().all(|&c| far(c)), "{}: tint too close to the background", t.name);
             assert!(far(t.mesh), "{}: mesh color too close to the background", t.name);
         }
+    }
+
+    #[test]
+    fn dark_panels_on_a_dark_background() {
+        assert!(!LIGHT.is_dark() && DARK.is_dark());
+        let black = Theme { bg: [0.0; 3], ..LIGHT };
+        assert!(black.is_dark(), "a custom dark theme");
     }
 }
 

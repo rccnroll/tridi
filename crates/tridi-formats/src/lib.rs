@@ -38,6 +38,7 @@ use std::{fs, io, path::Path};
 
 /// Why a file isn't a cloud we can read.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum FormatError {
     #[error("cannot read the file")]
     Io(#[source] io::Error),
@@ -58,6 +59,7 @@ pub type FormatResult<T> = Result<T, FormatError>;
 // =========================================== Cloud =========================================== {{{
 
 /// A cloud read from a file, before any coloring.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Cloud {
     pub points: Vec<[f32; 3]>,
     /// 0..1, one per point, only if the file has them
@@ -309,31 +311,31 @@ mod tests {
     #[test]
     fn lying_headers_are_errors() {
         let pcd = b"FIELDS x y z rgb\nSIZE 4 4 4 4\nTYPE F F F U\nCOUNT 1 1 1 0\nPOINTS 1\nDATA ascii\n0 0 0\n";
-        assert!(parse_cloud(pcd, "pcd").is_err());
+        parse_cloud(pcd, "pcd").unwrap_err();
         let pcd = b"FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nPOINTS 999999999999999999\nDATA ascii\n0 0 0\n";
         assert_eq!(parse_cloud(pcd, "pcd").unwrap().points.len(), 1);
         let ply = b"ply\nformat ascii 1.0\nelement vertex 999999999999999999\nproperty float x\nproperty float y\nproperty float z\n\
                     element face 999999999999999999\nproperty list uchar int vertex_indices\nend_header\n0 0 0\n";
         assert!(parse_cloud(ply, "ply").is_ok_and(|c| c.points.len() == 1));
-        assert!(parse_cloud(b"OFF\n999999999999999999 999999999999999999 0\n0 0 0\n", "off").is_err());
+        parse_cloud(b"OFF\n999999999999999999 999999999999999999 0\n0 0 0\n", "off").unwrap_err();
     }
 
     // 6. unreadable file -> an error, not an empty window
     #[test]
     fn unreadable_is_error() {
-        assert!(load_cloud(&tmp("bad.pcd", b"not a point cloud\n")).is_err());
-        assert!(load_cloud(&tmp("bad.ply", b"not a point cloud\n")).is_err());
-        assert!(load_cloud(&tmp("empty.xyz", b"hello\n")).is_err());
-        assert!(load_cloud(&tmp("x.foo", b"1 2 3\n")).is_err());
+        load_cloud(&tmp("bad.pcd", b"not a point cloud\n")).unwrap_err();
+        load_cloud(&tmp("bad.ply", b"not a point cloud\n")).unwrap_err();
+        load_cloud(&tmp("empty.xyz", b"hello\n")).unwrap_err();
+        load_cloud(&tmp("x.foo", b"1 2 3\n")).unwrap_err();
         // truncated binary and garbage LZF must not panic
         let mut b = b"FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nPOINTS 10\nDATA binary\n".to_vec();
         b.extend([0_u8; 20]);
-        assert!(load_cloud(&tmp("short.pcd", &b)).is_err());
+        load_cloud(&tmp("short.pcd", &b)).unwrap_err();
         let mut z = b"FIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nPOINTS 2\nDATA binary_compressed\n".to_vec();
         z.extend(8_u32.to_le_bytes());
         z.extend(24_u32.to_le_bytes());
         z.extend([0xff; 8]);
-        assert!(load_cloud(&tmp("lzf.pcd", &z)).is_err());
+        load_cloud(&tmp("lzf.pcd", &z)).unwrap_err();
     }
 }
 

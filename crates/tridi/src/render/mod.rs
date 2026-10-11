@@ -32,6 +32,7 @@ use std::env;
 
 /// Why drawing couldn't start.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum RenderError {
     #[error("no usable EGL device")]
     NoDevice,

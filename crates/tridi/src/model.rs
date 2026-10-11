@@ -18,6 +18,7 @@ use tridi_step::{StepError, StepMesh};
 
 /// Why a file couldn't be opened.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum LoadError {
     #[error(transparent)]
     Format(#[from] FormatError),
@@ -39,7 +40,7 @@ pub enum LoadError {
     NoMesh,
 }
 
-pub type LoadResult<T> = Result<T, LoadError>;
+pub(crate) type LoadResult<T> = Result<T, LoadError>;
 
 // }}}
 
@@ -47,10 +48,11 @@ pub type LoadResult<T> = Result<T, LoadError>;
 
 /// What a file is read for: it sets how a STEP file is tessellated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Purpose {
+pub(crate) enum Purpose {
     /// the window: a fine pass, then a coarse one for what it missed
     View,
     /// a thumbnail: coarse, and what came in 15 s
+    #[cfg_attr(not(feature = "thumbnail"), expect(dead_code, reason = "only the thumbnailer reads for one"))]
     Thumbnail,
 }
 
@@ -189,12 +191,10 @@ fn load_asset(path: &Path, ext: &str) -> LoadResult<CpuModel> {
         raw.insert(&key, bytes);
     }
     // three-d-asset panics on some files (unwrap on a .obj that isn't UTF-8):
-    // make it an error, quietly, so the other files still open
-    // ponytail: the panic hook is global; fine single-threaded, parallel tests may lose a message
-    let hook = panic::take_hook();
-    panic::set_hook(Box::new(|_| {}));
+    // make it an error so the other files still open
+    // ponytail: the panic message still reaches stderr through the host's hook; the hook is
+    // global and the loaders run in parallel, so it isn't swapped for a quiet one
     let r = panic::catch_unwind(panic::AssertUnwindSafe(|| raw.deserialize::<CpuModel>(&key)));
-    panic::set_hook(hook);
     #[expect(clippy::map_err_ignore, reason = "the panic payload says nothing a user can act on")]
     let model = r.map_err(|_| LoadError::Panicked { ext: ext.to_owned() })?;
     model.map_err(asset)

@@ -51,6 +51,7 @@ Window:
 
 /// Why the window couldn't show.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum ViewError {
     #[error("no file to show")]
     Empty,
@@ -81,9 +82,9 @@ pub enum ViewError {
     /// a cloud given with more or fewer colors than points
     #[error("{name}: {colors} colors for {points} points")]
     ColorCount { name: String, points: usize, colors: usize },
-    /// every file failed; each one's error is in the log
+    /// Every file failed: each one's name, and why.
     #[error("no file could be opened")]
-    NothingOpened,
+    NothingOpened { failed: Vec<(String, LoadError)> },
 }
 
 pub type ViewResult<T> = Result<T, ViewError>;
@@ -94,6 +95,7 @@ pub type ViewResult<T> = Result<T, ViewError>;
 
 /// What the window showed: the files that failed, and why.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct Shown {
     pub failed: Vec<(String, LoadError)>,
 }
@@ -136,13 +138,26 @@ impl Viewer {
 
     /// A cloud from memory, shown as a file would be: `name` in the legend.
     /// `colors`, if given, must have one per point: `show()` says if not.
+    /// Points that aren't finite (NaN, as PCL marks missing ones) are
+    /// dropped with their colors, as from a file.
     #[must_use]
     pub fn cloud(mut self, name: &str, points: &[[f32; 3]], colors: Option<&[[f32; 3]]>) -> Self {
+        let finite = |p: &&[f32; 3]| p.iter().all(|v| v.is_finite());
+        // colors that don't match are kept as given, unfiltered, so that
+        // `show()` reports the counts the caller passed
+        let (points, colors) = match colors {
+            Some(c) if c.len() == points.len() => {
+                let (p, c) = points.iter().zip(c).filter(|(p, _)| finite(p)).unzip();
+                (p, Some(c))
+            }
+            Some(c) => (points.to_vec(), Some(c.to_vec())),
+            None => (points.iter().filter(finite).copied().collect(), None),
+        };
         self.sources.push(Source::Cloud {
             name: name.to_owned(),
             cloud: Cloud {
-                points: points.to_vec(),
-                colors: colors.map(<[_]>::to_vec),
+                points,
+                colors,
                 faces: None,
             },
         });
@@ -179,6 +194,12 @@ impl Viewer {
     /// parallel and show up as they're read, a STEP file solid by solid;
     /// the clouds from memory show at once. A cloud with no points, or with
     /// colors that don't match its points, is an error before any window opens.
+    ///
+    /// While the window opens, the process's stderr (fd 2) is pointed at
+    /// /dev/null for a moment, to silence what Mesa prints about each GPU it
+    /// has no driver for: whatever another thread writes to stderr then is
+    /// lost. `TRIDI_DEBUG` set in the environment, to any value, leaves
+    /// stderr alone.
     pub fn show(self) -> ViewResult<Shown> {
         for s in &self.sources {
             if let Source::Cloud { name, cloud } = s
@@ -211,7 +232,8 @@ impl Viewer {
     }
 }
 
-/// [`Viewer`] with these files and the defaults.
+/// [`Viewer`] with these files and the defaults. stderr is silenced for a
+/// moment while the window opens, as [`Viewer::show`] says.
 pub fn show<I: IntoIterator<Item = P>, P: AsRef<Path>>(paths: I) -> ViewResult<Shown> {
     Viewer::new().files(paths).show()
 }
@@ -232,6 +254,24 @@ mod tests {
             matches!(&r, Err(ViewError::ColorCount { name, points: 3, colors: 2 }) if name == "c"),
             "{r:?}"
         );
+    }
+
+    #[test]
+    fn non_finite_points_are_dropped() {
+        let nan = [f32::NAN, 0.0, 0.0];
+        let points = [nan, [1.0; 3], [0.0, f32::INFINITY, 0.0], [2.0; 3]];
+        let v = Viewer::new().cloud("c", &points, Some(&[[0.1; 3], [0.2; 3], [0.3; 3], [0.4; 3]]));
+        assert!(
+            matches!(&v.sources[..], [Source::Cloud { cloud, .. }]
+                if cloud.points == [[1.0; 3], [2.0; 3]] && cloud.colors == Some(vec![[0.2; 3], [0.4; 3]])),
+            "the finite points and their colors"
+        );
+        // nothing left: no points
+        let r = Viewer::new().cloud("n", &[nan], None).show();
+        assert!(matches!(&r, Err(ViewError::EmptyCloud { name }) if name == "n"), "{r:?}");
+        // a wrong color count is told as given, NaNs and all
+        let r = Viewer::new().cloud("w", &[nan, [1.0; 3]], Some(&[[0.1; 3]])).show();
+        assert!(matches!(&r, Err(ViewError::ColorCount { points: 2, colors: 1, .. })), "{r:?}");
     }
 
     #[test]

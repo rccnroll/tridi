@@ -155,9 +155,11 @@ impl Gl {
         let scene = Scene::new(&context, vec![input], true, up)?;
         let cam = scene.camera(viewport(&window));
         let gui = GUI::new(&context);
-        let dark = theme.name == "dark";
-        gui.context()
-            .set_visuals(if dark { egui::Visuals::dark() } else { egui::Visuals::light() });
+        gui.context().set_visuals(if theme.is_dark() {
+            egui::Visuals::dark()
+        } else {
+            egui::Visuals::light()
+        });
         Ok(Self {
             scene,
             gui,

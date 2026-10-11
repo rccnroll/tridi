@@ -51,6 +51,7 @@ const NO_SOLID: i32 = 2;
 
 /// Why a STEP file gave no triangles.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum StepError {
     /// The helper couldn't be put anywhere it can run.
     #[error("cannot set up the STEP helper")]

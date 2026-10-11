@@ -9,7 +9,7 @@ use std::{
     error::Error,
     fmt,
     io::Write,
-    iter,
+    iter, mem,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -218,8 +218,9 @@ impl App {
             }
         }
         if self.pending == 0 && self.gl.is_none() {
-            // each file that failed was reported as it was read
-            self.err = Some(ViewError::NothingOpened);
+            self.err = Some(ViewError::NothingOpened {
+                failed: mem::take(&mut self.failed),
+            });
             event_loop.exit();
         }
         self.request_redraw();

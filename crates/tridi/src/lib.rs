@@ -33,7 +33,7 @@ mod viewer;
 
 // ======================================== Re-exports ========================================= {{{
 
-pub use model::{LoadError, LoadResult, Purpose};
+pub use model::LoadError;
 pub use render::RenderError;
 pub use theme::{DARK, LIGHT, THEMES, Theme};
 #[cfg(feature = "thumbnail")]
@@ -46,7 +46,7 @@ pub use viewer::{APP_ID, KEYS, Shown, ViewError, ViewResult, Viewer, show};
 
 // for the modules: `crate::Scene`, not `crate::render::Scene`
 use color::{colorize, own_colors};
-use model::{Item, is_gltf, load, triangles, up_for};
+use model::{Item, LoadResult, Purpose, is_gltf, load, triangles, up_for};
 use render::{FOV, Input, Scene, px_f32, quiet_stderr};
 
 // }}}
