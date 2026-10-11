@@ -65,8 +65,10 @@ fn main() {
         .arg(&out);
     if let Some(dir) = &lib {
         cmd.arg(format!("-L{}", dir.display()));
-        // a non-standard OCCT_LIB_DIR is found at run time too
-        cmd.arg(format!("-Wl,-rpath,{}", dir.display()));
+    }
+    // a non-standard OCCT_LIB_DIR is found at run time too; the distributions' dirs need no rpath
+    if let Some(dir) = env::var_os("OCCT_LIB_DIR") {
+        cmd.arg(format!("-Wl,-rpath,{}", Path::new(&dir).display()));
     }
     let new = lib.as_ref().is_none_or(|d| d.join("libTKDESTEP.so").exists());
     for l in LIBS.iter().chain(if new { STEP_NEW } else { STEP_OLD }) {

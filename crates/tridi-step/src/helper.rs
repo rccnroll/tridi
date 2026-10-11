@@ -34,6 +34,9 @@ const NAME: &CStr = c"tridi-step-helper";
 /// The helper's exit code without arguments (sysexits.h's `EX_USAGE`).
 const USAGE: i32 = 64;
 
+/// The exit code of the dynamic loader when a shared library is missing.
+const NO_LIBRARY: i32 = 127;
+
 /// How often a busy executable is tried: a fork in another thread can hold
 /// a copy of the write fd of a file just written, until that child execs.
 const BUSY_TRIES: u32 = 10;
@@ -67,10 +70,11 @@ pub(crate) fn command() -> io::Result<Command> {
 }
 
 /// Memory first; the cache, then our own directory in the temp dir, where
-/// memory can't run.
+/// memory can't run. OpenCASCADE missing stops the search: it's missing
+/// from every place.
 fn place() -> io::Result<Place> {
     match memory() {
-        Ok(fd) if runs(Path::new(&fd_path(&fd))) => return Ok(Place::Memory(fd)),
+        Ok(fd) if runs(Path::new(&fd_path(&fd)))? => return Ok(Place::Memory(fd)),
         Ok(_) => debug!("the helper can't run from memory"),
         Err(e) => debug!("no in-memory file for the helper: {e}"),
     }
@@ -84,7 +88,7 @@ fn place() -> io::Result<Place> {
     for (dir, private) in cache.map(|c| (c, false)).into_iter().chain([(shared, true)]) {
         let ready = if private { private_dir(&dir, uid()) } else { Ok(()) };
         match ready.and_then(|()| cache_copy(&dir)) {
-            Ok(p) if runs(&p) => {
+            Ok(p) if runs(&p)? => {
                 debug!("the helper runs from {}", p.display());
                 return Ok(Place::Disk(p));
             }
@@ -179,9 +183,19 @@ fn uid() -> u32 {
 }
 
 /// Whether the helper starts from `exe`: without arguments it prints its
-/// usage and exits `USAGE`.
-fn runs(exe: &Path) -> bool {
-    retry_busy(|| Command::new(exe).output()).is_ok_and(|o| o.status.code() == Some(USAGE))
+/// usage and exits `USAGE`. False if it can't be run from there (noexec);
+/// an error if it runs but the loader can't find OpenCASCADE's libraries,
+/// with the loader's message.
+fn runs(exe: &Path) -> io::Result<bool> {
+    let Ok(out) = retry_busy(|| Command::new(exe).output()) else {
+        return Ok(false);
+    };
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if out.status.code() == Some(NO_LIBRARY) || stderr.contains("error while loading shared libraries") {
+        let line = stderr.lines().next().unwrap_or("the shared libraries are missing");
+        return Err(io::Error::other(format!("cannot load OpenCASCADE: {line}")));
+    }
+    Ok(out.status.code() == Some(USAGE))
 }
 
 // }}}
@@ -229,6 +243,29 @@ mod tests {
         symlink(&ours, &link).unwrap();
         private_dir(&link, uid()).unwrap_err(); // a symlink
         fs::remove_dir_all(base).unwrap();
+    }
+
+    // OpenCASCADE missing is told apart from a place that can't run
+    #[test]
+    fn missing_library_is_told() {
+        let dir = env::temp_dir().join(format!("tridi-probe-test-{}", process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let script = |name: &str, body: &str| {
+            let p = dir.join(name);
+            fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+            fs::set_permissions(&p, Permissions::from_mode(0o700)).unwrap();
+            p
+        };
+        let ld = "x: error while loading shared libraries: libTKernel.so.7.8: cannot open shared object file";
+        let e = runs(&script("ld", &format!("echo '{ld}' >&2; exit 127"))).unwrap_err();
+        assert_eq!(e.to_string(), format!("cannot load OpenCASCADE: {ld}"));
+        assert!(runs(&script("ok", "exit 64")).unwrap(), "the usage exit");
+        assert!(!runs(&script("other", "exit 3")).unwrap(), "any other exit");
+        // not executable: can't run from there
+        let noexec = script("noexec", "exit 64");
+        fs::set_permissions(&noexec, Permissions::from_mode(0o600)).unwrap();
+        assert!(!runs(&noexec).unwrap());
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
