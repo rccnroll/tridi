@@ -45,5 +45,6 @@ and no OpenCASCADE:
 
 ## Reading without a window
 
-[tridi-formats](https://crates.io/crates/tridi-formats) reads the same files
-into points and meshes, with no GL and no display.
+[tridi-formats](https://crates.io/crates/tridi-formats) reads the point
+cloud formats, PCD, PLY, OFF and XYZ/XYZRGB/PTS, into points (with the faces
+of a PLY or OFF mesh), with no GL and no display.

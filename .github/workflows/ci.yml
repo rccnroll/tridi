@@ -28,7 +28,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       # the viewer without OpenCASCADE
-      - run: cargo check -p tridi --no-default-features --locked
+      - run: cargo clippy -p tridi --no-default-features --all-targets --locked -- -D warnings
       # every crate packages and builds from what crates.io would get
       - run: cargo publish --workspace --dry-run --locked
 
