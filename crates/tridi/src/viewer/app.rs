@@ -27,7 +27,7 @@ use winit::{
 
 use super::{
     Shown, ViewError, ViewResult, Viewer,
-    load::{File, Generation, Loaded, Ready, State, label, load_all},
+    load::{File, Generation, Loaded, Ready, Source, State, load_all},
     navigate::{WHEEL_NOTCH, WHEEL_PIXEL, ZOOM_MAX, ZOOM_MIN, navigate},
     overlay::overlay,
     window::{Gl, scale, viewport, with_event_loop},
@@ -57,15 +57,15 @@ const POINT_MAX: f32 = 20.0;
 /// but itself.
 pub(crate) fn run(v: Viewer) -> ViewResult<Shown> {
     let Viewer {
-        paths,
+        sources,
         theme,
         app_id,
         mut out,
     } = v;
-    let files: Vec<File> = paths
+    let files: Vec<File> = sources
         .iter()
-        .map(|p| File {
-            name: label(p),
+        .map(|s| File {
+            name: s.name(),
             state: State::Loading,
         })
         .collect();
@@ -78,7 +78,7 @@ pub(crate) fn run(v: Viewer) -> ViewResult<Shown> {
             .collect();
         tell(&mut *out, format_args!("keys: {}", keys.join(", ")));
     }
-    let up = up_for(paths.iter().all(|p| is_gltf(p)));
+    let up = up_for(sources.iter().all(|s| matches!(s, Source::File(p) if is_gltf(p))));
     let generation = Generation::next();
     let mut app = App {
         generation,
@@ -101,7 +101,7 @@ pub(crate) fn run(v: Viewer) -> ViewResult<Shown> {
     };
     let stop = Arc::new(AtomicBool::new(false));
     let ran = with_event_loop(|events| {
-        load_all(&paths, theme, generation, &stop, &events.create_proxy());
+        load_all(sources, theme, generation, &stop, &events.create_proxy());
         let ran = events.run_app_on_demand(&mut app).map_err(ViewError::EventLoop);
         // the window is gone, however it went: its loaders stop, a STEP helper is killed
         stop.store(true, Ordering::Relaxed);

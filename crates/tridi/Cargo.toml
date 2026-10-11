@@ -8,9 +8,9 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["point-cloud", "pcd", "mesh", "viewer", "thumbnailer"]
-categories = ["graphics", "visualization", "command-line-utilities"]
+categories = ["graphics", "visualization"]
 
 [dependencies]
 glutin.workspace = true

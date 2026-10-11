@@ -17,11 +17,13 @@ mod window;
 use glutin::error;
 use std::{
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 use winit::error::EventLoopError;
 
-use crate::{LIGHT, LoadError, RenderError, Theme};
+use load::Source;
+
+use crate::{Cloud, LIGHT, LoadError, RenderError, Theme};
 
 // }}}
 
@@ -73,6 +75,9 @@ pub enum ViewError {
     OtherThread,
     #[error("the window's event loop failed")]
     EventLoop(#[source] EventLoopError),
+    /// a cloud given with more or fewer colors than points
+    #[error("{name}: {colors} colors for {points} points")]
+    ColorCount { name: String, points: usize, colors: usize },
     /// every file failed; each one's error is in the log
     #[error("no file could be opened")]
     NothingOpened,
@@ -96,7 +101,7 @@ pub struct Shown {
 
 /// Sets up the window: files, theme, app id, where the per-file lines go.
 pub struct Viewer {
-    paths: Vec<PathBuf>,
+    sources: Vec<Source>,
     theme: &'static Theme,
     app_id: String,
     out: Box<dyn Write>,
@@ -113,7 +118,7 @@ impl Viewer {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            paths: vec![],
+            sources: vec![],
             theme: &LIGHT,
             app_id: APP_ID.to_owned(),
             out: Box::new(io::sink()),
@@ -122,7 +127,22 @@ impl Viewer {
 
     #[must_use]
     pub fn file<P: AsRef<Path>>(mut self, path: P) -> Self {
-        self.paths.push(path.as_ref().to_owned());
+        self.sources.push(Source::File(path.as_ref().to_owned()));
+        self
+    }
+
+    /// A cloud from memory, shown as a file would be: `name` in the legend.
+    /// `colors`, if given, must have one per point: `show()` says if not.
+    #[must_use]
+    pub fn cloud(mut self, name: &str, points: &[[f32; 3]], colors: Option<&[[f32; 3]]>) -> Self {
+        self.sources.push(Source::Cloud {
+            name: name.to_owned(),
+            cloud: Cloud {
+                points: points.to_vec(),
+                colors: colors.map(<[_]>::to_vec),
+                faces: None,
+            },
+        });
         self
     }
 
@@ -155,7 +175,26 @@ impl Viewer {
     /// Opens the window and blocks until it's closed. The files load in
     /// parallel and show up as they're read, a STEP file solid by solid.
     pub fn show(self) -> ViewResult<Shown> {
-        if self.paths.is_empty() {
+        for s in &self.sources {
+            if let Source::Cloud {
+                name,
+                cloud:
+                    Cloud {
+                        points,
+                        colors: Some(colors),
+                        ..
+                    },
+            } = s
+                && colors.len() != points.len()
+            {
+                return Err(ViewError::ColorCount {
+                    name: name.clone(),
+                    points: points.len(),
+                    colors: colors.len(),
+                });
+            }
+        }
+        if self.sources.is_empty() {
             return Err(ViewError::Empty);
         }
         app::run(self)
@@ -175,6 +214,15 @@ pub fn show<I: IntoIterator<Item = P>, P: AsRef<Path>>(paths: I) -> ViewResult<S
 mod tests {
     use super::*;
     use std::{env, thread};
+
+    #[test]
+    fn color_count_must_match() {
+        let r = Viewer::new().cloud("c", &[[0.0; 3]; 3], Some(&[[1.0; 3]; 2])).show();
+        assert!(
+            matches!(&r, Err(ViewError::ColorCount { name, points: 3, colors: 2 }) if name == "c"),
+            "{r:?}"
+        );
+    }
 
     #[test]
     fn empty_viewer_is_an_error() {

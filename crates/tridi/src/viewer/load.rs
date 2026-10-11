@@ -16,11 +16,27 @@ use three_d::{AxisAlignedBoundingBox, Vec3};
 use three_d_asset::Geometry;
 use winit::event_loop::EventLoopProxy;
 
-use crate::{Input, Item, LoadResult, Purpose, Theme, colorize, load, own_colors, triangles};
+use crate::{Cloud, Input, Item, LoadResult, Purpose, Theme, colorize, load, own_colors, triangles};
 
 // }}}
 
 // ========================================== Loading ========================================== {{{
+
+/// What a window shows, in legend order.
+pub(crate) enum Source {
+    File(PathBuf),
+    Cloud { name: String, cloud: Cloud },
+}
+
+impl Source {
+    /// Its name in the legend, the title and the lines on stdout.
+    pub(crate) fn name(&self) -> String {
+        match self {
+            Self::File(p) => label(p),
+            Self::Cloud { name, .. } => name.clone(),
+        }
+    }
+}
 
 /// A file to show, as the legend shows it.
 pub(crate) struct File {
@@ -91,28 +107,52 @@ impl Loaded {
     }
 }
 
-/// Reads the files on as many threads as there are cores, each sent to the
+/// Hands the clouds to the event loop at once and reads the files on as many threads as there are cores, each sent to the
 /// event loop as it's ready. A file's tint is its place on the command line,
 /// so it doesn't change with the order they finish in. Once `stop` is set
 /// (the window closed) each thread ends: before its next file, or within a
 /// STEP file, whose helper is killed.
 pub(crate) fn load_all(
-    paths: &[PathBuf],
+    sources: Vec<Source>,
     theme: &'static Theme,
     generation: Generation,
     stop: &Arc<AtomicBool>,
     proxy: &EventLoopProxy<Loaded>,
 ) {
-    let paths: Arc<[PathBuf]> = paths.into();
+    let total = sources.len();
+    let tint_of = move |i: usize| theme.palette.iter().cycle().nth(i).copied().filter(|_| total > 1);
+    let mut files = vec![];
+    for (i, source) in sources.into_iter().enumerate() {
+        match source {
+            Source::File(p) => files.push((i, p)),
+            Source::Cloud { cloud, .. } => {
+                let ready = ready(Item::Cloud(cloud), tint_of(i), theme);
+                // the event loop is gone: nobody to show it to
+                if proxy.send_event(Loaded::Part { generation, i, ready }).is_err()
+                    || proxy
+                        .send_event(Loaded::Done {
+                            generation,
+                            i,
+                            result: Ok(0),
+                        })
+                        .is_err()
+                {
+                    return;
+                }
+            }
+        }
+    }
+    let files: Arc<[(usize, PathBuf)]> = files.into();
     let next = Arc::new(AtomicUsize::new(0));
-    let workers = thread::available_parallelism().map_or(1, NonZeroUsize::get).min(paths.len());
+    let workers = thread::available_parallelism().map_or(1, NonZeroUsize::get).min(files.len());
     for _ in 0..workers {
-        let (paths, next, stop, proxy) = (Arc::clone(&paths), Arc::clone(&next), Arc::clone(stop), proxy.clone());
+        let (files, next, stop, proxy) = (Arc::clone(&files), Arc::clone(&next), Arc::clone(stop), proxy.clone());
         thread::spawn(move || {
             while !stop.load(Ordering::Relaxed) {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                let Some(p) = paths.get(i) else { break };
-                let tint = theme.palette.iter().cycle().nth(i).copied().filter(|_| paths.len() > 1);
+                let Some((i, p)) = files.get(next.fetch_add(1, Ordering::Relaxed)) else {
+                    break;
+                };
+                let (i, tint) = (*i, tint_of(*i));
                 let result = load(p, theme.mesh, Purpose::View, &|| stop.load(Ordering::Relaxed), &mut |item| {
                     // the window closed, the helper not killed yet: nobody to show it to
                     if stop.load(Ordering::Relaxed) {
