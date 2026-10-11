@@ -189,7 +189,7 @@ fn load_all(paths: &[String], theme: &'static Theme, proxy: &EventLoopProxy<Load
                 let i = next.fetch_add(1, Ordering::Relaxed);
                 let Some(p) = paths.get(i) else { break };
                 let tint = theme.palette.iter().cycle().nth(i).copied().filter(|_| paths.len() > 1);
-                let result = tridi::load(Path::new(p), theme.mesh, Purpose::View, &mut |item| {
+                let result = tridi::load(Path::new(p), theme.mesh, Purpose::View, &|| false, &mut |item| {
                     #[expect(clippy::let_underscore_must_use, reason = "a closed window is found out below")]
                     let _ = proxy.send_event(Loaded::Part {
                         i,

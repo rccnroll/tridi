@@ -28,10 +28,11 @@ eyre.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tridi-formats.workspace = true
+tridi-step = { workspace = true, optional = true }
 
-# the STEP child's OpenCASCADE side (build.rs)
-[build-dependencies]
-cc.workspace = true
+[features]
+default = ["step"]
+step = ["dep:tridi-step"]
 
 [lints]
 workspace = true
@@ -42,9 +43,10 @@ workspace = true
 maintainer = "Rocco Caccioppoli <caccioppolirocco@gmail.com>"
 extended-description = "Point cloud and mesh viewer, with file manager thumbnails."
 section = "graphics"
-# GL/EGL, Wayland and xkbcommon are dlopened at runtime; $auto is what's
-# linked: OpenCASCADE (STEP), libstdc++
-depends = "$auto, libc6 (>= 2.34), libgcc-s1, libegl1, libgl1-mesa-dri, libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, xdg-utils"
+# GL/EGL, Wayland and xkbcommon are dlopened at runtime; $auto is what tridi
+# links. OpenCASCADE (and through it libstdc++) is linked by the embedded STEP
+# helper, which $auto can't see: named here, Ubuntu 24.04's t64 or Debian 12's
+depends = "$auto, libc6 (>= 2.34), libgcc-s1, libegl1, libgl1-mesa-dri, libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, xdg-utils, libocct-foundation-7.6t64 | libocct-foundation-7.6, libocct-modeling-data-7.6t64 | libocct-modeling-data-7.6, libocct-modeling-algorithms-7.6t64 | libocct-modeling-algorithms-7.6, libocct-ocaf-7.6t64 | libocct-ocaf-7.6, libocct-data-exchange-7.6t64 | libocct-data-exchange-7.6"
 maintainer-scripts = "../../packaging/deb/"
 assets = [
     ["target/release/tridi", "usr/bin/", "755"],

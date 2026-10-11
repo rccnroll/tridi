@@ -55,7 +55,7 @@ use std::{
     process::ExitCode,
 };
 use tracing_subscriber::EnvFilter;
-use tridi::{LIGHT, Quality, Theme};
+use tridi::{LIGHT, Theme};
 
 // }}}
 
@@ -144,17 +144,6 @@ enum Cmd {
         /// Thumbnail cache directories
         dirs: Vec<PathBuf>,
     },
-    /// Internal: step.rs runs itself as a child to tessellate
-    #[command(hide = true)]
-    StepMesh {
-        input: String,
-        /// the fallback for the solids the fine pass didn't hand back
-        #[arg(long)]
-        coarse: bool,
-        /// only these solids
-        #[arg(long, value_delimiter = ',')]
-        only: Vec<u64>,
-    },
     /// Packaging: write the man page and the bash, zsh and fish completions to DIR
     #[command(hide = true)]
     Generate { dir: PathBuf },
@@ -166,24 +155,10 @@ enum Cmd {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    // not in the STEP child: its stderr is the error it hands back
-    if !matches!(cli.cmd, Some(Cmd::StepMesh { .. })) {
-        init_logging();
-    }
+    init_logging();
     let mut out = io::stdout();
     let t = cli.theme.as_deref().and_then(Theme::by_name);
     let r = match cli.cmd {
-        Some(Cmd::StepMesh { input, coarse, only }) => {
-            let quality = if coarse { Quality::Coarse } else { Quality::Fine };
-            // the parent reads this and puts the file's name in front
-            return tridi::step_mesh_to_stdout(&input, quality, &only).map_or_else(
-                |e| {
-                    eprintln!("{:#}", eyre::Report::new(e));
-                    ExitCode::FAILURE
-                },
-                |()| ExitCode::SUCCESS,
-            );
-        }
         Some(Cmd::Generate { dir }) => generate(&dir),
         // thumbnails can't read the saved theme (sandbox): light unless told
         Some(Cmd::Thumb { input, output, size }) => thumb::thumb(&input, &output, size, t.unwrap_or(&LIGHT)),

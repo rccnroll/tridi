@@ -21,7 +21,6 @@
 mod color;
 mod model;
 mod render;
-mod step;
 #[cfg(test)]
 mod test_support;
 mod theme;
@@ -31,9 +30,8 @@ mod theme;
 // ======================================== Re-exports ========================================= {{{
 
 pub use color::{colorize, own_colors};
-pub use model::{Item, LoadError, LoadResult, is_gltf, load, triangles, up_for};
+pub use model::{Item, LoadError, LoadResult, Purpose, is_gltf, load, triangles, up_for};
 pub use render::{FOV, Input, RenderError, RenderResult, Scene, headless, offscreen, px_f32, quiet_stderr};
-pub use step::{Purpose, Quality, StepError, StepResult, mesh_to_stdout as step_mesh_to_stdout};
 pub use theme::{DARK, LIGHT, THEMES, Theme};
 pub use tridi_formats::{Cloud, FormatError, FormatResult, load_cloud, parse_cloud};
 

@@ -2273,7 +2273,6 @@ dependencies = [
 name = "tridi"
 version = "2.8.0"
 dependencies = [
- "cc",
  "clap",
  "clap_complete",
  "clap_mangen",
@@ -2288,6 +2287,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tridi-formats",
+ "tridi-step",
  "winit",
 ]
 
@@ -2296,6 +2296,16 @@ name = "tridi-formats"
 version = "2.8.0"
 dependencies = [
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tridi-step"
+version = "2.8.0"
+dependencies = [
+ "cc",
+ "libc",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]

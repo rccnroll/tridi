@@ -23,7 +23,7 @@ pub fn thumb(inp: &str, out: &str, size: u32, theme: &Theme) -> eyre::Result<()>
     }
     // a STEP file's solids come one by one: the thumbnail is what came in time
     let mut inputs = vec![];
-    let skipped = tridi::load(Path::new(inp), theme.mesh, Purpose::Thumbnail, &mut |item| {
+    let skipped = tridi::load(Path::new(inp), theme.mesh, Purpose::Thumbnail, &|| false, &mut |item| {
         inputs.push(match item {
             Item::Cloud(c) => {
                 let colors = tridi::colorize(&c, None, theme);
@@ -63,7 +63,6 @@ mod tests {
         let dir = env::temp_dir().join(format!("tridi-thumb-{}", process::id()));
         fs::create_dir_all(&dir).unwrap();
         let out = dir.join("cache-entry");
-        // not a STEP file: those run `current_exe() step-mesh`, the test binary under cargo test
         let inp = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/data/rgb_ascii.pcd");
         thumb(inp, out.to_str().unwrap(), 64, &tridi::LIGHT).unwrap();
         assert_eq!(&fs::read(&out).unwrap()[..8], b"\x89PNG\r\n\x1a\n");

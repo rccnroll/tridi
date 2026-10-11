@@ -1,6 +1,6 @@
 // The STEP child's work through OpenCASCADE: read the file with its colors
 // and assembly, then heal and mesh each part on a thread of its own, and hand
-// it back at every place the assembly puts it. Reached from tessellate.rs
+// it back at every place the assembly puts it. Reached from main.cpp
 // through `tridi_step_tessellate`, the only symbol it exports.
 
 #include <BRepBndLib.hxx>
@@ -49,7 +49,7 @@ namespace {
 using Color = std::array<float, 3>;
 
 // the color of a face the file gives none: negative, as no real color is
-// (step/mod.rs's NONE)
+// (tridi-step's parent.rs reads it so)
 constexpr Color NONE = {-1.0F, -1.0F, -1.0F};
 
 // what tridi_step_tessellate returns

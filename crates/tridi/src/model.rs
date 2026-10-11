@@ -1,6 +1,6 @@
 //! What a file is: a cloud, or a mesh (glb/gltf/obj/stl through
 //! three-d-asset, ply/off with faces from the readers, step/stp through
-//! step), and which way is up.
+//! tridi-step), and which way is up.
 
 // ========================================== Imports ========================================== {{{
 
@@ -9,7 +9,8 @@ use three_d::{CpuMaterial, CpuModel, Mat4, Srgba, Vec3};
 use three_d_asset::{Geometry, Indices, Positions, Primitive, TriMesh, io};
 use tridi_formats::{Cloud, FormatError, load_cloud};
 
-use crate::step::{self, Purpose, StepError};
+#[cfg(feature = "step")]
+use tridi_step::{StepError, StepMesh};
 
 // }}}
 
@@ -20,8 +21,11 @@ use crate::step::{self, Purpose, StepError};
 pub enum LoadError {
     #[error(transparent)]
     Format(#[from] FormatError),
+    #[cfg(feature = "step")]
     #[error(transparent)]
     Step(#[from] StepError),
+    #[error(".{ext} files need tridi's step feature")]
+    Unsupported { ext: String },
     #[error("not a valid .{ext} file")]
     Asset {
         ext: String,
@@ -39,6 +43,19 @@ pub type LoadResult<T> = Result<T, LoadError>;
 
 // }}}
 
+// ========================================== Purpose ========================================== {{{
+
+/// What a file is read for: it sets how a STEP file is tessellated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Purpose {
+    /// the window: a fine pass, then a coarse one for what it missed
+    View,
+    /// a thumbnail: coarse, and what came in 15 s
+    Thumbnail,
+}
+
+// }}}
+
 // =========================================== Item ============================================ {{{
 
 /// A file read: a cloud to color, or a mesh ready for the GPU.
@@ -49,14 +66,29 @@ pub enum Item {
 
 /// Reads `path` into `part`: in one piece, or a STEP file solid by solid
 /// as they're tessellated. `grey` is the color of meshes without a material
-/// (the theme's); `purpose` sets how a STEP file is tessellated. Returns
-/// how many solids were given up on: 0 but for STEP.
-pub fn load(path: &Path, grey: [f32; 3], purpose: Purpose, part: &mut dyn FnMut(Item)) -> LoadResult<usize> {
+/// (the theme's); `purpose` sets how a STEP file is tessellated, and
+/// `stop`, looked at while one is, cancels it. Returns how many solids were
+/// given up on: 0 but for STEP.
+pub fn load(path: &Path, grey: [f32; 3], purpose: Purpose, stop: &dyn Fn() -> bool, part: &mut dyn FnMut(Item)) -> LoadResult<usize> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let model = match ext.as_str() {
         "glb" | "gltf" | "obj" | "stl" => load_asset(path, &ext)?,
-        // a solid is never empty: the child sends only those with triangles
-        "step" | "stp" => return Ok(step::load(path, grey, purpose, |m| part(finish(model(m), grey)))?),
+        // a solid is never empty: the helper sends only those with triangles
+        #[cfg(feature = "step")]
+        "step" | "stp" => {
+            let purpose = match purpose {
+                Purpose::View => tridi_step::Purpose::View,
+                Purpose::Thumbnail => tridi_step::Purpose::Thumbnail,
+            };
+            let solid = |m| part(finish(model(tri_mesh(m)), grey));
+            return Ok(tridi_step::load(path, grey, purpose, stop, solid)?);
+        }
+        #[cfg(not(feature = "step"))]
+        "step" | "stp" => {
+            // what only STEP reads
+            let _ = (purpose, stop);
+            return Err(LoadError::Unsupported { ext });
+        }
         _ => {
             let c = load_cloud(path)?;
             if c.faces.is_none() {
@@ -178,6 +210,19 @@ fn from_faces(c: Cloud) -> CpuModel {
     })
 }
 
+#[cfg(feature = "step")]
+fn tri_mesh(m: StepMesh) -> TriMesh {
+    TriMesh {
+        positions: Positions::F32(m.positions.into_iter().map(Vec3::from).collect()),
+        normals: Some(m.normals.into_iter().map(Vec3::from).collect()),
+        colors: m
+            .colors
+            .map(|c| c.into_iter().map(|[r, g, b]| Srgba::from([r, g, b, 1.0])).collect()),
+        indices: Indices::None,
+        ..Default::default()
+    }
+}
+
 fn model(mesh: TriMesh) -> CpuModel {
     CpuModel {
         name: String::new(),
@@ -205,7 +250,7 @@ mod tests {
     /// A file that isn't STEP, in its one piece.
     fn load(path: &Path, grey: [f32; 3]) -> LoadResult<Item> {
         let mut item = None;
-        super::load(path, grey, Purpose::View, &mut |i| item = Some(i))?;
+        super::load(path, grey, Purpose::View, &|| false, &mut |i| item = Some(i))?;
         Ok(item.unwrap())
     }
 
