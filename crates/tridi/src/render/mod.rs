@@ -1,9 +1,11 @@
-//! Drawing: the scene, the headless GL context the thumbnailer uses, and the
+//! Drawing: the scene, and for thumbnails the headless GL context and the
 //! offscreen render.
 
 // ======================================== Sub-modules ======================================== {{{
 
+#[cfg(feature = "thumbnail")]
 mod headless;
+#[cfg(feature = "thumbnail")]
 mod offscreen;
 mod scene;
 
@@ -11,7 +13,9 @@ mod scene;
 
 // ======================================== Re-exports ========================================= {{{
 
-pub use headless::{headless, quiet_stderr};
+#[cfg(feature = "thumbnail")]
+pub use headless::headless;
+#[cfg(feature = "thumbnail")]
 pub use offscreen::offscreen;
 pub use scene::{FOV, Input, Scene};
 
@@ -20,6 +24,7 @@ pub use scene::{FOV, Input, Scene};
 // ========================================== Imports ========================================== {{{
 
 use glutin::error;
+use std::env;
 
 // }}}
 
@@ -63,6 +68,34 @@ pub fn px_f32(n: u32) -> f32 {
     #[expect(clippy::as_conversions, clippy::cast_precision_loss, reason = "image sizes are far below 2^24")]
     let n = n as f32;
     n
+}
+
+// }}}
+
+// ======================================= Quiet stderr ======================================== {{{
+
+/// Runs `f` with stderr closed. Mesa prints `pci id for fd N: 10de:…, driver
+/// (null)` for every GPU node it has no driver for (the NVIDIA one) while
+/// EGL starts, before any of its log settings apply. Real failures still come
+/// back through `f`'s result.
+pub fn quiet_stderr<T, F: FnOnce() -> T>(f: F) -> T {
+    if env::var_os("TRIDI_DEBUG").is_some() {
+        return f();
+    }
+    // SAFETY: plain fd juggling on 2; the saved copy is restored and closed
+    unsafe {
+        let saved = libc::dup(2);
+        let null = libc::open(c"/dev/null".as_ptr(), libc::O_WRONLY);
+        if saved < 0 || null < 0 {
+            return f();
+        }
+        libc::dup2(null, 2);
+        libc::close(null);
+        let r = f();
+        libc::dup2(saved, 2);
+        libc::close(saved);
+        r
+    }
 }
 
 // }}}

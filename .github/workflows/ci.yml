@@ -27,6 +27,8 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      # the viewer without OpenCASCADE
+      - run: cargo check -p tridi --no-default-features --locked
 
   # the oldest Rust Cargo.toml's rust-version promises
   msrv:

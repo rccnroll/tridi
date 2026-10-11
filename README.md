@@ -110,7 +110,7 @@ prints which device is used.
 ## Develop
 
     cargo test                   # one test renders on llvmpipe (Mesa, no GPU)
-    cargo run --release -- FILE
+    cargo run --release -p tridi-cli -- FILE
 
 How the code is laid out, what CI checks, fuzzing, the commit style and how
 a release is cut are in

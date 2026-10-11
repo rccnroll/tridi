@@ -57,17 +57,17 @@ pub fn offscreen(ctx: &Context, scene: &Scene, size: u32, bg: [f32; 3]) -> Vec<u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::render::{Input, headless, quiet_stderr};
-    use glutin::api::egl::device::Device;
-    use std::env;
+    use crate::{
+        render::{Input, headless},
+        test_support::llvmpipe,
+    };
     use three_d::Vec3;
 
     // a thumbnail on llvmpipe (no GPU needed): right size, not all
     // background, and not upside down (a heavy blob at the top, Z up)
     #[test]
     fn thumbnail_llvmpipe() {
-        // SAFETY: tests in this binary don't read this variable concurrently
-        unsafe { env::set_var("TRIDI_EGL_DEVICE", software_device().to_string()) };
+        llvmpipe();
         let (ctx, _keep) = headless().unwrap();
         let mut pts: Vec<[f32; 3]> = (0..50_u16)
             .flat_map(|row| (0..40_u16).map(move |col| [f32::from(col) / 40.0 - 0.5, f32::from(row) / 50.0 - 0.5, 1.0]))
@@ -81,13 +81,6 @@ mod tests {
         let (top, bottom) = img.split_at(64 * 32 * 4);
         assert!(dark(top) > 50, "only {} dark pixels on top", dark(top));
         assert!(dark(top) > dark(bottom), "upside down: top {} bottom {}", dark(top), dark(bottom));
-    }
-
-    fn software_device() -> usize {
-        quiet_stderr(Device::query_devices)
-            .unwrap()
-            .position(|d| d.extensions().contains("EGL_MESA_device_software"))
-            .expect("no llvmpipe EGL device")
     }
 }
 

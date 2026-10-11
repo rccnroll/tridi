@@ -93,6 +93,8 @@ Bugs: https://github.com/rccnroll/tridi/issues";
 
 #[derive(Parser)]
 #[command(
+    // the binary, not the package (tridi-cli): man pages, completions, --help
+    name = "tridi",
     version,
     disable_help_subcommand = true,
     override_usage = "tridi [OPTIONS] FILE...\n       tridi [OPTIONS] <COMMAND>",

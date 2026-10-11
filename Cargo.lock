@@ -2273,22 +2273,30 @@ dependencies = [
 name = "tridi"
 version = "2.8.0"
 dependencies = [
- "clap",
- "clap_complete",
- "clap_mangen",
- "eyre",
  "glutin",
  "glutin-winit",
- "image",
  "libc",
  "thiserror 2.0.21",
  "three-d",
  "three-d-asset",
  "tracing",
- "tracing-subscriber",
  "tridi-formats",
  "tridi-step",
  "winit",
+]
+
+[[package]]
+name = "tridi-cli"
+version = "2.8.0"
+dependencies = [
+ "clap",
+ "clap_complete",
+ "clap_mangen",
+ "eyre",
+ "image",
+ "tracing",
+ "tracing-subscriber",
+ "tridi",
 ]
 
 [[package]]

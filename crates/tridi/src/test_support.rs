@@ -2,7 +2,14 @@
 
 // ========================================== Imports ========================================== {{{
 
+#[cfg(feature = "thumbnail")]
+use glutin::api::egl::device::Device;
+#[cfg(feature = "thumbnail")]
+use std::sync::Once;
 use std::{env, fmt::Write, fs, path::PathBuf, process};
+
+#[cfg(feature = "thumbnail")]
+use crate::quiet_stderr;
 
 // }}}
 
@@ -29,6 +36,22 @@ pub fn ascii_pcd(pts: &[[f32; 3]]) -> Vec<u8> {
 
 pub fn close(a: [f32; 3], b: [f32; 3]) -> bool {
     a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum::<f32>().sqrt() < 1e-3
+}
+
+/// Headless GL on Mesa's llvmpipe from here on, GPU or not: the same
+/// pixels everywhere, as in CI. Once, before any test opens EGL, which reads
+/// the environment from C.
+#[cfg(feature = "thumbnail")]
+pub fn llvmpipe() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        let software = quiet_stderr(Device::query_devices)
+            .unwrap()
+            .position(|d| d.extensions().contains("EGL_MESA_device_software"))
+            .expect("no llvmpipe EGL device");
+        // SAFETY: under the Once, before the tests that read it start EGL
+        unsafe { env::set_var("TRIDI_EGL_DEVICE", software.to_string()) };
+    });
 }
 
 // }}}

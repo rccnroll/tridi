@@ -13,7 +13,7 @@ libocct-foundation-dev` on Debian/Ubuntu. Elsewhere, point
 `OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR` at them.
 
     cargo build --release
-    cargo run --release -- FILE
+    cargo run --release -p tridi-cli -- FILE
     cargo test
 
 One test renders a thumbnail offscreen: with no GPU it runs on Mesa's
@@ -41,25 +41,33 @@ synthetic files too (`python3 scripts/samples.py`, recorded with
 
 ## Layout
 
-The repository is a Cargo workspace; for now one member, `crates/tridi`.
-The crate is a library (`crates/tridi/src/lib.rs`: readers, scene, rendering) and a
-binary on top of it (`crates/tridi/src/main.rs`: the window, the thumbnailer command,
-the desktop integration). Dependencies go one way, down this list:
+The repository is a Cargo workspace of four crates. Dependencies go one
+way, down this list, and nothing depends on `tridi-cli`:
 
-- `crates/tridi/src/formats/` — the point cloud readers, one file per format (pcd, ply,
-  off, xyz/xyzrgb/pts). Every byte is untrusted, and nothing here uses the
-  rest of tridi, so the fuzz targets include this folder alone.
-- `crates/tridi/src/step/` — STEP: the child process with its deadline (`mod.rs`), the
-  OpenCASCADE side that reads, heals and meshes the parts (`occt.cpp`,
-  built by `crates/tridi/build.rs`), and its Rust end (`tessellate.rs`).
-- `crates/tridi/src/model.rs` — what a file is: a cloud, or a mesh (three-d-asset,
-  ply/off faces, STEP), and which way is up.
-- `crates/tridi/src/color.rs`, `crates/tridi/src/theme.rs` — the coloring rules and the two themes.
-- `crates/tridi/src/render/` — the scene with eye-dome lighting, the headless EGL
-  context on the right GPU, the offscreen thumbnail.
-- `crates/tridi/src/view.rs`, `crates/tridi/src/thumb.rs`, `crates/tridi/src/desktop.rs` — the binary's parts:
-  the window (navigation, keys, legend), `tridi thumb`, and `tridi theme`
-  with the thumbnail cache.
+- `crates/tridi-cli/` — the `tridi` command: `main.rs` parses the command
+  line and dispatches, `thumb.rs` is `tridi thumb` (pins Mesa's EGL, writes
+  the PNG), `desktop.rs` is `tridi theme` with the thumbnail cache. clap,
+  eyre, tracing-subscriber and image live here only. The `.deb` metadata is
+  in its `Cargo.toml`.
+- `crates/tridi/` — the viewer as a library: `show` and `Viewer`. The
+  window in `src/viewer/` (`mod.rs` the API, `app.rs` the event loop,
+  `window.rs` the window and its GL, `load.rs` the loader threads,
+  `navigate.rs` the mouse, `overlay.rs` the legend and keys); what a file is
+  (a cloud or a mesh, which way is up) in `model.rs`; the coloring rules and
+  the two themes in `color.rs` and `theme.rs`; the scene with eye-dome
+  lighting in `src/render/`. Behind the `thumbnail` feature, for
+  `tridi-cli` only and outside the semver promise: `thumbnail.rs`, with the
+  headless EGL context on the right GPU and the offscreen render. The
+  `step` feature (default) brings in `tridi-step`.
+- `crates/tridi-step/` — STEP through OpenCASCADE, in a helper process
+  embedded in the crate: `helper/occt.cpp` reads, heals and meshes the
+  parts, `helper/main.cpp` writes them to the parent, both built by
+  `build.rs`; `src/parent.rs` runs the helper with its deadline and reads
+  what it sends, `src/helper.rs` holds the embedded executable, `src/lib.rs`
+  the API.
+- `crates/tridi-formats/` — the point cloud readers, one file per format
+  (pcd, ply, off, xyz/xyzrgb/pts). Every byte is untrusted, and the crate
+  depends on nothing of tridi's, so the fuzz targets build it alone.
 - `share/` — what the packages install: thumbnailer entry, MIME types,
   `.desktop`, AppStream metainfo, icons. Under `Papirus/` only symlinks to
   our mimetype icon: GTK looks for every name of a file's icon, generic
@@ -87,7 +95,7 @@ fuzzed: `cargo install cargo-fuzz`, then from `fuzz/`,
 `mkdir -p corpus/pcd && cargo +nightly fuzz run -O pcd corpus/pcd seeds/pcd`
 (or `ply`, `off`, `text`). New inputs go to the first folder, `corpus/`
 (ignored), so the seeds stay as committed. A crash lands in
-`fuzz/artifacts/`; it becomes a test in `crates/tridi/src/formats/`, next to the reader.
+`fuzz/artifacts/`; it becomes a test in `crates/tridi-formats/src/`, next to the reader.
 
 ## Commits
 

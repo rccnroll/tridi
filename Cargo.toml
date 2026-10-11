@@ -32,6 +32,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 cc = "1.2"
 tridi-formats = { path = "crates/tridi-formats", version = "2.8.0" }
 tridi-step = { path = "crates/tridi-step", version = "2.8.0" }
+# each member names the features it wants
+tridi = { path = "crates/tridi", version = "2.8.0", default-features = false }
 
 [profile.release]
 strip = true
