@@ -217,11 +217,7 @@ fn run(
         cmd.arg("--only").arg(ids.join(","));
     }
     let mut child = Reaped(
-        cmd.stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(StepError::Spawn)?,
+        helper::retry_busy(|| cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn()).map_err(StepError::Spawn)?,
     );
     let (Some(out), Some(mut err)) = (child.0.stdout.take(), child.0.stderr.take()) else {
         return Err(StepError::Spawn(io::Error::other("the helper has no pipes")));

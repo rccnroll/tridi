@@ -17,6 +17,8 @@ use std::{
     path::{Path, PathBuf},
     process::{self, Command},
     sync::OnceLock,
+    thread,
+    time::Duration,
 };
 
 // }}}
@@ -31,6 +33,13 @@ const NAME: &CStr = c"tridi-step-helper";
 
 /// The helper's exit code without arguments (sysexits.h's `EX_USAGE`).
 const USAGE: i32 = 64;
+
+/// How often a busy executable is tried: a fork in another thread can hold
+/// a copy of the write fd of a file just written, until that child execs.
+const BUSY_TRIES: u32 = 10;
+
+/// The wait between those tries; the child execs within microseconds.
+const BUSY_WAIT: Duration = Duration::from_millis(10);
 
 // }}}
 
@@ -84,6 +93,18 @@ fn place() -> io::Result<Place> {
         }
     }
     Err(last)
+}
+
+/// `run`, again while the executable is busy (ETXTBSY): a few times, then
+/// the error. For every spawn of the helper from a disk path.
+pub(crate) fn retry_busy<T>(mut run: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    for _ in 1..BUSY_TRIES {
+        match run() {
+            Err(e) if e.kind() == io::ErrorKind::ExecutableFileBusy => thread::sleep(BUSY_WAIT),
+            done => return done,
+        }
+    }
+    run()
 }
 
 fn fd_path(fd: &OwnedFd) -> String {
@@ -160,7 +181,7 @@ fn uid() -> u32 {
 /// Whether the helper starts from `exe`: without arguments it prints its
 /// usage and exits `USAGE`.
 fn runs(exe: &Path) -> bool {
-    Command::new(exe).output().is_ok_and(|o| o.status.code() == Some(USAGE))
+    retry_busy(|| Command::new(exe).output()).is_ok_and(|o| o.status.code() == Some(USAGE))
 }
 
 // }}}
@@ -182,7 +203,7 @@ mod tests {
     fn cache_copy_runs() {
         let dir = env::temp_dir().join(format!("tridi-helper-test-{}", process::id()));
         let exe = cache_copy(&dir).unwrap();
-        let out = Command::new(&exe).output().unwrap();
+        let out = retry_busy(|| Command::new(&exe).output()).unwrap();
         // no arguments: the helper's usage, exit 64 (EX_USAGE)
         assert_eq!(out.status.code(), Some(64), "{out:?}");
         // a second call reuses the file
