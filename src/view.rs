@@ -36,7 +36,7 @@ use winit::{
     keyboard::{Key, NamedKey},
     platform::wayland::WindowAttributesExtWayland,
     raw_window_handle::HasWindowHandle,
-    window::{Window, WindowId},
+    window::{CursorIcon, Window, WindowId},
 };
 
 use crate::{tell, window_keys};
@@ -568,11 +568,13 @@ impl Viewer {
         let [r, g, b] = self.theme.bg;
         screen.clear(ClearState::color_and_depth(r, g, b, 1.0, 1.0));
         gl.scene.render(&screen, &gl.cam, self.psize * dpr);
-        let (visible, legend, help) = (gl.scene.visible(), self.legend, self.help);
+        let (visible, sizes, legend, help) = (gl.scene.visible(), gl.scene.sizes(), self.legend, self.help);
         let ms = gl.start.elapsed().as_secs_f64() * 1000.0;
+        let hover = row(&self.rows, self.cursor);
         let rows = &mut self.rows;
-        gl.gui
-            .update(&mut [], ms, vp, dpr, |ui| *rows = overlay(ui, &self.files, visible, legend, help));
+        gl.gui.update(&mut [], ms, vp, dpr, |ui| {
+            *rows = overlay(ui, &self.files, visible, sizes, hover, legend, help);
+        });
         if let Err(e) = screen.write(|| gl.gui.render()) {
             warn!("cannot draw the panels: {e}");
         }
@@ -624,13 +626,19 @@ impl ApplicationHandler<Loaded> for Viewer {
                     _ => None,
                 };
                 let pressed = state == ElementState::Pressed;
-                // a left click on a legend row turns its file off or on, and doesn't orbit
-                let row = self
-                    .cursor
-                    .filter(|_| pressed && b == Some(MouseButton::Left))
-                    .and_then(|(x, y)| self.rows.iter().find(|(r, _)| r.contains(egui::pos2(x, y))).map(|(_, i)| *i));
-                if let Some(i) = row {
-                    self.toggle(i);
+                // on a legend row, left turns its file off or on, right puts its points
+                // back to the others' size; neither moves the view
+                if let Some(i) = row(&self.rows, self.cursor).filter(|_| pressed) {
+                    match b {
+                        Some(MouseButton::Left) => self.toggle(i),
+                        Some(MouseButton::Right) => {
+                            if let Some(l) = layer(&self.files, i) {
+                                let s = gl.scene.sizes().get(l).copied().unwrap_or(1.0);
+                                gl.scene.resize(l, 1.0 / s, 0.0, f32::MAX);
+                            }
+                        }
+                        _ => {}
+                    }
                     self.button = None;
                     return self.request_redraw();
                 }
@@ -648,13 +656,29 @@ impl ApplicationHandler<Loaded> for Viewer {
                         handled: false,
                     });
                 }
+                let was = row(&self.rows, self.cursor);
                 self.cursor = Some((p.x, p.y));
+                // the row under the cursor is highlighted: the one the wheel and clicks act on
+                let now = row(&self.rows, self.cursor);
+                if now != was {
+                    gl.window
+                        .set_cursor(if now.is_some() { CursorIcon::Pointer } else { CursorIcon::Default });
+                    gl.window.request_redraw();
+                }
             }
             WindowEvent::MouseWheel { delta, .. } => {
                 let y = match delta {
                     MouseScrollDelta::LineDelta(_, y) => y * WHEEL_NOTCH,
                     MouseScrollDelta::PixelDelta(d) => d.to_logical::<f32>(f64::from(dpr)).y * WHEEL_PIXEL,
                 };
+                // the wheel on a legend row sizes that file's points, not the view
+                if let Some(i) = row(&self.rows, self.cursor) {
+                    if let Some(l) = layer(&self.files, i) {
+                        let by = POINT_STEP.powf(y / WHEEL_NOTCH);
+                        gl.scene.resize(l, by, POINT_MIN / self.psize, POINT_MAX / self.psize);
+                    }
+                    return self.request_redraw();
+                }
                 events.push(Event::MouseWheel {
                     delta: (0.0, y),
                     position: PhysicalPoint { x: 0.0, y: 0.0 },
@@ -683,12 +707,20 @@ impl ApplicationHandler<Loaded> for Viewer {
 // ========================================== Overlay ========================================== {{{
 
 /// What's drawn over the scene; egui gets no input, the window hit-tests the
-/// legend's rows itself. Top left, with `legend`: each file with its key,
-/// its tint and its size, the ones turned off, still loading or failed
-/// dimmed. Top right, with
-/// `help`, the keys; else a hint bottom left that H shows them. Returns the
-/// legend's rows and their file, empty without it.
-fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: bool) -> Vec<(egui::Rect, usize)> {
+/// legend's rows itself. Top left, with `legend`: each file with its tint,
+/// its size and its points' size if not the others', the ones turned off,
+/// still loading or failed dimmed, the one under the cursor (`hover`) in
+/// bold. Top right, with `help`, the keys; else a hint bottom left that H
+/// shows them. Returns the legend's rows and their file, empty without it.
+fn overlay(
+    ui: &egui::Ui,
+    files: &[File],
+    visible: &[bool],
+    sizes: &[f32],
+    hover: Option<usize>,
+    legend: bool,
+    help: bool,
+) -> Vec<(egui::Rect, usize)> {
     let panel = |id: &str, at: egui::Align2, off: [f32; 2], add: &mut dyn FnMut(&mut egui::Ui)| {
         egui::Area::new(egui::Id::new(id))
             .anchor(at, off)
@@ -741,7 +773,12 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
                             (false, 0) => String::new(),
                             (false, n) => format!(", {n} solids skipped"),
                         };
-                        (visible.get(*layer).copied().unwrap_or(true), *tint, format!("{count} {unit}{more}"))
+                        let size = match sizes.get(*layer) {
+                            Some(s) if (s - 1.0).abs() > 0.01 => format!(", points ×{s:.1}"),
+                            _ => String::new(),
+                        };
+                        let on = visible.get(*layer).copied().unwrap_or(true);
+                        (on, *tint, format!("{count} {unit}{size}{more}"))
                     }
                     State::Loading => (false, None, "loading…".to_owned()),
                     State::Failed => (false, None, "failed".to_owned()),
@@ -749,7 +786,6 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
                 let alpha = if on { 1.0 } else { OFF_ALPHA };
                 let fg = ui.visuals().text_color().gamma_multiply(alpha);
                 let text = |t: String| egui::RichText::new(t).color(fg);
-                let first = ui.label(text(if i < 9 { format!("{}", i + 1) } else { String::new() }));
                 let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
                 if let Some(c) = tint {
                     // the palette is written to the screen as is: sRGB
@@ -761,14 +797,30 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
                     ui.painter()
                         .rect_stroke(r, 2.0, egui::Stroke::new(1.0_f32, fg), egui::StrokeKind::Inside);
                 }
-                ui.label(text(f.name.clone()));
+                let name = text(f.name.clone());
+                ui.label(if hover == Some(i) { name.strong().underline() } else { name });
                 let last = ui.label(text(count));
-                rows.push((first.rect.union(last.rect), i));
+                // half the grid's spacing above and below: no gap between rows
+                rows.push((r.union(last.rect).expand2(egui::vec2(0.0, 2.0)), i));
                 ui.end_row();
             }
         });
     });
     rows
+}
+
+/// The scene's layer of the i-th file, once shown: files come in as they're read.
+fn layer(files: &[File], i: usize) -> Option<usize> {
+    match files.get(i)?.state {
+        State::Shown { layer, .. } => Some(layer),
+        State::Loading | State::Failed => None,
+    }
+}
+
+/// The file whose legend row is under the cursor.
+fn row(rows: &[(egui::Rect, usize)], cursor: Option<(f32, f32)>) -> Option<usize> {
+    let (x, y) = cursor?;
+    rows.iter().find(|(r, _)| r.contains(egui::pos2(x, y))).map(|(_, i)| *i)
 }
 
 /// A 0..1 channel as a byte.

@@ -81,6 +81,8 @@ Window:
   + and -               point size
   1-9 or click legend   turn the N-th file off and on (any file by click)
   A                     turn every file off, or all back on
+  wheel on legend row   that file's point size
+  right click on row    that file's point size back to the others'
   I                     show or hide the legend (on with several files)
   H or ?                show or hide these keys
   Q or Esc              quit

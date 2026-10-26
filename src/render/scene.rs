@@ -102,6 +102,8 @@ pub struct Scene {
     edl_targets: RefCell<Option<(u32, u32, Texture2D, DepthTexture2D)>>,
     layers: Vec<Layer>,
     visible: Vec<bool>,
+    /// each layer's point size, times the one `render` gets
+    sizes: Vec<f32>,
     /// the triad, when asked for: remade as layers come in
     with_axes: bool,
     axes: Option<(VertexBuffer<Vec3>, VertexBuffer<Vec3>)>,
@@ -130,6 +132,7 @@ impl Scene {
             edl_tri: VertexBuffer::new_with_data(ctx, &[vec2(0.0, 0.0), vec2(2.0, 0.0), vec2(0.0, 2.0)]),
             layers: vec![],
             visible: vec![],
+            sizes: vec![],
             with_axes: axes,
             axes: None,
             bb: AxisAlignedBoundingBox::EMPTY,
@@ -158,6 +161,7 @@ impl Scene {
         };
         self.layers.push(layer);
         self.visible.push(true);
+        self.sizes.push(1.0);
         self.place_axes();
         Ok(self.layers.len() - 1)
     }
@@ -212,6 +216,19 @@ impl Scene {
         let v = self.visible.get_mut(i)?;
         *v = !*v;
         Some(*v)
+    }
+
+    /// Multiplies layer `i`'s point size by `by`, within `min..=max`;
+    /// returns the new one, None if there's no such layer.
+    pub fn resize(&mut self, i: usize, by: f32, min: f32, max: f32) -> Option<f32> {
+        let s = self.sizes.get_mut(i)?;
+        *s = (*s * by).clamp(min, max);
+        Some(*s)
+    }
+
+    /// Each layer's point size, times the one `render` gets, in file order.
+    pub fn sizes(&self) -> &[f32] {
+        &self.sizes
     }
 
     /// Which layers are on, in file order.
@@ -307,8 +324,10 @@ impl Scene {
                 .clear(ClearState::color_and_depth(0.0, 0.0, 0.0, 0.0, 1.0))
                 .write::<Infallible>(|| {
                     p.use_uniform("mvp", own.projection() * own.view());
-                    for l in shown() {
+                    let sized = self.layers.iter().zip(&self.visible).zip(&self.sizes);
+                    for ((l, _), s) in sized.filter(|((_, v), _)| **v) {
                         if let Layer::Points { pos, col, n } = l {
+                            p.use_uniform("psize", psize * s);
                             p.use_vertex_attribute("pos", pos);
                             p.use_vertex_attribute("color", col);
                             // SAFETY: the buffers bound just above hold n vertices
