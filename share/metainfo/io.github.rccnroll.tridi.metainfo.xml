@@ -35,7 +35,6 @@
     <binary>tridi</binary>
   </provides>
   <releases>
-    <release version="2.9.0" date="2026-10-26"/>
     <release version="2.8.0" date="2026-10-09"/>
     <release version="2.7.0" date="2026-10-08"/>
     <release version="2.6.0" date="2026-10-08"/>
