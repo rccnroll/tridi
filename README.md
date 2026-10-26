@@ -94,7 +94,7 @@ and keys.
 
 In the window: left drag orbits, right or middle drag (or shift + left drag)
 pans, the wheel zooms; `R` resets the view, `+`/`-` change the point size,
-`1`–`9` turn the N-th file off and on, `I` hides the legend, `H` or `?`
+`1`–`9` or a click on its legend row turn the N-th file off and on, `I` hides the legend, `H` or `?`
 shows the keys, `Q` or `Esc` quits.
 
 One file is colored by height (Z); several files get one color each, so

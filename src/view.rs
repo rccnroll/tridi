@@ -166,6 +166,7 @@ pub fn view(paths: &[String], theme: &'static Theme, mut out: Box<dyn Write>) ->
         err: None,
         psize: POINT_SIZE,
         help: false,
+        rows: vec![],
         moved: false,
         cursor: None,
         button: None,
@@ -327,6 +328,8 @@ struct Viewer {
     legend: bool,
     /// H or ?: the keys
     help: bool,
+    /// the legend's rows on screen, logical pixels, and their file: a click toggles it
+    rows: Vec<(egui::Rect, usize)>,
     /// the user moved the view: a file read later no longer reframes it
     moved: bool,
     /// last cursor position, logical pixels
@@ -516,16 +519,23 @@ impl Viewer {
             "h" | "?" => self.help = !self.help,
             "i" => self.legend = !self.legend,
             d => {
-                if let Some(i) = d.parse::<usize>().ok().filter(|n| (1..=9).contains(n)).map(|n| n - 1)
-                    && let Some(f) = self.files.get(i)
-                    && let State::Shown { layer, .. } = f.state
-                    && let Some(on) = gl.scene.toggle(layer)
-                {
-                    tell(&mut *self.out, format_args!("{}: {}", f.name, if on { "on" } else { "off" }));
+                if let Some(i) = d.parse::<usize>().ok().filter(|n| (1..=9).contains(n)).map(|n| n - 1) {
+                    self.toggle(i);
                 }
             }
         }
         true
+    }
+
+    /// Turns the i-th file off or on, if it's shown.
+    fn toggle(&mut self, i: usize) {
+        if let Some(gl) = self.gl.as_mut()
+            && let Some(f) = self.files.get(i)
+            && let State::Shown { layer, .. } = f.state
+            && let Some(on) = gl.scene.toggle(layer)
+        {
+            tell(&mut *self.out, format_args!("{}: {}", f.name, if on { "on" } else { "off" }));
+        }
     }
 
     fn request_redraw(&self) {
@@ -546,8 +556,9 @@ impl Viewer {
         gl.scene.render(&screen, &gl.cam, self.psize * dpr);
         let (visible, legend, help) = (gl.scene.visible(), self.legend, self.help);
         let ms = gl.start.elapsed().as_secs_f64() * 1000.0;
+        let rows = &mut self.rows;
         gl.gui
-            .update(&mut [], ms, vp, dpr, |ui| overlay(ui, &self.files, visible, legend, help));
+            .update(&mut [], ms, vp, dpr, |ui| *rows = overlay(ui, &self.files, visible, legend, help));
         if let Err(e) = screen.write(|| gl.gui.render()) {
             warn!("cannot draw the panels: {e}");
         }
@@ -598,7 +609,17 @@ impl ApplicationHandler<Loaded> for Viewer {
                     WinitButton::Middle => Some(MouseButton::Middle),
                     _ => None,
                 };
-                self.button = b.filter(|_| state == ElementState::Pressed);
+                let pressed = state == ElementState::Pressed;
+                // a left click on a legend row turns its file off or on, and doesn't orbit
+                let row = self.cursor.filter(|_| pressed && b == Some(MouseButton::Left)).and_then(|(x, y)| {
+                    self.rows.iter().find(|(r, _)| r.contains(egui::pos2(x, y))).map(|(_, i)| *i)
+                });
+                if let Some(i) = row {
+                    self.toggle(i);
+                    self.button = None;
+                    return self.request_redraw();
+                }
+                self.button = b.filter(|_| pressed);
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let p = position.to_logical::<f32>(f64::from(dpr));
@@ -646,13 +667,14 @@ impl ApplicationHandler<Loaded> for Viewer {
 
 // ========================================== Overlay ========================================== {{{
 
-/// What's drawn over the scene, none of it clickable (the keys toggle, the
-/// mouse moves the view). Top left, with `legend`: each file with its key,
+/// What's drawn over the scene; egui gets no input, the window hit-tests the
+/// legend's rows itself. Top left, with `legend`: each file with its key,
 /// its tint and its size, the ones turned off, still loading or failed
 /// dimmed. Top right, with
-/// `help`, the keys; else a hint bottom left that H shows them.
-fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: bool) {
-    let panel = |id: &str, at: egui::Align2, off: [f32; 2], add: &dyn Fn(&mut egui::Ui)| {
+/// `help`, the keys; else a hint bottom left that H shows them. Returns the
+/// legend's rows and their file, empty without it.
+fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: bool) -> Vec<(egui::Rect, usize)> {
+    let panel = |id: &str, at: egui::Align2, off: [f32; 2], add: &mut dyn FnMut(&mut egui::Ui)| {
         egui::Area::new(egui::Id::new(id))
             .anchor(at, off)
             .interactable(false)
@@ -663,7 +685,7 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
             });
     };
     if help {
-        panel("help", egui::Align2::RIGHT_TOP, [-12.0, 12.0], &|ui| {
+        panel("help", egui::Align2::RIGHT_TOP, [-12.0, 12.0], &mut |ui| {
             // the help's lines: two spaces or more between key and what it does
             egui::Grid::new("keys").spacing([16.0, 4.0]).show(ui, |ui| {
                 for (k, d) in window_keys().lines().skip(1).filter_map(|l| l.trim().split_once("  ")) {
@@ -682,10 +704,11 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
             .interactable(false)
             .show(ui.ctx(), |ui| ui.weak(if loading { "loading…   H  keys" } else { "H  keys" }));
     }
+    let mut rows = vec![];
     if !legend {
-        return;
+        return rows;
     }
-    panel("legend", egui::Align2::LEFT_TOP, [12.0, 12.0], &|ui| {
+    panel("legend", egui::Align2::LEFT_TOP, [12.0, 12.0], &mut |ui| {
         egui::Grid::new("files").min_col_width(0.0).spacing([10.0, 4.0]).show(ui, |ui| {
             for (i, f) in files.iter().enumerate() {
                 let (on, tint, count) = match &f.state {
@@ -711,7 +734,7 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
                 let alpha = if on { 1.0 } else { OFF_ALPHA };
                 let fg = ui.visuals().text_color().gamma_multiply(alpha);
                 let text = |t: String| egui::RichText::new(t).color(fg);
-                ui.label(text(if i < 9 { format!("{}", i + 1) } else { String::new() }));
+                let first = ui.label(text(if i < 9 { format!("{}", i + 1) } else { String::new() }));
                 let (r, _) = ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
                 if let Some(c) = tint {
                     // the palette is written to the screen as is: sRGB
@@ -724,11 +747,13 @@ fn overlay(ui: &egui::Ui, files: &[File], visible: &[bool], legend: bool, help: 
                         .rect_stroke(r, 2.0, egui::Stroke::new(1.0_f32, fg), egui::StrokeKind::Inside);
                 }
                 ui.label(text(f.name.clone()));
-                ui.label(text(count));
+                let last = ui.label(text(count));
+                rows.push((first.rect.union(last.rect), i));
                 ui.end_row();
             }
         });
     });
+    rows
 }
 
 /// A 0..1 channel as a byte.
