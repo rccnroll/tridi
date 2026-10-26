@@ -518,6 +518,20 @@ impl Viewer {
             // H is Open3D's help key, ? everyone else's
             "h" | "?" => self.help = !self.help,
             "i" => self.legend = !self.legend,
+            "a" => {
+                // any on: all off; all off: all on
+                let on = !gl.scene.visible().iter().any(|v| *v);
+                let flip: Vec<usize> = (self.files.iter().enumerate())
+                    .filter(|(_, f)| {
+                        matches!(f.state, State::Shown { layer, .. }
+                            if gl.scene.visible().get(layer).is_some_and(|v| *v != on))
+                    })
+                    .map(|(i, _)| i)
+                    .collect();
+                for i in flip {
+                    self.toggle(i);
+                }
+            }
             d => {
                 if let Some(i) = d.parse::<usize>().ok().filter(|n| (1..=9).contains(n)).map(|n| n - 1) {
                     self.toggle(i);
@@ -611,9 +625,10 @@ impl ApplicationHandler<Loaded> for Viewer {
                 };
                 let pressed = state == ElementState::Pressed;
                 // a left click on a legend row turns its file off or on, and doesn't orbit
-                let row = self.cursor.filter(|_| pressed && b == Some(MouseButton::Left)).and_then(|(x, y)| {
-                    self.rows.iter().find(|(r, _)| r.contains(egui::pos2(x, y))).map(|(_, i)| *i)
-                });
+                let row = self
+                    .cursor
+                    .filter(|_| pressed && b == Some(MouseButton::Left))
+                    .and_then(|(x, y)| self.rows.iter().find(|(r, _)| r.contains(egui::pos2(x, y))).map(|(_, i)| *i));
                 if let Some(i) = row {
                     self.toggle(i);
                     self.button = None;
