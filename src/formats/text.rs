@@ -11,25 +11,24 @@ use crate::formats::Cloud;
 // ======================================== Text clouds ======================================== {{{
 
 /// xyz: x y z; xyzrgb: x y z r g b (0..1); pts: an optional count line, then
-/// x y z [intensity] [r g b] (0..255). Spaces or commas; other lines skipped.
+/// x y z [intensity] [r g b] (0..255). Spaces or commas; a line that doesn't
+/// start with three numbers is skipped.
 #[expect(clippy::many_single_char_names, reason = "x y z and r g b, as the formats name them")]
 pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
     let mut points = vec![];
     let mut colors = vec![];
     let mut all_colored = true;
     for line in String::from_utf8_lossy(raw).lines() {
-        let t: Vec<f32> = match line
-            .split(|c: char| c.is_whitespace() || c == ',')
-            .filter(|s| !s.is_empty())
-            .map(str::parse)
-            .collect()
-        {
-            Ok(t) => t,
-            Err(_) => continue,
+        let mut words = line.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty());
+        // a point is a line that starts with three numbers, as Open3D reads
+        // them; the numbers after them, up to anything else, are its color
+        let mut num = || words.next()?.parse::<f32>().ok();
+        let (Some(x), Some(y), Some(z)) = (num(), num(), num()) else {
+            continue;
         };
-        let [x, y, z, ref rest @ ..] = *t.as_slice() else { continue };
+        let rest: Vec<f32> = words.map_while(|w| w.parse().ok()).collect();
         points.push(vec3(x, y, z));
-        let c = match (ext, rest) {
+        let c = match (ext, rest.as_slice()) {
             ("xyzrgb", &[r, g, b, ..]) => Some(vec3(r, g, b)),
             // x y z intensity r g b, or x y z r g b
             ("pts", &([_, r, g, b, ..] | [r, g, b])) => Some(vec3(r, g, b) / 255.0),
@@ -45,6 +44,7 @@ pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
         points,
         colors,
         faces: None,
+        index: None,
     }
 }
 
@@ -55,9 +55,10 @@ pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
 #[cfg(test)]
 mod tests {
     use crate::{
-        formats::load_cloud,
+        formats::{load_cloud, parse_cloud},
         test_support::{close, tmp},
     };
+    use three_d::vec3;
 
     #[test]
     fn text_formats() {
@@ -69,6 +70,19 @@ mod tests {
         let c = load_cloud(&tmp("a.pts", b"2\n1 2 3 -500 255 0 0\n4 5 6 -500 0 255 0\n")).unwrap();
         assert_eq!(c.points.len(), 2);
         assert!(close(c.colors.unwrap()[1], [0.0, 1.0, 0.0]));
+    }
+
+    #[test]
+    fn first_three_numbers_make_a_point() {
+        let c = parse_cloud(b"# comment\n0 0 0\n1 2 3 abc\n4 5 6\n", "xyz").unwrap();
+        assert_eq!(c.points.len(), 3);
+        assert_eq!(c.points[1], vec3(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn a_junk_tail_keeps_the_colors() {
+        let c = parse_cloud(b"0 0 0 1 0 0\n1 2 3 0 1 0 abc\n", "xyzrgb").unwrap();
+        assert!(c.colors.is_some());
     }
 }
 

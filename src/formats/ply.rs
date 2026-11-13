@@ -113,7 +113,12 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
             binary_faces(body.get(len..).unwrap_or_default(), list, m, big, &mut add_face)?;
         }
     }
-    Ok(Cloud { points, colors, faces })
+    Ok(Cloud {
+        points,
+        colors,
+        faces,
+        index: None,
+    })
 }
 
 // }}}
