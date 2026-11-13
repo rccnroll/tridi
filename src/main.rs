@@ -35,6 +35,8 @@
 // ======================================== Sub-modules ======================================== {{{
 
 mod desktop;
+#[expect(dead_code, reason = "wired into the viewer next")]
+mod pick;
 mod thumb;
 mod view;
 
