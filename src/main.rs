@@ -80,6 +80,8 @@ Window:
   wheel                 zoom
   shift + click         pick a point (printed on stdout)
   shift + right click   take the last pick off
+  P                     show or hide the picked points
+  Ctrl+C or click row   copy the picked points (or that one)
   R                     reset the view
   + and -               point size
   1-9 or click legend   turn the N-th file off and on (any file by click)

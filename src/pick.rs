@@ -1,8 +1,10 @@
 //! Picking a cloud's point with the mouse: which point is under the cursor,
-//! where a pick lands on screen, and the line it prints on stdout.
+//! where a pick lands on screen, the line it prints on stdout, and what the
+//! picks panel shows and copies.
 
 // ========================================== Imports ========================================== {{{
 
+use std::ops::Range;
 use three_d::{Mat4, Vec3};
 
 // }}}
@@ -33,6 +35,58 @@ pub struct Pick {
 /// the path last so spaces in it don't split it.
 pub fn line(event: &str, p: &Pick, path: &str) -> String {
     format!("{event} #{} {} {} {} {path}", p.index, p.at.x, p.at.y, p.at.z)
+}
+
+/// What the clipboard gets: each pick's stdout line, in pick order, `paths`
+/// the files as given on the command line.
+pub fn copy(picks: &[Pick], paths: &[String]) -> String {
+    picks
+        .iter()
+        .map(|p| line("picked", p, paths.get(p.file).map_or("", String::as_str)) + "\n")
+        .collect()
+}
+
+/// A pick as the picks panel shows it, numbered `n` like its marker: the
+/// number, the index in the file, x, y and z, a column each.
+pub fn row(n: usize, p: &Pick) -> [String; 5] {
+    [
+        n.to_string(),
+        format!("#{}", p.index),
+        p.at.x.to_string(),
+        p.at.y.to_string(),
+        p.at.z.to_string(),
+    ]
+}
+
+/// The picks the panel shows out of `len`, at most `max` from `top`, or the
+/// last `max` when `top` is None (it follows the newest).
+pub fn shown(len: usize, top: Option<usize>, max: usize) -> Range<usize> {
+    let last = len.saturating_sub(max);
+    let start = top.map_or(last, |t| t.min(last));
+    start..len.min(start + max)
+}
+
+/// `top` moved a row `up` (to older picks) or down; None once it's back at
+/// the end, so the next pick shows.
+pub fn scroll(len: usize, top: Option<usize>, max: usize, up: bool) -> Option<usize> {
+    let last = len.saturating_sub(max);
+    let start = shown(len, top, max).start;
+    let start = if up { start.saturating_sub(1) } else { (start + 1).min(last) };
+    (start < last).then_some(start)
+}
+
+/// `name` cut to `max` characters by taking out its middle, where a file's
+/// name is least telling (its start and its extension stay).
+pub fn short_name(name: &str, max: usize) -> String {
+    let n = name.chars().count();
+    if n <= max {
+        return name.to_owned();
+    }
+    let tail = (max - 1).div_euclid(3);
+    let head = max - 1 - tail;
+    let start: String = name.chars().take(head).collect();
+    let end: String = name.chars().skip(n - tail).collect();
+    format!("{start}…{end}")
 }
 
 /// `at` in normalized device coordinates, None if behind the eye or out of view.
@@ -175,6 +229,59 @@ mod tests {
     fn a_click_moves_less_than_the_slop() {
         assert!(is_click((10.0, 10.0), (12.0, 13.0)));
         assert!(!is_click((10.0, 10.0), (10.0, 20.0)));
+    }
+
+    #[test]
+    fn copy_is_the_stdout_lines_in_pick_order() {
+        let a = Pick {
+            file: 1,
+            index: 7,
+            at: vec3(1.0, 2.0, 3.0),
+        };
+        let b = Pick {
+            file: 0,
+            index: 0,
+            at: vec3(0.5, 0.0, -1.0),
+        };
+        let paths = ["a.pcd".to_owned(), "dir/b c.pcd".to_owned()];
+        assert_eq!(copy(&[a, b], &paths), "picked #7 1 2 3 dir/b c.pcd\npicked #0 0.5 0 -1 a.pcd\n");
+        assert_eq!(copy(&[], &paths), "");
+    }
+
+    #[test]
+    fn a_row_shows_number_index_coordinates_and_name() {
+        let p = Pick {
+            file: 0,
+            index: 52313,
+            at: vec3(1024.087, 3681.835, 1257.451),
+        };
+        assert_eq!(row(2, &p), ["2", "#52313", "1024.087", "3681.835", "1257.451"]);
+    }
+
+    #[test]
+    fn the_panel_shows_the_newest_until_scrolled() {
+        assert_eq!(shown(27, None, 8), 19..27);
+        assert_eq!(shown(27, Some(3), 8), 3..11);
+        // a top past the end is the end
+        assert_eq!(shown(27, Some(25), 8), 19..27);
+        assert_eq!(shown(5, None, 8), 0..5);
+    }
+
+    #[test]
+    fn scrolling_up_leaves_the_end_and_down_comes_back() {
+        assert_eq!(scroll(27, None, 8, true), Some(18));
+        assert_eq!(scroll(27, Some(18), 8, false), None);
+        assert_eq!(scroll(27, Some(0), 8, true), Some(0));
+        assert_eq!(scroll(5, None, 8, true), None);
+    }
+
+    #[test]
+    fn long_names_lose_their_middle() {
+        assert_eq!(short_name("scan.pcd", 24), "scan.pcd");
+        let long = "Cappellotto_eye_in_hand_robot_World_mm_2026-11-04T16-27-17-126.pcd";
+        let s = short_name(long, 24);
+        assert_eq!(s.chars().count(), 24);
+        assert!(s.starts_with("Cappellotto") && s.ends_with("126.pcd") && s.contains('…'), "{s}");
     }
 }
 
