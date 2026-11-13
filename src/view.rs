@@ -39,7 +39,10 @@ use winit::{
     window::{CursorIcon, Window, WindowId},
 };
 
-use crate::{tell, window_keys};
+use crate::{
+    pick::{self, Pick},
+    tell, window_keys,
+};
 
 // }}}
 
@@ -116,6 +119,8 @@ struct Ready {
     count: usize,
     unit: &'static str,
     bb: AxisAlignedBoundingBox,
+    /// a cloud's points kept for picking, with their records in the file
+    cloud: Option<tridi::Cloud>,
 }
 
 /// What a loader thread sends the event loop.
@@ -158,6 +163,10 @@ pub fn view(paths: &[String], theme: &'static Theme, mut out: Box<dyn Write>) ->
     let mut v = Viewer {
         pending: files.len(),
         legend: files.len() > 1,
+        paths: paths.to_vec(),
+        clouds: paths.iter().map(|_| None).collect(),
+        picks: vec![],
+        press: None,
         files,
         theme,
         up: tridi::up_for(paths.iter().all(|p| tridi::is_gltf(Path::new(p)))),
@@ -215,6 +224,13 @@ fn ready(item: Item, tint: Option<[f32; 3]>, theme: &Theme) -> Ready {
             tint: tint.filter(|_| tridi::own_colors(&c, tint).is_none()),
             count: c.points.len(),
             unit: "points",
+            // before `input` takes the points
+            cloud: Some(tridi::Cloud {
+                points: c.points.clone(),
+                colors: None,
+                faces: None,
+                index: c.index.clone(),
+            }),
             input: {
                 let colors = tridi::colorize(&c, tint, theme);
                 Input::Points(c.points, colors)
@@ -234,6 +250,7 @@ fn ready(item: Item, tint: Option<[f32; 3]>, theme: &Theme) -> Ready {
                 }
             })),
             tint: None,
+            cloud: None,
             count: tridi::triangles(&m),
             unit: "triangles",
             input: Input::Mesh(m),
@@ -314,11 +331,19 @@ struct Gl {
 /// three-d only gets the GL context.
 struct Viewer {
     files: Vec<File>,
+    /// the files as given on the command line: what the pick lines name
+    paths: Vec<String>,
+    /// each file's points, if it's a cloud and shown: what Shift + click picks from
+    clouds: Vec<Option<tridi::Cloud>>,
+    /// the points picked, in order: Shift + right click takes the last off
+    picks: Vec<Pick>,
+    /// the button and where it was pressed with Shift, logical pixels
+    press: Option<(MouseButton, (f32, f32))>,
     /// files not read yet
     pending: usize,
     theme: &'static Theme,
     up: Vec3,
-    /// stdout: the files turned off and on
+    /// stdout: the files turned off and on, the points picked and removed
     out: Box<dyn Write>,
     gl: Option<Gl>,
     /// what closed the window, if not the user
@@ -402,6 +427,9 @@ impl Viewer {
 
     /// A piece read: into the scene, the window opened if it's the first.
     fn part(&mut self, event_loop: &ActiveEventLoop, i: usize, r: Ready) {
+        if let (Some(c), Some(slot)) = (r.cloud, self.clouds.get_mut(i)) {
+            *slot = Some(c);
+        }
         let to = match self.files.get(i) {
             Some(File {
                 state: State::Shown { layer, .. },
@@ -552,6 +580,66 @@ impl Viewer {
         }
     }
 
+    /// A Shift click: left picks the point at `at`, right takes the last pick off.
+    fn clicked(&mut self, b: MouseButton, at: (f32, f32)) {
+        if b == MouseButton::Left {
+            self.pick(at);
+        } else {
+            self.unpick();
+        }
+    }
+
+    /// Shift + click at `at` (logical pixels): the point of a shown cloud
+    /// under it, if any, kept and told on stdout.
+    fn pick(&mut self, at: (f32, f32)) {
+        let Some(gl) = self.gl.as_ref() else { return };
+        let mvp = gl.cam.projection() * gl.cam.view();
+        let (visible, sizes, psize) = (gl.scene.visible(), gl.scene.sizes(), self.psize);
+        let clouds = self.files.iter().zip(&self.clouds).enumerate().filter_map(|(i, (f, c))| {
+            let State::Shown { layer, .. } = f.state else { return None };
+            let c = c.as_ref().filter(|_| visible.get(layer).is_some_and(|v| *v))?;
+            // a big point is picked anywhere it's drawn
+            let radius = pick::PICK_RADIUS.max(psize * sizes.get(layer).copied().unwrap_or(1.0) / 2.0);
+            Some((i, c.points.as_slice(), radius))
+        });
+        let Some((file, i)) = pick::under(clouds, mvp, logical_size(&gl.window), at) else {
+            return;
+        };
+        let Some(c) = self.clouds.get(file).and_then(Option::as_ref) else {
+            return;
+        };
+        let Some(&at) = c.points.get(i) else { return };
+        let p = Pick {
+            file,
+            index: c.file_index(i),
+            at,
+        };
+        let path = self.paths.get(file).map_or("", String::as_str);
+        tell(&mut *self.out, format_args!("{}", pick::line("picked", &p, path)));
+        self.picks.push(p);
+    }
+
+    /// Shift + right click: the last pick taken off, told on stdout.
+    fn unpick(&mut self) {
+        if let Some(p) = self.picks.pop() {
+            let path = self.paths.get(p.file).map_or("", String::as_str);
+            tell(&mut *self.out, format_args!("{}", pick::line("removed", &p, path)));
+        }
+    }
+
+    /// Where the picks are on screen, numbered from 1: those of shown files,
+    /// in view.
+    fn marks(&self) -> Vec<(usize, (f32, f32))> {
+        let Some(gl) = self.gl.as_ref() else { return vec![] };
+        let mvp = gl.cam.projection() * gl.cam.view();
+        let size = logical_size(&gl.window);
+        let shown = |file: usize| layer(&self.files, file).is_some_and(|l| gl.scene.visible().get(l).is_some_and(|v| *v));
+        (self.picks.iter().enumerate())
+            .filter(|(_, p)| shown(p.file))
+            .filter_map(|(n, p)| Some((n + 1, pick::screen(p.at, mvp, size)?)))
+            .collect()
+    }
+
     fn request_redraw(&self) {
         if let Some(gl) = &self.gl {
             gl.window.request_redraw();
@@ -560,6 +648,7 @@ impl Viewer {
 
     /// Draws the scene and the panels, and shows the frame.
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
+        let marks = self.marks();
         let Some(gl) = self.gl.as_mut() else { return };
         let dpr = scale(&gl.window);
         let vp = viewport(&gl.window);
@@ -574,6 +663,7 @@ impl Viewer {
         let rows = &mut self.rows;
         gl.gui.update(&mut [], ms, vp, dpr, |ui| {
             *rows = overlay(ui, &self.files, visible, sizes, hover, legend, help);
+            draw_marks(ui, &marks);
         });
         if let Err(e) = screen.write(|| gl.gui.render()) {
             warn!("cannot draw the panels: {e}");
@@ -643,6 +733,11 @@ impl ApplicationHandler<Loaded> for Viewer {
                     return self.request_redraw();
                 }
                 self.button = b.filter(|_| pressed);
+                // Shift + click picks, Shift + right click takes the last pick off
+                if let Some((click, at)) = shift_click(&mut self.press, self.cursor, self.mods.shift, b, pressed) {
+                    self.clicked(click, at);
+                    return self.request_redraw();
+                }
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let p = position.to_logical::<f32>(f64::from(dpr));
@@ -809,6 +904,57 @@ fn overlay(
     rows
 }
 
+/// The picks' markers, over everything: a ring and a dot, outlined so they
+/// read on any color, and the pick's number.
+fn draw_marks(ui: &egui::Ui, marks: &[(usize, (f32, f32))]) {
+    let painter = ui
+        .ctx()
+        .layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("picks")));
+    let (fg, halo) = (ui.visuals().strong_text_color(), ui.visuals().window_fill);
+    for &(n, (x, y)) in marks {
+        let c = egui::pos2(x, y);
+        painter.circle_stroke(c, 6.0, egui::Stroke::new(3.5_f32, halo));
+        painter.circle_stroke(c, 6.0, egui::Stroke::new(1.5_f32, fg));
+        painter.circle_filled(c, 1.5, fg);
+        let at = c + egui::vec2(8.0, -6.0);
+        let font = egui::FontId::proportional(13.0);
+        // the number outlined too: drawn in the halo color around, then on top
+        for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+            painter.text(
+                at + egui::vec2(dx, dy),
+                egui::Align2::LEFT_BOTTOM,
+                n.to_string(),
+                font.clone(),
+                halo,
+            );
+        }
+        painter.text(at, egui::Align2::LEFT_BOTTOM, n.to_string(), font, fg);
+    }
+}
+
+/// A Shift click from the mouse buttons' events: the button and where it
+/// was kept in `press` when pressed; on release, where it ended, if Shift is
+/// still down, it's the same button and it moved too little to be a drag (a
+/// Shift drag pans). Only left and right count.
+fn shift_click(
+    press: &mut Option<(MouseButton, (f32, f32))>,
+    cursor: Option<(f32, f32)>,
+    shift: bool,
+    b: Option<MouseButton>,
+    pressed: bool,
+) -> Option<(MouseButton, (f32, f32))> {
+    if pressed {
+        // every press starts over: one without Shift leaves nothing behind
+        *press = b
+            .zip(cursor)
+            .filter(|(b, _)| shift && matches!(b, MouseButton::Left | MouseButton::Right));
+        return None;
+    }
+    let (down, from) = press.take()?;
+    let to = cursor?;
+    (shift && b == Some(down) && pick::is_click(from, to)).then_some((down, to))
+}
+
 /// The scene's layer of the i-th file, once shown: files come in as they're read.
 fn layer(files: &[File], i: usize) -> Option<usize> {
     match files.get(i)?.state {
@@ -848,6 +994,12 @@ fn scale(w: &Window) -> f32 {
     )]
     let s = w.scale_factor() as f32;
     s
+}
+
+/// The window's size in logical pixels, as the cursor is.
+fn logical_size(w: &Window) -> (f32, f32) {
+    let s = w.inner_size().to_logical::<f32>(w.scale_factor());
+    (s.width, s.height)
 }
 
 fn viewport(w: &Window) -> Viewport {
@@ -922,6 +1074,37 @@ mod tests {
             meta.contains(r#"<launchable type="desktop-id">io.github.rccnroll.tridi.desktop</launchable>"#),
             "the metainfo's desktop entry"
         );
+    }
+
+    #[test]
+    fn shift_click_not_drag() {
+        let (mut press, l) = (None, Some(MouseButton::Left));
+        assert_eq!(shift_click(&mut press, Some((10.0, 10.0)), true, l, true), None);
+        assert_eq!(
+            shift_click(&mut press, Some((11.0, 12.0)), true, l, false),
+            Some((MouseButton::Left, (11.0, 12.0)))
+        );
+        // a drag pans, and without Shift (or with the middle button) nothing picks
+        shift_click(&mut press, Some((10.0, 10.0)), true, l, true);
+        assert_eq!(shift_click(&mut press, Some((40.0, 10.0)), true, l, false), None);
+        shift_click(&mut press, Some((10.0, 10.0)), false, l, true);
+        assert_eq!(shift_click(&mut press, Some((10.0, 10.0)), false, l, false), None);
+        let m = Some(MouseButton::Middle);
+        shift_click(&mut press, Some((10.0, 10.0)), true, m, true);
+        assert_eq!(shift_click(&mut press, Some((10.0, 10.0)), true, m, false), None);
+    }
+
+    #[test]
+    fn shift_click_needs_shift_on_the_same_button_throughout() {
+        let (mut press, l, r) = (None, Some(MouseButton::Left), Some(MouseButton::Right));
+        // pressed without Shift, released with it: no pick
+        shift_click(&mut press, Some((10.0, 10.0)), true, l, true);
+        shift_click(&mut press, Some((10.0, 10.0)), false, l, false);
+        shift_click(&mut press, Some((50.0, 50.0)), false, l, true);
+        assert_eq!(shift_click(&mut press, Some((10.0, 10.0)), true, l, false), None);
+        // Shift + left pressed, right released: neither picks nor removes
+        shift_click(&mut press, Some((10.0, 10.0)), true, l, true);
+        assert_eq!(shift_click(&mut press, Some((10.0, 10.0)), true, r, false), None);
     }
 }
 

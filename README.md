@@ -29,6 +29,7 @@ a window or a GPU.
 | ![Orbiting, panning and zooming four point cloud tiles, then R](docs/media/navigate.gif) | **Navigation**: left drag orbits, right or middle drag (or shift + left) pans, the wheel zooms, `R` resets the view. |
 | ![Four tiles turned off and on with the keys 1 to 4](docs/media/files.gif) | **Several files at once**, one color each, so they tell apart; `1`–`9` turn the N-th file off and on, and a legend top left says which is which (`I` hides it); `H` or `?` shows the keys. A file's own colors always win. |
 | ![The point size growing and shrinking](docs/media/points.gif) | **Point size** with `+` and `-`; eye-dome lighting gives the cloud its depth. |
+| | **Picking**: Shift + click picks a point of a cloud and marks it, Shift + right click takes the last one off. Each prints a line on stdout, `picked #48213 1.234 -0.45 2.1 scan.pcd` or `removed …`: the point's index in the file, its x y z and the file, for an agent or a script to read. |
 | ![The same scene in the light and the dark theme](docs/media/themes.png) | **Two themes** (Nord light and dark) for the window and the thumbnails: `tridi theme dark`. |
 
 ## Install (Arch)
