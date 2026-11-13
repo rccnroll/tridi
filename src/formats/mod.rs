@@ -48,6 +48,18 @@ pub struct Cloud {
     pub colors: Option<Vec<Vec3>>,
     /// triangles as index triples, for ply/off files that have faces
     pub faces: Option<Vec<u32>>,
+    /// each point's record in the file, 0-based, when some were dropped
+    /// (NaN points); None when `points` is the file's records in order
+    pub index: Option<Vec<usize>>,
+}
+
+impl Cloud {
+    /// The record in the file of the i-th point: what a reader of the file
+    /// finds at that position.
+    #[must_use]
+    pub fn file_index(&self, i: usize) -> usize {
+        self.index.as_ref().and_then(|ix| ix.get(i).copied()).unwrap_or(i)
+    }
 }
 
 /// Reads `path`, picking the reader from its extension (any case).
@@ -73,6 +85,7 @@ pub fn parse_cloud(raw: &[u8], ext: &str) -> FormatResult<Cloud> {
         .map(|p| p.x.is_finite() && p.y.is_finite() && p.z.is_finite())
         .collect();
     if c.faces.is_none() && keep.contains(&false) {
+        c.index = Some(keep.iter().enumerate().filter(|(_, kept)| **kept).map(|(i, _)| i).collect());
         let mut k = keep.iter();
         c.points.retain(|_| k.next().is_some_and(|&kept| kept));
         if let Some(cols) = &mut c.colors {
@@ -322,6 +335,31 @@ mod tests {
         z.extend(24_u32.to_le_bytes());
         z.extend([0xff; 8]);
         assert!(load_cloud(&tmp("lzf.pcd", &z)).is_err());
+    }
+
+    const HEAD: &str = "VERSION .7\nFIELDS x y z\nSIZE 4 4 4\nTYPE F F F\nCOUNT 1 1 1\n";
+
+    #[test]
+    fn nan_rows_keep_their_file_index() {
+        let pcd = format!("{HEAD}WIDTH 4\nHEIGHT 1\nPOINTS 4\nDATA ascii\n0 0 0\nnan nan nan\n1 1 1\n2 2 2\n");
+        let c = parse_cloud(pcd.as_bytes(), "pcd").unwrap();
+        assert_eq!(c.points.len(), 3);
+        assert_eq!([c.file_index(0), c.file_index(1), c.file_index(2)], [0, 2, 3]);
+    }
+
+    #[test]
+    fn short_ascii_pcd_row_still_counts() {
+        let pcd = format!("{HEAD}WIDTH 3\nHEIGHT 1\nPOINTS 3\nDATA ascii\n0 0 0\n5\n2 2 2\n");
+        let c = parse_cloud(pcd.as_bytes(), "pcd").unwrap();
+        assert_eq!(c.points.len(), 2);
+        assert_eq!(c.file_index(1), 2);
+    }
+
+    #[test]
+    fn no_drops_no_index() {
+        let c = parse_cloud(b"0 0 0\n1 1 1\n", "xyz").unwrap();
+        assert!(c.index.is_none());
+        assert_eq!(c.file_index(1), 1);
     }
 }
 

@@ -90,6 +90,7 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
         points,
         colors,
         faces: Some(faces),
+        index: None,
     })
 }
 

@@ -26,7 +26,7 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
     if sizes.len() != names.len() || types.len() != names.len() || counts.len() != names.len() {
         return Err("FIELDS, SIZE, TYPE and COUNT have different lengths".into());
     }
-    let (fields, stride, col) = header_fields(names, sizes, types, counts)?;
+    let (fields, stride, _columns) = header_fields(names, sizes, types, counts)?;
     let n: usize = if let Some(v) = get("POINTS") {
         v.first().and_then(|s| s.parse().ok()).ok_or("bad POINTS")?
     } else {
@@ -49,8 +49,10 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
         "ascii" => {
             let text = String::from_utf8_lossy(body);
             for line in text.lines() {
+                // a short row is still a point, NaN: dropped later, but counted,
+                // so the points after it keep their index in the file
                 let t: Vec<&str> = line.split_whitespace().collect();
-                if t.len() < col {
+                if t.is_empty() {
                     continue;
                 }
                 let v = |f: &Field| t.get(f.col).and_then(|s| s.parse::<f32>().ok()).unwrap_or(f32::NAN);
@@ -120,6 +122,7 @@ fn parse(raw: &[u8]) -> Result<Cloud, String> {
         points,
         colors,
         faces: None,
+        index: None,
     })
 }
 
