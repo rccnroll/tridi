@@ -5,7 +5,7 @@
 // ========================================== Imports ========================================== {{{
 
 use std::ops::Range;
-use three_d::{Mat4, Vec3};
+use three_d::{InnerSpace, Mat4, Vec3};
 
 // }}}
 
@@ -47,14 +47,17 @@ pub fn copy(picks: &[Pick], paths: &[String]) -> String {
 }
 
 /// A pick as the picks panel shows it, numbered `n` like its marker: the
-/// number, the index in the file, x, y and z, a column each.
-pub fn row(n: usize, p: &Pick) -> [String; 5] {
+/// number, the index in the file, x, y and z, and how far it is from the
+/// pick before it (`prev`), in the file's units, a column each.
+pub fn row(n: usize, p: &Pick, prev: Option<&Pick>) -> [String; 6] {
+    let delta = prev.map_or_else(String::new, |q| format!("Δ {:.3}", (p.at - q.at).magnitude()));
     [
         n.to_string(),
         format!("#{}", p.index),
         p.at.x.to_string(),
         p.at.y.to_string(),
         p.at.z.to_string(),
+        delta,
     ]
 }
 
@@ -255,7 +258,22 @@ mod tests {
             index: 52313,
             at: vec3(1024.087, 3681.835, 1257.451),
         };
-        assert_eq!(row(2, &p), ["2", "#52313", "1024.087", "3681.835", "1257.451"]);
+        assert_eq!(row(2, &p, None), ["2", "#52313", "1024.087", "3681.835", "1257.451", ""]);
+    }
+
+    #[test]
+    fn a_row_says_how_far_its_pick_is_from_the_one_before() {
+        let a = Pick {
+            file: 0,
+            index: 1,
+            at: vec3(0.0, 0.0, 0.0),
+        };
+        let b = Pick {
+            file: 1,
+            index: 2,
+            at: vec3(3.0, 4.0, 0.0),
+        };
+        assert_eq!(row(2, &b, Some(&a))[5], "Δ 5.000");
     }
 
     #[test]

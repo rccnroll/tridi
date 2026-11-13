@@ -560,6 +560,7 @@ impl Viewer {
         #[expect(clippy::wildcard_enum_match_arm, reason = "the keys we use; every other one does nothing")]
         let c = match key {
             Key::Named(NamedKey::Escape) => "q".to_owned(),
+            Key::Named(NamedKey::Delete) => "delete".to_owned(),
             Key::Character(c) => c.to_lowercase(),
             _ => return false,
         };
@@ -574,6 +575,11 @@ impl Viewer {
             // H is Open3D's help key, ? everyone else's
             "h" | "?" => self.help = !self.help,
             "p" => self.panel = !self.panel,
+            "delete" => {
+                while !self.picks.is_empty() {
+                    self.unpick(None);
+                }
+            }
             "c" if self.mods.ctrl && self.panel => self.copy(None),
             "i" => self.legend = !self.legend,
             "a" => {
@@ -615,7 +621,7 @@ impl Viewer {
         if b == MouseButton::Left {
             self.pick(at);
         } else {
-            self.unpick();
+            self.unpick(None);
         }
     }
 
@@ -652,11 +658,23 @@ impl Viewer {
         self.picks.push(p);
     }
 
-    /// Shift + right click: the last pick taken off, told on stdout.
-    fn unpick(&mut self) {
-        if let Some(p) = self.picks.pop() {
+    /// Pick `n` (0-based) taken off, or the last one, told on stdout.
+    fn unpick(&mut self, n: Option<usize>) {
+        let n = n.unwrap_or(self.picks.len().saturating_sub(1));
+        if n < self.picks.len() {
+            let p = self.picks.remove(n);
             let path = self.paths.get(p.file).map_or("", String::as_str);
             tell(&mut *self.out, format_args!("{}", pick::line("removed", &p, path)));
+        }
+    }
+
+    /// A click on the picks panel's row `n`: left copies that pick, right
+    /// takes it off.
+    fn panel_click(&mut self, b: Option<MouseButton>, n: usize) {
+        match b {
+            Some(MouseButton::Left) => self.copy(Some(n)),
+            Some(MouseButton::Right) => self.unpick(Some(n)),
+            _ => {}
         }
     }
 
@@ -719,7 +737,8 @@ impl Viewer {
             let name = (self.files.len() > 1)
                 .then(|| self.files.get(p.file).map(|f| pick::short_name(&f.name, NAME_MAX)))
                 .flatten();
-            view.rows.push((n, pick::row(n + 1, p), name, shown(p.file)));
+            let prev = n.checked_sub(1).and_then(|k| self.picks.get(k));
+            view.rows.push((n, pick::row(n + 1, p, prev), name, shown(p.file)));
         }
         view
     }
@@ -755,7 +774,7 @@ impl Viewer {
         gl.gui.update(&mut [], ms, vp, dpr, |ui| {
             *rows = overlay(ui, &self.files, visible, sizes, hover, legend, help);
             *panel_rows = picks_panel(ui, &lines, over, status);
-            draw_marks(ui, &marks);
+            draw_marks(ui, &marks, over);
         });
         if let Err(e) = screen.write(|| gl.gui.render()) {
             warn!("cannot draw the panels: {e}");
@@ -809,9 +828,9 @@ impl ApplicationHandler<Loaded> for Viewer {
             }
             WindowEvent::MouseInput { state, button, .. } => {
                 let (b, pressed) = (mouse_button(button), state == ElementState::Pressed);
-                // a left click on a pick's row copies it
-                if let Some(n) = row(&self.panel_rows, self.cursor).filter(|_| pressed && b == Some(MouseButton::Left)) {
-                    self.copy(Some(n));
+                // on a pick's row, left copies it, right takes it off
+                if let Some(n) = row(&self.panel_rows, self.cursor).filter(|_| pressed) {
+                    self.panel_click(b, n);
                     return self.request_redraw();
                 }
                 // on a legend row, left turns its file off or on, right puts its points
@@ -932,11 +951,20 @@ fn overlay(
     };
     if help {
         panel("help", egui::Align2::RIGHT_TOP, [-12.0, 12.0], &mut |ui| {
-            // the help's lines: two spaces or more between key and what it does
+            // the help's lines: a group's name alone, then its keys, two
+            // spaces or more between a key and what it does
             egui::Grid::new("keys").spacing([16.0, 4.0]).show(ui, |ui| {
-                for (k, d) in window_keys().lines().skip(1).filter_map(|l| l.trim().split_once("  ")) {
-                    ui.strong(k);
-                    ui.label(d.trim());
+                for (i, l) in window_keys().lines().skip(1).map(str::trim).enumerate() {
+                    if let Some((k, d)) = l.split_once("  ") {
+                        ui.strong(k);
+                        ui.label(d.trim());
+                    } else {
+                        let top = if i == 0 { 0.0 } else { 8.0 };
+                        ui.vertical(|ui| {
+                            ui.add_space(top);
+                            ui.label(egui::RichText::new(l).small().weak());
+                        });
+                    }
                     ui.end_row();
                 }
             });
@@ -1013,7 +1041,7 @@ fn overlay(
 /// how many picks are out of view above and below.
 #[derive(Default)]
 struct PanelView {
-    rows: Vec<(usize, [String; 5], Option<String>, bool)>,
+    rows: Vec<(usize, [String; 6], Option<String>, bool)>,
     above: usize,
     below: usize,
 }
@@ -1048,7 +1076,7 @@ fn picks_panel(ui: &egui::Ui, view: &PanelView, over: Option<usize>, status: Opt
                         let first = last.rect;
                         last = ui.label(text(&cells[1]));
                         for c in &cells[2..] {
-                            // coordinates right-aligned, so their digits line up
+                            // coordinates and distance right-aligned, so their digits line up
                             last = ui
                                 .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(text(c).monospace()))
                                 .inner;
@@ -1070,18 +1098,25 @@ fn picks_panel(ui: &egui::Ui, view: &PanelView, over: Option<usize>, status: Opt
 }
 
 /// The picks' markers, over the scene and under the panels: a ring and a dot, outlined so they
-/// read on any color, and the pick's number.
-fn draw_marks(ui: &egui::Ui, marks: &[(usize, (f32, f32))]) {
+/// read on any color, and the pick's number; the one whose panel row is
+/// under the cursor (`over`, 0-based) bigger, in the accent color.
+fn draw_marks(ui: &egui::Ui, marks: &[(usize, (f32, f32))], over: Option<usize>) {
     let painter = ui
         .ctx()
         .layer_painter(egui::LayerId::new(egui::Order::Background, egui::Id::new("picks")));
-    let (fg, halo) = (ui.visuals().strong_text_color(), ui.visuals().window_fill);
+    let (text, halo, accent) = (
+        ui.visuals().strong_text_color(),
+        ui.visuals().window_fill,
+        ui.visuals().selection.bg_fill,
+    );
     for &(n, (x, y)) in marks {
         let c = egui::pos2(x, y);
-        painter.circle_stroke(c, 6.0, egui::Stroke::new(3.5_f32, halo));
-        painter.circle_stroke(c, 6.0, egui::Stroke::new(1.5_f32, fg));
+        let lit = over == n.checked_sub(1);
+        let (fg, r, w) = if lit { (accent, 10.0, 2.5_f32) } else { (text, 6.0, 1.5_f32) };
+        painter.circle_stroke(c, r, egui::Stroke::new(w + 2.0, halo));
+        painter.circle_stroke(c, r, egui::Stroke::new(w, fg));
         painter.circle_filled(c, 1.5, fg);
-        let at = c + egui::vec2(8.0, -6.0);
+        let at = c + egui::vec2(r + 2.0, -r);
         let font = egui::FontId::proportional(13.0);
         // the number outlined too: drawn in the halo color around, then on top
         for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
