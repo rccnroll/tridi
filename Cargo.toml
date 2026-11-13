@@ -30,6 +30,8 @@ thiserror = "2"
 eyre = "0.6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "std"] }
+# the picks copied to the clipboard (Wayland through data-control, else X11)
+arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
 
 # the STEP child's OpenCASCADE side (build.rs)
 [build-dependencies]

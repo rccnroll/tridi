@@ -21,7 +21,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
     thread,
-    time::Instant,
+    time::{Duration, Instant},
 };
 use three_d::{
     AxisAlignedBoundingBox, Camera, ClearState, Context, Event, GUI, HasContext, InnerSpace, MetricSpace, Modifiers, MouseButton,
@@ -31,8 +31,8 @@ use three_d_asset::Geometry;
 use tridi::{Input, Item, Purpose, Scene, Theme};
 use winit::{
     application::ApplicationHandler,
-    event::{ElementState, MouseButton as WinitButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    event::{ElementState, MouseButton as WinitButton, MouseScrollDelta, StartCause, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     keyboard::{Key, NamedKey},
     platform::wayland::WindowAttributesExtWayland,
     raw_window_handle::HasWindowHandle,
@@ -77,6 +77,15 @@ const POINT_MAX: f32 = 20.0;
 const ZOOM_MIN: f32 = 0.05;
 
 const ZOOM_MAX: f32 = 15.0;
+
+/// How long the picks panel says it copied.
+const COPIED_FOR: Duration = Duration::from_secs(2);
+
+/// The picks panel's rows at most: the wheel scrolls the rest.
+const PANEL_ROWS: usize = 8;
+
+/// A file's name in the picks panel, characters at most.
+const NAME_MAX: usize = 28;
 
 /// The legend's dimming of a file turned off, and the panels' see-through.
 const OFF_ALPHA: f32 = 0.35;
@@ -175,6 +184,11 @@ pub fn view(paths: &[String], theme: &'static Theme, mut out: Box<dyn Write>) ->
         err: None,
         psize: POINT_SIZE,
         help: false,
+        panel: false,
+        panel_rows: vec![],
+        panel_top: None,
+        clipboard: None,
+        copied: None,
         rows: vec![],
         moved: false,
         cursor: None,
@@ -329,6 +343,10 @@ struct Gl {
 /// winit 0.28: on GNOME, where winit draws the title bar itself, at scale 2
 /// that one sends a 45 px high buffer and the compositor kills the window.
 /// three-d only gets the GL context.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the panels and the view's state: independent flags, not a state machine"
+)]
 struct Viewer {
     files: Vec<File>,
     /// the files as given on the command line: what the pick lines name
@@ -353,6 +371,16 @@ struct Viewer {
     legend: bool,
     /// H or ?: the keys
     help: bool,
+    /// P: the picks panel, opened by the first pick
+    panel: bool,
+    /// the picks panel's rows on screen, logical pixels, and their pick: a click copies it
+    panel_rows: Vec<(egui::Rect, usize)>,
+    /// the first pick the panel shows, scrolled with the wheel; None follows the newest
+    panel_top: Option<usize>,
+    /// made at the first copy, and kept: on X11 what's copied goes with it
+    clipboard: Option<arboard::Clipboard>,
+    /// when the panel last copied, and what it says about it
+    copied: Option<(Instant, String)>,
     /// the legend's rows on screen, logical pixels, and their file: a click toggles it
     rows: Vec<(egui::Rect, usize)>,
     /// the user moved the view: a file read later no longer reframes it
@@ -532,6 +560,7 @@ impl Viewer {
         #[expect(clippy::wildcard_enum_match_arm, reason = "the keys we use; every other one does nothing")]
         let c = match key {
             Key::Named(NamedKey::Escape) => "q".to_owned(),
+            Key::Named(NamedKey::Delete) => "delete".to_owned(),
             Key::Character(c) => c.to_lowercase(),
             _ => return false,
         };
@@ -545,6 +574,13 @@ impl Viewer {
             "q" => event_loop.exit(),
             // H is Open3D's help key, ? everyone else's
             "h" | "?" => self.help = !self.help,
+            "p" => self.panel = !self.panel,
+            "delete" => {
+                while !self.picks.is_empty() {
+                    self.unpick(None);
+                }
+            }
+            "c" if self.mods.ctrl && self.panel => self.copy(None),
             "i" => self.legend = !self.legend,
             "a" => {
                 // any on: all off; all off: all on
@@ -585,7 +621,7 @@ impl Viewer {
         if b == MouseButton::Left {
             self.pick(at);
         } else {
-            self.unpick();
+            self.unpick(None);
         }
     }
 
@@ -616,15 +652,61 @@ impl Viewer {
         };
         let path = self.paths.get(file).map_or("", String::as_str);
         tell(&mut *self.out, format_args!("{}", pick::line("picked", &p, path)));
+        // the panel shows up with the first pick: no terminal, no stdout
+        self.panel |= self.picks.is_empty();
+        self.panel_top = None;
         self.picks.push(p);
     }
 
-    /// Shift + right click: the last pick taken off, told on stdout.
-    fn unpick(&mut self) {
-        if let Some(p) = self.picks.pop() {
+    /// Pick `n` (0-based) taken off, or the last one, told on stdout.
+    fn unpick(&mut self, n: Option<usize>) {
+        let n = n.unwrap_or(self.picks.len().saturating_sub(1));
+        if n < self.picks.len() {
+            let p = self.picks.remove(n);
             let path = self.paths.get(p.file).map_or("", String::as_str);
             tell(&mut *self.out, format_args!("{}", pick::line("removed", &p, path)));
         }
+    }
+
+    /// A click on the picks panel's row `n`: left copies that pick, right
+    /// takes it off.
+    fn panel_click(&mut self, b: Option<MouseButton>, n: usize) {
+        match b {
+            Some(MouseButton::Left) => self.copy(Some(n)),
+            Some(MouseButton::Right) => self.unpick(Some(n)),
+            _ => {}
+        }
+    }
+
+    /// Copies pick `n` (0-based), or all of them, as their stdout lines; the
+    /// panel says how it went for a while.
+    fn copy(&mut self, n: Option<usize>) {
+        let picks = match n {
+            Some(n) => self.picks.get(n..=n).unwrap_or_default(),
+            None => &self.picks,
+        };
+        if picks.is_empty() {
+            return;
+        }
+        let text = pick::copy(picks, &self.paths);
+        let what = if picks.len() == 1 {
+            "1 point".to_owned()
+        } else {
+            format!("{} points", picks.len())
+        };
+        if self.clipboard.is_none() {
+            self.clipboard = arboard::Clipboard::new().map_err(|e| warn!("no clipboard: {e}")).ok();
+        }
+        let done = self.clipboard.as_mut().map(|c| c.set_text(text));
+        let said = match done {
+            Some(Ok(())) => format!("copied {what}"),
+            Some(Err(e)) => {
+                warn!("cannot copy: {e}");
+                "cannot copy".to_owned()
+            }
+            None => "no clipboard".to_owned(),
+        };
+        self.copied = Some((Instant::now(), said));
     }
 
     /// Where the picks are on screen, numbered from 1: those of shown files,
@@ -640,6 +722,27 @@ impl Viewer {
             .collect()
     }
 
+    /// What the picks panel shows, if it's open: the picks in view, each
+    /// with its place in `picks`, its row, its file's name when there are
+    /// several files, and whether that file is shown.
+    fn panel_view(&self) -> PanelView {
+        let mut view = PanelView::default();
+        let Some(gl) = self.gl.as_ref().filter(|_| self.panel) else {
+            return view;
+        };
+        let shown = |file: usize| layer(&self.files, file).is_some_and(|l| gl.scene.visible().get(l).is_some_and(|v| *v));
+        let range = pick::shown(self.picks.len(), self.panel_top, PANEL_ROWS);
+        (view.above, view.below) = (range.start, self.picks.len() - range.end);
+        for (n, p) in self.picks.iter().enumerate().take(range.end).skip(range.start) {
+            let name = (self.files.len() > 1)
+                .then(|| self.files.get(p.file).map(|f| pick::short_name(&f.name, NAME_MAX)))
+                .flatten();
+            let prev = n.checked_sub(1).and_then(|k| self.picks.get(k));
+            view.rows.push((n, pick::row(n + 1, p, prev), name, shown(p.file)));
+        }
+        view
+    }
+
     fn request_redraw(&self) {
         if let Some(gl) = &self.gl {
             gl.window.request_redraw();
@@ -649,6 +752,13 @@ impl Viewer {
     /// Draws the scene and the panels, and shows the frame.
     fn redraw(&mut self, event_loop: &ActiveEventLoop) {
         let marks = self.marks();
+        let lines = self.panel_view();
+        // "copied" stays a while, then a timer redraws without it
+        self.copied = self.copied.take().filter(|(t, _)| t.elapsed() < COPIED_FOR);
+        if let Some((t, _)) = &self.copied {
+            event_loop.set_control_flow(ControlFlow::WaitUntil(*t + COPIED_FOR));
+        }
+        let status = self.copied.as_ref().map(|(_, s)| s.as_str());
         let Some(gl) = self.gl.as_mut() else { return };
         let dpr = scale(&gl.window);
         let vp = viewport(&gl.window);
@@ -659,11 +769,12 @@ impl Viewer {
         gl.scene.render(&screen, &gl.cam, self.psize * dpr);
         let (visible, sizes, legend, help) = (gl.scene.visible(), gl.scene.sizes(), self.legend, self.help);
         let ms = gl.start.elapsed().as_secs_f64() * 1000.0;
-        let hover = row(&self.rows, self.cursor);
-        let rows = &mut self.rows;
+        let (hover, over) = (row(&self.rows, self.cursor), row(&self.panel_rows, self.cursor));
+        let (rows, panel_rows) = (&mut self.rows, &mut self.panel_rows);
         gl.gui.update(&mut [], ms, vp, dpr, |ui| {
             *rows = overlay(ui, &self.files, visible, sizes, hover, legend, help);
-            draw_marks(ui, &marks);
+            *panel_rows = picks_panel(ui, &lines, over, status);
+            draw_marks(ui, &marks, over);
         });
         if let Err(e) = screen.write(|| gl.gui.render()) {
             warn!("cannot draw the panels: {e}");
@@ -682,6 +793,14 @@ impl Viewer {
 impl ApplicationHandler<Loaded> for Viewer {
     // the window opens with the first file read, in `user_event`
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
+
+    /// The picks panel's "copied" timer ran out: drawn again without it.
+    fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+        if matches!(cause, StartCause::ResumeTimeReached { .. }) {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            self.request_redraw();
+        }
+    }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: Loaded) {
         match event {
@@ -708,14 +827,12 @@ impl ApplicationHandler<Loaded> for Viewer {
                 };
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                #[expect(clippy::wildcard_enum_match_arm, reason = "the three buttons that move the view")]
-                let b = match button {
-                    WinitButton::Left => Some(MouseButton::Left),
-                    WinitButton::Right => Some(MouseButton::Right),
-                    WinitButton::Middle => Some(MouseButton::Middle),
-                    _ => None,
-                };
-                let pressed = state == ElementState::Pressed;
+                let (b, pressed) = (mouse_button(button), state == ElementState::Pressed);
+                // on a pick's row, left copies it, right takes it off
+                if let Some(n) = row(&self.panel_rows, self.cursor).filter(|_| pressed) {
+                    self.panel_click(b, n);
+                    return self.request_redraw();
+                }
                 // on a legend row, left turns its file off or on, right puts its points
                 // back to the others' size; neither moves the view
                 if let Some(i) = row(&self.rows, self.cursor).filter(|_| pressed) {
@@ -751,21 +868,27 @@ impl ApplicationHandler<Loaded> for Viewer {
                         handled: false,
                     });
                 }
-                let was = row(&self.rows, self.cursor);
+                let on_row = |c| (row(&self.rows, c), row(&self.panel_rows, c));
+                let was = on_row(self.cursor);
                 self.cursor = Some((p.x, p.y));
                 // the row under the cursor is highlighted: the one the wheel and clicks act on
-                let now = row(&self.rows, self.cursor);
+                let now = on_row(self.cursor);
                 if now != was {
-                    gl.window
-                        .set_cursor(if now.is_some() { CursorIcon::Pointer } else { CursorIcon::Default });
+                    gl.window.set_cursor(if now == (None, None) {
+                        CursorIcon::Default
+                    } else {
+                        CursorIcon::Pointer
+                    });
                     gl.window.request_redraw();
                 }
             }
             WindowEvent::MouseWheel { delta, .. } => {
-                let y = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => y * WHEEL_NOTCH,
-                    MouseScrollDelta::PixelDelta(d) => d.to_logical::<f32>(f64::from(dpr)).y * WHEEL_PIXEL,
-                };
+                let y = wheel(delta, dpr);
+                // the wheel on the picks panel scrolls it, a row a step
+                if row(&self.panel_rows, self.cursor).is_some() {
+                    self.panel_top = pick::scroll(self.picks.len(), self.panel_top, PANEL_ROWS, y > 0.0);
+                    return self.request_redraw();
+                }
                 // the wheel on a legend row sizes that file's points, not the view
                 if let Some(i) = row(&self.rows, self.cursor) {
                     if let Some(l) = layer(&self.files, i) {
@@ -828,11 +951,20 @@ fn overlay(
     };
     if help {
         panel("help", egui::Align2::RIGHT_TOP, [-12.0, 12.0], &mut |ui| {
-            // the help's lines: two spaces or more between key and what it does
+            // the help's lines: a group's name alone, then its keys, two
+            // spaces or more between a key and what it does
             egui::Grid::new("keys").spacing([16.0, 4.0]).show(ui, |ui| {
-                for (k, d) in window_keys().lines().skip(1).filter_map(|l| l.trim().split_once("  ")) {
-                    ui.strong(k);
-                    ui.label(d.trim());
+                for (i, l) in window_keys().lines().skip(1).map(str::trim).enumerate() {
+                    if let Some((k, d)) = l.split_once("  ") {
+                        ui.strong(k);
+                        ui.label(d.trim());
+                    } else {
+                        let top = if i == 0 { 0.0 } else { 8.0 };
+                        ui.vertical(|ui| {
+                            ui.add_space(top);
+                            ui.label(egui::RichText::new(l).small().weak());
+                        });
+                    }
                     ui.end_row();
                 }
             });
@@ -904,19 +1036,87 @@ fn overlay(
     rows
 }
 
-/// The picks' markers, over everything: a ring and a dot, outlined so they
-/// read on any color, and the pick's number.
-fn draw_marks(ui: &egui::Ui, marks: &[(usize, (f32, f32))]) {
+/// What the picks panel shows: its rows in view (place in the picks, the
+/// row's cells, the file's name if several, whether its file is shown) and
+/// how many picks are out of view above and below.
+#[derive(Default)]
+struct PanelView {
+    rows: Vec<(usize, [String; 6], Option<String>, bool)>,
+    above: usize,
+    below: usize,
+}
+
+/// The picks panel, bottom right, while there are picks and it's open
+/// (`view` empty otherwise): each pick in view with its number, index, x y z
+/// (right-aligned) and file, those of hidden files dimmed, the one under the
+/// cursor (`over`) in bold, and how many are scrolled out; below, what the
+/// last copy did (`status`), or how to copy. Returns the rows and their pick.
+fn picks_panel(ui: &egui::Ui, view: &PanelView, over: Option<usize>, status: Option<&str>) -> Vec<(egui::Rect, usize)> {
+    let mut rows = vec![];
+    if view.rows.is_empty() {
+        return rows;
+    }
+    egui::Area::new(egui::Id::new("picks panel"))
+        .anchor(egui::Align2::RIGHT_BOTTOM, [-12.0, -12.0])
+        .interactable(false)
+        .show(ui.ctx(), |ui| {
+            let fill = ui.visuals().window_fill.gamma_multiply(PANEL_ALPHA);
+            egui::Frame::popup(ui.style()).fill(fill).show(ui, |ui| {
+                if view.above > 0 {
+                    ui.weak(format!("↑ {} more", view.above));
+                }
+                egui::Grid::new("picks").min_col_width(0.0).spacing([10.0, 4.0]).show(ui, |ui| {
+                    for (n, cells, name, on) in &view.rows {
+                        let fg = ui.visuals().text_color().gamma_multiply(if *on { 1.0 } else { OFF_ALPHA });
+                        let text = |t: &str| {
+                            let t = egui::RichText::new(t).color(fg);
+                            if over == Some(*n) { t.strong().underline() } else { t }
+                        };
+                        let mut last = ui.label(text(&cells[0]).strong());
+                        let first = last.rect;
+                        last = ui.label(text(&cells[1]));
+                        for c in &cells[2..] {
+                            // coordinates and distance right-aligned, so their digits line up
+                            last = ui
+                                .with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(text(c).monospace()))
+                                .inner;
+                        }
+                        if let Some(name) = name {
+                            last = ui.label(text(name));
+                        }
+                        rows.push((first.union(last.rect).expand2(egui::vec2(0.0, 2.0)), *n));
+                        ui.end_row();
+                    }
+                });
+                if view.below > 0 {
+                    ui.weak(format!("↓ {} more", view.below));
+                }
+                ui.weak(status.unwrap_or("click a row or Ctrl+C to copy"));
+            });
+        });
+    rows
+}
+
+/// The picks' markers, over the scene and under the panels: a ring and a dot, outlined so they
+/// read on any color, and the pick's number; the one whose panel row is
+/// under the cursor (`over`, 0-based) bigger, in the accent color.
+fn draw_marks(ui: &egui::Ui, marks: &[(usize, (f32, f32))], over: Option<usize>) {
     let painter = ui
         .ctx()
-        .layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("picks")));
-    let (fg, halo) = (ui.visuals().strong_text_color(), ui.visuals().window_fill);
+        .layer_painter(egui::LayerId::new(egui::Order::Background, egui::Id::new("picks")));
+    let (text, halo, accent) = (
+        ui.visuals().strong_text_color(),
+        ui.visuals().window_fill,
+        ui.visuals().selection.bg_fill,
+    );
     for &(n, (x, y)) in marks {
         let c = egui::pos2(x, y);
-        painter.circle_stroke(c, 6.0, egui::Stroke::new(3.5_f32, halo));
-        painter.circle_stroke(c, 6.0, egui::Stroke::new(1.5_f32, fg));
+        let lit = over == n.checked_sub(1);
+        let (fg, r, w) = if lit { (accent, 10.0, 2.5_f32) } else { (text, 6.0, 1.5_f32) };
+        painter.circle_stroke(c, r, egui::Stroke::new(w + 2.0, halo));
+        painter.circle_stroke(c, r, egui::Stroke::new(w, fg));
         painter.circle_filled(c, 1.5, fg);
-        let at = c + egui::vec2(8.0, -6.0);
+        let at = c + egui::vec2(r + 2.0, -r);
         let font = egui::FontId::proportional(13.0);
         // the number outlined too: drawn in the halo color around, then on top
         for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
@@ -953,6 +1153,25 @@ fn shift_click(
     let (down, from) = press.take()?;
     let to = cursor?;
     (shift && b == Some(down) && pick::is_click(from, to)).then_some((down, to))
+}
+
+/// A wheel turn in three-d's wheel units, up positive.
+fn wheel(delta: MouseScrollDelta, dpr: f32) -> f32 {
+    match delta {
+        MouseScrollDelta::LineDelta(_, y) => y * WHEEL_NOTCH,
+        MouseScrollDelta::PixelDelta(d) => d.to_logical::<f32>(f64::from(dpr)).y * WHEEL_PIXEL,
+    }
+}
+
+/// The buttons that move the view, click legend rows and pick.
+fn mouse_button(b: WinitButton) -> Option<MouseButton> {
+    #[expect(clippy::wildcard_enum_match_arm, reason = "the three buttons that move the view")]
+    match b {
+        WinitButton::Left => Some(MouseButton::Left),
+        WinitButton::Right => Some(MouseButton::Right),
+        WinitButton::Middle => Some(MouseButton::Middle),
+        _ => None,
+    }
 }
 
 /// The scene's layer of the i-th file, once shown: files come in as they're read.
