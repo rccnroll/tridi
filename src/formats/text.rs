@@ -21,12 +21,12 @@ pub(crate) fn read(raw: &[u8], ext: &str) -> Cloud {
     for line in String::from_utf8_lossy(raw).lines() {
         let mut words = line.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty());
         // a point is a line that starts with three numbers, as Open3D reads
-        // them; whatever follows is its color only if it all parses
+        // them; the numbers after them, up to anything else, are its color
         let mut num = || words.next()?.parse::<f32>().ok();
         let (Some(x), Some(y), Some(z)) = (num(), num(), num()) else {
             continue;
         };
-        let rest: Vec<f32> = words.map(str::parse).collect::<Result<_, _>>().unwrap_or_default();
+        let rest: Vec<f32> = words.map_while(|w| w.parse().ok()).collect();
         points.push(vec3(x, y, z));
         let c = match (ext, rest.as_slice()) {
             ("xyzrgb", &[r, g, b, ..]) => Some(vec3(r, g, b)),
@@ -77,6 +77,12 @@ mod tests {
         let c = parse_cloud(b"# comment\n0 0 0\n1 2 3 abc\n4 5 6\n", "xyz").unwrap();
         assert_eq!(c.points.len(), 3);
         assert_eq!(c.points[1], vec3(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn a_junk_tail_keeps_the_colors() {
+        let c = parse_cloud(b"0 0 0 1 0 0\n1 2 3 0 1 0 abc\n", "xyzrgb").unwrap();
+        assert!(c.colors.is_some());
     }
 }
 

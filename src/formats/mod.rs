@@ -361,6 +361,14 @@ mod tests {
         assert!(c.index.is_none());
         assert_eq!(c.file_index(1), 1);
     }
+
+    #[test]
+    fn short_row_without_its_color_is_counted_not_drawn() {
+        let pcd = "VERSION .7\nFIELDS x y z rgb\nSIZE 4 4 4 4\nTYPE F F F U\nCOUNT 1 1 1 1\nWIDTH 3\nHEIGHT 1\nPOINTS 3\nDATA ascii\n0 0 0 255\n1 2 3\n2 2 2 255\n";
+        let c = parse_cloud(pcd.as_bytes(), "pcd").unwrap();
+        assert_eq!(c.points.len(), 2);
+        assert_eq!(c.file_index(1), 2);
+    }
 }
 
 // }}}

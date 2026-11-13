@@ -337,8 +337,8 @@ struct Viewer {
     clouds: Vec<Option<tridi::Cloud>>,
     /// the points picked, in order: Shift + right click takes the last off
     picks: Vec<Pick>,
-    /// where a Shift click was pressed, logical pixels
-    press: Option<(f32, f32)>,
+    /// the button and where it was pressed with Shift, logical pixels
+    press: Option<(MouseButton, (f32, f32))>,
     /// files not read yet
     pending: usize,
     theme: &'static Theme,
@@ -932,23 +932,27 @@ fn draw_marks(ui: &egui::Ui, marks: &[(usize, (f32, f32))]) {
     }
 }
 
-/// A Shift click from the mouse buttons' events: kept in `press` when
-/// pressed, and on release where it ended, if it moved too little to be a
-/// drag (a Shift drag pans). Only left and right count.
+/// A Shift click from the mouse buttons' events: the button and where it
+/// was kept in `press` when pressed; on release, where it ended, if Shift is
+/// still down, it's the same button and it moved too little to be a drag (a
+/// Shift drag pans). Only left and right count.
 fn shift_click(
-    press: &mut Option<(f32, f32)>,
+    press: &mut Option<(MouseButton, (f32, f32))>,
     cursor: Option<(f32, f32)>,
     shift: bool,
     b: Option<MouseButton>,
     pressed: bool,
 ) -> Option<(MouseButton, (f32, f32))> {
-    let b = b.filter(|b| shift && matches!(b, MouseButton::Left | MouseButton::Right))?;
     if pressed {
-        *press = cursor;
+        // every press starts over: one without Shift leaves nothing behind
+        *press = b
+            .zip(cursor)
+            .filter(|(b, _)| shift && matches!(b, MouseButton::Left | MouseButton::Right));
         return None;
     }
-    let (from, to) = (press.take()?, cursor?);
-    pick::is_click(from, to).then_some((b, to))
+    let (down, from) = press.take()?;
+    let to = cursor?;
+    (shift && b == Some(down) && pick::is_click(from, to)).then_some((down, to))
 }
 
 /// The scene's layer of the i-th file, once shown: files come in as they're read.
@@ -1088,6 +1092,19 @@ mod tests {
         let m = Some(MouseButton::Middle);
         shift_click(&mut press, Some((10.0, 10.0)), true, m, true);
         assert_eq!(shift_click(&mut press, Some((10.0, 10.0)), true, m, false), None);
+    }
+
+    #[test]
+    fn shift_click_needs_shift_on_the_same_button_throughout() {
+        let (mut press, l, r) = (None, Some(MouseButton::Left), Some(MouseButton::Right));
+        // pressed without Shift, released with it: no pick
+        shift_click(&mut press, Some((10.0, 10.0)), true, l, true);
+        shift_click(&mut press, Some((10.0, 10.0)), false, l, false);
+        shift_click(&mut press, Some((50.0, 50.0)), false, l, true);
+        assert_eq!(shift_click(&mut press, Some((10.0, 10.0)), true, l, false), None);
+        // Shift + left pressed, right released: neither picks nor removes
+        shift_click(&mut press, Some((10.0, 10.0)), true, l, true);
+        assert_eq!(shift_click(&mut press, Some((10.0, 10.0)), true, r, false), None);
     }
 }
 
