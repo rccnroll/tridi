@@ -72,6 +72,28 @@ pub fn nearest(points: &[Vec3], mvp: Mat4, size: (f32, f32), cursor: (f32, f32),
         .min_by(|a, b| a.1.total_cmp(&b.1))
 }
 
+/// The point under `cursor` among several files' clouds, each with its
+/// pick radius: the closest to the eye wins. Returns the file and the
+/// point's place in its cloud.
+pub fn under<'a, I: IntoIterator<Item = (usize, &'a [Vec3], f32)>>(
+    clouds: I,
+    mvp: Mat4,
+    size: (f32, f32),
+    cursor: (f32, f32),
+) -> Option<(usize, usize)> {
+    clouds
+        .into_iter()
+        .filter_map(|(file, points, radius)| nearest(points, mvp, size, cursor, radius).map(|(i, z)| (file, i, z)))
+        .min_by(|a, b| a.2.total_cmp(&b.2))
+        .map(|(file, i, _)| (file, i))
+}
+
+/// A press at `from` released at `to` (logical px) is a click, not a drag.
+pub fn is_click(from: (f32, f32), to: (f32, f32)) -> bool {
+    let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+    dx * dx + dy * dy < CLICK_SLOP * CLICK_SLOP
+}
+
 // }}}
 
 // =========================================== Tests =========================================== {{{
@@ -139,6 +161,20 @@ mod tests {
             line("picked", &p, "scans/scan 01.pcd"),
             "picked #48213 1.234 -0.45 2.1 scans/scan 01.pcd"
         );
+    }
+
+    #[test]
+    fn across_files_the_front_most_wins() {
+        let back = [vec3(0.0, 0.0, -1.0)];
+        let front = [vec3(5.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0)];
+        let clouds = [(0, &back[..], PICK_RADIUS), (3, &front[..], PICK_RADIUS)];
+        assert_eq!(under(clouds, mvp(), SIZE, CENTER), Some((3, 1)));
+    }
+
+    #[test]
+    fn a_click_moves_less_than_the_slop() {
+        assert!(is_click((10.0, 10.0), (12.0, 13.0)));
+        assert!(!is_click((10.0, 10.0), (10.0, 20.0)));
     }
 }
 

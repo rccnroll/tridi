@@ -35,7 +35,6 @@
 // ======================================== Sub-modules ======================================== {{{
 
 mod desktop;
-#[expect(dead_code, reason = "wired into the viewer next")]
 mod pick;
 mod thumb;
 mod view;
@@ -79,6 +78,8 @@ Window:
   left drag             orbit
   right or middle drag  pan (or shift + left drag)
   wheel                 zoom
+  shift + click         pick a point (printed on stdout)
+  shift + right click   take the last pick off
   R                     reset the view
   + and -               point size
   1-9 or click legend   turn the N-th file off and on (any file by click)
