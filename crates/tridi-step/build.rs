@@ -120,7 +120,8 @@ fn bundled_occt() -> Occt {
     let root = occt_sys::occt_path();
     let mut link = vec![format!("-L{}", root.join("lib").display()), "-Wl,--start-group".to_owned()];
     link.extend(LIBS.iter().chain(STEP_NEW).chain(STATIC_EXTRA).map(|l| format!("-l:lib{l}.a")));
-    link.push("-Wl,--end-group".to_owned());
+    // TKernel loads plugins; libdl is part of libc only from glibc 2.34 (manylinux_2_28 has 2.28)
+    link.extend(["-Wl,--end-group", "-ldl"].map(str::to_owned));
     Occt {
         include: root.join("include"),
         link,
