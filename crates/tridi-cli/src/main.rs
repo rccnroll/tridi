@@ -11,7 +11,7 @@
 //!
 //! In the window: left drag orbits, right or middle drag (or shift + left)
 //! pans, the wheel zooms; R resets the view, + and - change the point size,
-//! 1-9 turn the N-th file off and on, Q or Esc quits.
+//! 1-9 or a click on its legend row turn the N-th file off and on, Q or Esc quits.
 //!
 //! With several files each cloud gets its own color, to tell them apart at a
 //! glance; with a single file the cloud is colored by Z height. In both cases

@@ -13,6 +13,7 @@ keywords = ["point-cloud", "pcd", "mesh", "viewer", "step"]
 categories = ["graphics", "visualization"]
 
 [dependencies]
+arboard.workspace = true
 glutin.workspace = true
 glutin-winit.workspace = true
 libc.workspace = true

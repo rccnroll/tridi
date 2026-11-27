@@ -36,6 +36,14 @@ impl Source {
             Self::Cloud { name, .. } => name.clone(),
         }
     }
+
+    /// What a pick line names: the path as given, or the cloud's name.
+    pub(crate) fn given(&self) -> String {
+        match self {
+            Self::File(p) => p.to_string_lossy().into_owned(),
+            Self::Cloud { name, .. } => name.clone(),
+        }
+    }
 }
 
 /// A file to show, as the legend shows it.
@@ -70,6 +78,8 @@ pub(crate) struct Ready {
     pub(crate) count: usize,
     pub(crate) unit: &'static str,
     pub(crate) bb: AxisAlignedBoundingBox,
+    /// a cloud's points kept for picking, with their records in the file
+    pub(crate) cloud: Option<Cloud>,
 }
 
 /// Which `show()` a loader thread works for: the event loop outlives a
@@ -189,6 +199,13 @@ fn ready(item: Item, tint: Option<[f32; 3]>, theme: &Theme) -> Ready {
             tint: tint.filter(|_| own_colors(&c, tint).is_none()),
             count: c.points.len(),
             unit: "points",
+            // before `input` takes the points
+            cloud: Some(Cloud {
+                points: c.points.clone(),
+                colors: None,
+                faces: None,
+                index: c.index.clone(),
+            }),
             input: {
                 let colors = colorize(&c, tint, theme);
                 Input::Points(c.points, colors)
@@ -208,6 +225,7 @@ fn ready(item: Item, tint: Option<[f32; 3]>, theme: &Theme) -> Ready {
                 }
             })),
             tint: None,
+            cloud: None,
             count: triangles(&m),
             unit: "triangles",
             input: Input::Mesh(m),

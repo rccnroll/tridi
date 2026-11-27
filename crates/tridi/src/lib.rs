@@ -21,6 +21,7 @@
 
 mod color;
 mod model;
+mod pick;
 mod render;
 #[cfg(test)]
 mod test_support;

@@ -35,15 +35,28 @@ pub const APP_ID: &str = "io.github.rccnroll.tridi";
 /// The keys, as `tridi --help` lists them and H shows them in the window.
 pub const KEYS: &str = "\
 Window:
-  left drag             orbit
-  right or middle drag  pan (or shift + left drag)
-  wheel                 zoom
-  R                     reset the view
-  + and -               point size
-  1-9                   turn the N-th file off and on
-  I                     show or hide the legend (on with several files)
-  H or ?                show or hide these keys
-  Q or Esc              quit";
+  View
+    left drag             orbit
+    right or middle drag  pan (or shift + left drag)
+    wheel                 zoom
+    R                     reset the view
+    + and -               point size
+  Files
+    1-9 or legend row     turn the N-th file off and on (any file by click)
+    A                     turn every file off, or all back on
+    wheel on legend row   that file's point size
+    right click legend    that file's point size back to the others'
+    I                     show or hide the legend (on with several files)
+  Picks
+    shift + click         pick a point (printed on stdout)
+    shift + right click   take the last pick off
+    P                     show or hide the picks
+    click on pick row     copy that pick (Ctrl+C: all of them)
+    right click pick row  take that pick off
+    Delete                take every pick off
+  Other
+    H or ?                show or hide these keys
+    Q or Esc              quit";
 
 // }}}
 
@@ -145,13 +158,12 @@ impl Viewer {
         let finite = |p: &&[f32; 3]| p.iter().all(|v| v.is_finite());
         // colors that don't match are kept as given, unfiltered, so that
         // `show()` reports the counts the caller passed
-        let (points, colors) = match colors {
-            Some(c) if c.len() == points.len() => {
-                let (p, c) = points.iter().zip(c).filter(|(p, _)| finite(p)).unzip();
-                (p, Some(c))
-            }
-            Some(c) => (points.to_vec(), Some(c.to_vec())),
-            None => (points.iter().filter(finite).copied().collect(), None),
+        let kept: Vec<usize> = (points.iter().enumerate()).filter(|(_, p)| finite(p)).map(|(i, _)| i).collect();
+        let keep = |v: &[[f32; 3]]| kept.iter().filter_map(|&i| v.get(i).copied()).collect::<Vec<_>>();
+        let (points, colors, index) = match colors {
+            Some(c) if c.len() != points.len() => (points.to_vec(), Some(c.to_vec()), None),
+            // a pick names the point's place in what the caller passed
+            c => (keep(points), c.map(keep), (kept.len() != points.len()).then_some(kept)),
         };
         self.sources.push(Source::Cloud {
             name: name.to_owned(),
@@ -159,6 +171,7 @@ impl Viewer {
                 points,
                 colors,
                 faces: None,
+                index,
             },
         });
         self
@@ -266,6 +279,16 @@ mod tests {
                 if cloud.points == [[1.0; 3], [2.0; 3]] && cloud.colors == Some(vec![[0.2; 3], [0.4; 3]])),
             "the finite points and their colors"
         );
+        // a pick names the point's place in what the caller passed
+        assert!(
+            matches!(&v.sources[..], [Source::Cloud { cloud, .. }] if cloud.file_index(1) == 3),
+            "the caller's index"
+        );
+        let v = Viewer::new().cloud("all", &[[1.0; 3]], None);
+        assert!(
+            matches!(&v.sources[..], [Source::Cloud { cloud, .. }] if cloud.index.is_none()),
+            "none dropped: no index"
+        );
         // nothing left: no points
         let r = Viewer::new().cloud("n", &[nan], None).show();
         assert!(matches!(&r, Err(ViewError::EmptyCloud { name }) if name == "n"), "{r:?}");
@@ -322,6 +345,14 @@ mod tests {
     fn keys_are_the_window_section() {
         assert!(
             KEYS.starts_with("Window:") && KEYS.ends_with("quit") && KEYS.contains("H or ?"),
+            "{KEYS}"
+        );
+        // in groups, a key under its own: picking keys under Picks
+        let picks = KEYS.find("\n  Picks").unwrap();
+        let files = KEYS.find("\n  Files").unwrap();
+        assert!(KEYS.find("\n  View").unwrap() < files && files < picks, "{KEYS}");
+        assert!(
+            KEYS.find("shift + click").unwrap() > picks && KEYS.find("Delete").unwrap() > picks,
             "{KEYS}"
         );
     }
