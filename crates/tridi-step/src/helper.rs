@@ -6,7 +6,7 @@
 
 use std::{
     env,
-    ffi::CStr,
+    ffi::{CStr, OsStr, OsString},
     fs::{self, DirBuilder, File, OpenOptions},
     hash::{DefaultHasher, Hash, Hasher},
     io::{self, Write},
@@ -37,6 +37,9 @@ const USAGE: i32 = 64;
 /// The exit code of the dynamic loader when a shared library is missing.
 const NO_LIBRARY: i32 = 127;
 
+/// Where the Python wheel puts OpenCASCADE: next to the tridi binary.
+const LIB_DIR: &str = "occt";
+
 /// How often a busy executable is tried: a fork in another thread can hold
 /// a copy of the write fd of a file just written, until that child execs.
 const BUSY_TRIES: u32 = 10;
@@ -63,10 +66,40 @@ pub(crate) fn command() -> io::Result<Command> {
     static PLACE: OnceLock<Result<Place, String>> = OnceLock::new();
     let place = PLACE.get_or_init(|| place().map_err(|e| e.to_string()));
     match place {
-        Ok(Place::Memory(fd)) => Ok(Command::new(fd_path(fd))),
-        Ok(Place::Disk(p)) => Ok(Command::new(p)),
+        Ok(Place::Memory(fd)) => Ok(helper_cmd(Path::new(&fd_path(fd)), own_dir().as_deref())),
+        Ok(Place::Disk(p)) => Ok(helper_cmd(p, own_dir().as_deref())),
         Err(e) => Err(io::Error::other(e.clone())),
     }
+}
+
+/// A command that runs the helper at `exe`. Next to a wheel's tridi
+/// (`exe_dir/occt`) it gets the OpenCASCADE there: the helper runs from
+/// memory or the cache, where `$ORIGIN` can't point at it.
+fn helper_cmd(exe: &Path, exe_dir: Option<&Path>) -> Command {
+    let mut cmd = Command::new(exe);
+    if let Some(p) = exe_dir.and_then(|d| lib_path(d, env::var_os("LD_LIBRARY_PATH").as_deref())) {
+        cmd.env("LD_LIBRARY_PATH", p);
+    }
+    cmd
+}
+
+/// `exe_dir/occt` before `current`, if that directory exists.
+fn lib_path(exe_dir: &Path, current: Option<&OsStr>) -> Option<OsString> {
+    let occt = exe_dir.join(LIB_DIR);
+    if !occt.is_dir() {
+        return None;
+    }
+    let mut p = occt.into_os_string();
+    if let Some(c) = current.filter(|c| !c.is_empty()) {
+        p.push(":");
+        p.push(c);
+    }
+    Some(p)
+}
+
+/// The directory of the running executable, if it can be told.
+fn own_dir() -> Option<PathBuf> {
+    env::current_exe().ok()?.parent().map(Path::to_path_buf)
 }
 
 /// Memory first; the cache, then our own directory in the temp dir, where
@@ -187,7 +220,7 @@ fn uid() -> u32 {
 /// an error if it runs but the loader can't find OpenCASCADE's libraries,
 /// with the loader's message.
 fn runs(exe: &Path) -> io::Result<bool> {
-    let Ok(out) = retry_busy(|| Command::new(exe).output()) else {
+    let Ok(out) = retry_busy(|| helper_cmd(exe, own_dir().as_deref()).output()) else {
         return Ok(false);
     };
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -272,6 +305,46 @@ mod tests {
     fn memfd_or_cache_gives_a_command() {
         let out = command().unwrap().output().unwrap();
         assert_eq!(out.status.code(), Some(64), "{out:?}");
+    }
+
+    // the wheel: OpenCASCADE in occt/ next to the tridi binary
+    #[test]
+    fn lib_dir_next_to_exe_is_prepended() {
+        let dir = env::temp_dir().join(format!("tridi-lib-dir-test-{}", process::id()));
+        fs::create_dir_all(dir.join(LIB_DIR)).unwrap();
+        let occt = dir.join(LIB_DIR);
+        assert_eq!(
+            lib_path(&dir, Some(OsStr::new("/x"))),
+            Some(format!("{}:/x", occt.display()).into())
+        );
+        assert_eq!(lib_path(&dir, None), Some(occt.clone().into_os_string()));
+        assert_eq!(lib_path(&dir, Some(OsStr::new(""))), Some(occt.into_os_string()));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn no_lib_dir_leaves_environment_alone() {
+        assert_eq!(lib_path(Path::new("/usr/bin"), Some(OsStr::new("/x"))), None);
+    }
+
+    // memory or disk, the probe and the real run: every helper command gets it
+    #[test]
+    fn helper_command_gets_lib_dir() {
+        let dir = env::temp_dir().join(format!("tridi-helper-cmd-test-{}", process::id()));
+        fs::create_dir_all(dir.join(LIB_DIR)).unwrap();
+        let cmd = helper_cmd(Path::new("/proc/self/fd/3"), Some(&dir));
+        let env: Vec<_> = cmd.get_envs().collect();
+        assert!(
+            env.iter().any(|(k, v)| *k == "LD_LIBRARY_PATH"
+                && v.is_some_and(|v| v.to_string_lossy().starts_with(&*dir.join(LIB_DIR).to_string_lossy()))),
+            "{env:?}"
+        );
+        assert_eq!(
+            helper_cmd(Path::new("/x"), None).get_envs().count(),
+            0,
+            "outside a wheel nothing changes"
+        );
+        fs::remove_dir_all(dir).unwrap();
     }
 }
 
