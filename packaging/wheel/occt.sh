@@ -6,8 +6,8 @@
 # already holds a build: that's what the CI cache restores.
 set -eu
 
-VERSION=7_8_1
-SHA256=7321af48c34dc253bf8aae3f0430e8cb10976961d534d8509e72516978aa82f5
+VERSION=7_9_3
+SHA256=5ecf094ec6b12d5413dfb851d8c3590c354058aee556e32e408bdfbf8c357d57
 PREFIX=$1
 
 if [ -e "$PREFIX/lib/libTKDESTEP.so" ]; then
@@ -22,16 +22,16 @@ echo "$SHA256  $src/occt.tar.gz" | sha256sum -c -
 tar xzf "$src/occt.tar.gz" -C "$src"
 
 # Visualization stays on: TKXCAF links TKV3d and TKService. What they'd
-# draw with (X11, FreeType, OpenGL) is off, so nothing beyond libc and
+# draw with (X11, FreeType, OpenGL) is off, and --as-needed drops the GL
+# and EGL they'd link anyway without using: nothing beyond libc and
 # libstdc++ ends up in the wheel.
-# 7.8 asks for a CMake older than 3.5, which CMake 4 no longer emulates
 cmake -S "$src/OCCT-$VERSION" -B "$src/build" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DINSTALL_DIR_LIB=lib \
     -DINSTALL_DIR_INCLUDE=include/opencascade \
     -DBUILD_LIBRARY_TYPE=Shared \
+    -DCMAKE_SHARED_LINKER_FLAGS=-Wl,--as-needed \
     -DBUILD_MODULE_Draw=OFF \
     -DBUILD_MODULE_DETools=OFF \
     -DBUILD_DOC_Overview=OFF \
@@ -44,6 +44,8 @@ cmake -S "$src/OCCT-$VERSION" -B "$src/build" \
     -DUSE_VTK=OFF
 cmake --build "$src/build" -j "$(nproc)"
 cmake --install "$src/build"
-# the license the wheel ships next to the libraries
-mkdir -p "$PREFIX/share/licenses"
+# the license the wheel ships next to the libraries, and the source the
+# release carries next to the wheel (LGPL-2.1: from the same place)
+mkdir -p "$PREFIX/share/licenses" "$PREFIX/share/src"
+cp "$src/occt.tar.gz" "$PREFIX/share/src/occt-$VERSION.tar.gz"
 cp "$src/OCCT-$VERSION/LICENSE_LGPL_21.txt" "$src/OCCT-$VERSION/OCCT_LGPL_EXCEPTION.txt" "$PREFIX/share/licenses/"
