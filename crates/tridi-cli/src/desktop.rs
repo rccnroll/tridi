@@ -80,10 +80,17 @@ pub fn current() -> &'static Theme {
 /// anyway.
 /// The cached thumbnails go too: until now the new types were drawn by the
 /// package's entry, which is the light theme.
+/// Only the tridi the entry would run does it: pip's in a venv (a script
+/// that runs the wheel's binary) or a build being worked on leave it alone.
 pub fn refresh() {
     let theme = current();
+    let program = program();
+    if !env::current_exe().is_ok_and(|exe| is_on_path(&program, &exe)) {
+        debug!("not the tridi on PATH ({}): the thumbnailer entry stays", program.display());
+        return;
+    }
     if let Some(ovr) = override_file()
-        && fs::read_to_string(&ovr).is_ok_and(|s| s != entry(theme, &program()))
+        && fs::read_to_string(&ovr).is_ok_and(|s| s != entry(theme, &program))
     {
         if let Err(e) = install(theme) {
             warn!("cannot update the thumbnailer entry: {e:#}");
@@ -119,6 +126,11 @@ fn program() -> PathBuf {
         .and_then(|p| env::split_paths(&p).map(|d| d.join("tridi")).find(|f| f.is_file()))
         .or_else(|| env::current_exe().ok())
         .unwrap_or_else(|| PathBuf::from("/usr/bin/tridi"))
+}
+
+/// Whether `program` (from `PATH`) is the running `exe`, links resolved.
+fn is_on_path(program: &Path, exe: &Path) -> bool {
+    matches!((fs::canonicalize(program), fs::canonicalize(exe)), (Ok(p), Ok(e)) if p == e)
 }
 
 /// The package's entry running `program`, with `--theme dark` added for the
@@ -218,7 +230,7 @@ fn write(path: &Path, text: &str) -> eyre::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::process;
+    use std::{os::unix::fs::symlink, process};
     use tridi::DARK;
 
     fn png(uri: &str) -> Vec<u8> {
@@ -251,6 +263,25 @@ mod tests {
         }
         assert_eq!(clear_thumbnails(&dir), 3);
         assert!(dir.join("normal/d.png").exists(), "a photo's thumbnail must stay");
+    }
+
+    // pip's tridi in a venv (a script that execs the bundled binary) or a
+    // cargo run must not take the thumbnailer over; NixOS's link to the
+    // store must
+    #[test]
+    fn only_the_tridi_on_path_updates_the_entry() {
+        let dir = env::temp_dir().join(format!("tridi-on-path-{}", process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let (bin, script, link) = (dir.join("bin"), dir.join("script"), dir.join("link"));
+        fs::write(&bin, b"").unwrap();
+        fs::write(&script, b"").unwrap();
+        if !link.exists() {
+            symlink(&bin, &link).unwrap();
+        }
+        assert!(is_on_path(&link, &bin), "the link on PATH is this program");
+        assert!(!is_on_path(&script, &bin), "another file on PATH");
+        assert!(!is_on_path(&dir.join("gone"), &bin), "nothing there");
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
