@@ -44,6 +44,9 @@ fn main() {
         return;
     }
     let include = env::var_os("OCCT_INCLUDE_DIR").map_or_else(|| PathBuf::from("/usr/include/opencascade"), PathBuf::from);
+    // another OpenCASCADE in the same place (a system upgrade, a new wheel
+    // build): the helper is built again against it
+    println!("cargo:rerun-if-changed={}", include.join("Standard_Version.hxx").display());
     let lib = env::var_os("OCCT_LIB_DIR").map(PathBuf::from).or_else(|| {
         ["/usr/lib", "/usr/lib64", "/usr/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu"]
             .into_iter()
