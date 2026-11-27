@@ -11,8 +11,8 @@ and the sections for those releases use that name.
 
 - `pip install tridi` (Linux x86_64), then `tridi.show(pcd, "part.step")`
   in place of Open3D's `draw_geometries`: files, Open3D clouds, numpy
-  arrays. The wheel carries the tridi binary and the OpenCASCADE its STEP
-  helper loads, so nothing else is installed. The window is always a
+  arrays. The wheel carries the tridi binary, with OpenCASCADE linked into
+  its STEP helper, so nothing else is installed. The window is always a
   separate process: never OpenGL in Python, a crash there never takes
   Python down, and the same shape will do live updates later (a cloud
   replaced, a 4x4 transform applied) as rerun does.
@@ -31,6 +31,12 @@ and the sections for those releases use that name.
   `tridi-cli` is the `tridi` binary with thumbnails, the theme command and
   the packaging. `tridi` builds without STEP and OpenCASCADE
   (`default-features = false`), which is also how docs.rs builds it.
+- `cargo add tridi` needs nothing installed for STEP: without the
+  system's OpenCASCADE, tridi-step compiles one from occt-sys (as
+  opencascade-rs does) and links it statically into the helper. The first
+  build takes about 10 minutes more; the helper then needs no OpenCASCADE
+  at run time, which is also what the wheel ships. Static is fine under
+  LGPL-2.1 here because the helper's source is open: anyone can relink it.
 - Thumbnails stay out of the API. They need a headless EGL context on the
   right GPU and Mesa pinned, which only the binary should promise; they sit
   behind a `thumbnail` feature of `tridi` that only `tridi-cli` turns on,

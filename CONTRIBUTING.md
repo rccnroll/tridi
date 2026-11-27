@@ -6,11 +6,13 @@ reproduce. A pull request is welcome for anything already in
 
 ## Build and test
 
-STEP needs OpenCASCADE's headers and libraries, 7.6 or later: `opencascade`
-on Arch and Fedora, `libocct-data-exchange-dev libocct-ocaf-dev
-libocct-modeling-algorithms-dev libocct-modeling-data-dev
+STEP is fastest to build against the system's OpenCASCADE, 7.6 or later:
+`opencascade` on Arch and Fedora, `libocct-data-exchange-dev
+libocct-ocaf-dev libocct-modeling-algorithms-dev libocct-modeling-data-dev
 libocct-foundation-dev` on Debian/Ubuntu. Elsewhere, point
-`OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR` at them.
+`OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR` at them. Without one, the build
+compiles OpenCASCADE from occt-sys (about 10 minutes, once per target dir);
+`TRIDI_OCCT=bundled` does that on purpose, as the wheel does.
 
     cargo build --release
     cargo run --release -p tridi-cli -- FILE
@@ -81,10 +83,9 @@ way, down this list, and nothing depends on `tridi-cli`:
   runs the tridi binary bundled in the wheel (`tridi/_bin/`, filled only by
   the wheel build), writing clouds from memory as binary PCD
   (`tridi/_pcd.py`) to a temp dir. Tests: `pytest python/tests`.
-- `packaging/wheel/` — the manylinux wheel: `occt.sh` builds OpenCASCADE
-  (none in the manylinux image), `build.sh` puts the binary and the
-  OpenCASCADE libraries the STEP helper loads in `tridi/_bin/`; the helper
-  finds them in `occt/` next to the binary.
+- `packaging/wheel/` — the manylinux wheel: `build.sh` builds the binary
+  with `TRIDI_OCCT=bundled` (OpenCASCADE linked into the STEP helper) and
+  puts it in `tridi/_bin/`, next to the OpenCASCADE source for the release.
 - `tests/data/` — tiny fixtures: PCD and GLB written by Open3D, STEP by
   hand.
 - `fuzz/` — cargo-fuzz targets for the readers, and their seeds.

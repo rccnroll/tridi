@@ -63,21 +63,23 @@ jobs:
     container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - uses: actions/checkout@v7
-      # OpenCASCADE takes long to build: once per version of its script
+      # OpenCASCADE takes long to build: what occt-sys built last time
+      # (target/OCCT) is rebuilt only where it changed
       - uses: actions/cache@v6
         with:
-          path: /opt/occt
-          key: occt-manylinux_2_28-${{ hashFiles('packaging/wheel/occt.sh') }}
+          path: /tmp/target/OCCT
+          key: occt-manylinux_2_28-${{ hashFiles('Cargo.lock') }}
+          restore-keys: occt-manylinux_2_28-
       - run: packaging/wheel/build.sh dist
       - uses: actions/upload-artifact@v7
         with:
           name: wheel
           path: dist/*.whl
-      # the OpenCASCADE source the wheel's libraries are built from (LGPL-2.1)
+      # the OpenCASCADE source the wheel's helper is built from (LGPL-2.1)
       - uses: actions/upload-artifact@v7
         with:
           name: occt-source
-          path: /opt/occt/share/src/*.tar.gz
+          path: dist/opencascade-*-source.tar.gz
 
   # the wheel where nothing else is installed: no OpenCASCADE, the GL
   # drivers only, as on a colleague's machine

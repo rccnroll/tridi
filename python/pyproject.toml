@@ -29,5 +29,5 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tridi"]
-# the binary and OpenCASCADE, put there by packaging/wheel/build.sh
+# the binary, OpenCASCADE linked in, put there by packaging/wheel/build.sh
 artifacts = ["tridi/_bin/**"]
