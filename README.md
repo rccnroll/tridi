@@ -68,11 +68,10 @@ on install and upgrade.
 
     cargo install tridi-cli
 
-builds the `tridi` binary into `~/.cargo/bin`. It needs OpenCASCADE's
-headers and libraries for STEP, 7.6 or later: `opencascade` on Arch and
-Fedora, `libocct-data-exchange-dev libocct-ocaf-dev
-libocct-modeling-algorithms-dev libocct-modeling-data-dev
-libocct-foundation-dev` on Debian/Ubuntu. cargo installs the binary only:
+builds the `tridi` binary into `~/.cargo/bin`. For STEP it uses the
+system's OpenCASCADE (`opencascade` on Arch and Fedora, `libocct-*-dev` on
+Debian/Ubuntu), or else compiles one in: about 10 minutes, with `cmake`
+and a C++ compiler. cargo installs the binary only:
 no MIME types, `.desktop` entry, man pages or shell completions. Without
 the MIME types the file manager doesn't know `.pcd`, `.xyz` and the
 others, and Nautilus's thumbnail sandbox doesn't see `$HOME`, so it can't

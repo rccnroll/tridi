@@ -32,6 +32,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 # the picks copied to the clipboard (Wayland through data-control, else X11)
 arboard = { version = "3.7", default-features = false, features = ["wayland-data-control"] }
 cc = "1.2"
+# OpenCASCADE's source, for a STEP helper built without the system's (its version is OpenCASCADE's)
+occt-sys = "=7.8.1"
 tridi-formats = { path = "crates/tridi-formats", version = "2.11.0" }
 tridi-step = { path = "crates/tridi-step", version = "2.11.0" }
 # each member names the features it wants

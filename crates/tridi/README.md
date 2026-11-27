@@ -36,12 +36,14 @@ that showed the first one. `show()` blocks that thread until its window closes.
 
 STEP files open through a helper process embedded in the crate: there is
 nothing to install and nothing to call. The `step` feature, on by default,
-builds the helper and needs OpenCASCADE 7.6 or later, headers and libraries:
-`opencascade` on Arch and Fedora, `libocct-data-exchange-dev
-libocct-ocaf-dev libocct-modeling-algorithms-dev libocct-modeling-data-dev
-libocct-foundation-dev` on Debian/Ubuntu. Elsewhere, point `OCCT_INCLUDE_DIR`
-and `OCCT_LIB_DIR` at them. With `default-features = false` there is no STEP
-and no OpenCASCADE:
+builds the helper against OpenCASCADE. If the system has it, 7.6 or later
+(`opencascade` on Arch and Fedora, `libocct-*-dev` on Debian/Ubuntu, or
+`OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR`), that one is used. Otherwise the
+build compiles OpenCASCADE from source and links it into the helper: about
+10 minutes the first time, then it stays in `target/`; it needs `cmake` and
+a C++ compiler. `TRIDI_OCCT=bundled` takes that path even where the system
+has one. With `default-features = false` there is no STEP and no
+OpenCASCADE:
 
     tridi = { version = "3", default-features = false }
 

@@ -1,6 +1,6 @@
 # tridi-step
 
-STEP files (.step, .stp) tessellated by the system's OpenCASCADE, 7.6 or later: each solid comes back as triangles, placed where the assembly puts it, with the file's colors.
+STEP files (.step, .stp) tessellated by OpenCASCADE: each solid comes back as triangles, placed where the assembly puts it, with the file's colors.
 
 ```rust
 let skipped = tridi_step::load(Path::new("part.step"), [0.5; 3], Purpose::View, &|| false, |m| {
@@ -18,11 +18,13 @@ The helper is built with the crate and embedded in it: there is nothing to insta
 
 ## OpenCASCADE
 
-Building needs its headers and libraries; point `OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR` at them if they aren't where the distributions put them.
+If the system has OpenCASCADE, 7.6 or later, the helper is built against it: headers and libraries where the distributions put them, or in `OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR`.
 
 | | build | run |
 |---|---|---|
 | Arch, Fedora | `opencascade` | `opencascade` |
 | Debian, Ubuntu | `libocct-data-exchange-dev libocct-ocaf-dev libocct-modeling-algorithms-dev libocct-modeling-data-dev libocct-foundation-dev` | `libocct-data-exchange-7.6 libocct-ocaf-7.6 libocct-modeling-algorithms-7.6 libocct-modeling-data-7.6 libocct-foundation-7.6` (`-7.6t64` on Ubuntu 24.04) |
+
+Otherwise, or with `TRIDI_OCCT=bundled`, the build compiles OpenCASCADE 7.8 from [occt-sys](https://crates.io/crates/occt-sys) and links it statically into the helper, which then needs nothing at run time. It takes about 10 minutes the first time (it stays in `target/`) and needs `cmake` and a C++ compiler.
 
 Linux only.
