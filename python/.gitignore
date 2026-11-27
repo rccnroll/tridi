@@ -1,0 +1,5 @@
+tridi/_bin/
+.venv/
+__pycache__/
+*.egg-info/
+dist/

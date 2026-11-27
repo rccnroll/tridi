@@ -1,0 +1,35 @@
+[package]
+name = "tridi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "A viewer window for point clouds, meshes and STEP files, callable from any Rust program"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["point-cloud", "pcd", "mesh", "viewer", "step"]
+categories = ["graphics", "visualization"]
+
+[dependencies]
+arboard.workspace = true
+glutin.workspace = true
+glutin-winit.workspace = true
+libc.workspace = true
+three-d.workspace = true
+three-d-asset.workspace = true
+winit.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tridi-formats.workspace = true
+tridi-step = { workspace = true, optional = true }
+
+[features]
+default = ["step"]
+step = ["dep:tridi-step"]
+# for tridi-cli's thumbnailer; not part of the semver promise
+thumbnail = []
+
+[lints]
+workspace = true

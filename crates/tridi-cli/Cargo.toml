@@ -1,0 +1,60 @@
+[package]
+name = "tridi-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "tridi: a fast viewer for point clouds, meshes and STEP files, and their file manager thumbnails"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["point-cloud", "pcd", "mesh", "viewer", "thumbnailer"]
+categories = ["graphics", "visualization", "command-line-utilities"]
+
+[[bin]]
+name = "tridi"
+path = "src/main.rs"
+
+[dependencies]
+tridi = { workspace = true, features = ["step", "thumbnail"] }
+image.workspace = true
+clap.workspace = true
+clap_mangen.workspace = true
+clap_complete.workspace = true
+eyre.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true
+
+# `packaging/deb/build.sh`; same files as the PKGBUILD's package(). target/assets
+# is `tridi generate`'s output: man pages and completions
+[package.metadata.deb]
+name = "tridi"
+maintainer = "Rocco Caccioppoli <caccioppolirocco@gmail.com>"
+extended-description = "Point cloud and mesh viewer, with file manager thumbnails."
+section = "graphics"
+# GL/EGL, Wayland and xkbcommon are dlopened at runtime; $auto is what tridi
+# links. OpenCASCADE (and through it libstdc++) is linked by the embedded STEP
+# helper, which $auto can't see: named here, Ubuntu 24.04's t64 or Debian 12's
+depends = "$auto, libc6 (>= 2.34), libgcc-s1, libegl1, libgl1-mesa-dri, libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, xdg-utils, libocct-foundation-7.6t64 | libocct-foundation-7.6, libocct-modeling-data-7.6t64 | libocct-modeling-data-7.6, libocct-modeling-algorithms-7.6t64 | libocct-modeling-algorithms-7.6, libocct-ocaf-7.6t64 | libocct-ocaf-7.6, libocct-data-exchange-7.6t64 | libocct-data-exchange-7.6"
+maintainer-scripts = "../../packaging/deb/"
+# cargo-deb special-cases only target/release/ (it finds the workspace's);
+# its "will not be built" warnings for ../../target/assets are expected
+assets = [
+    ["target/release/tridi", "usr/bin/", "755"],
+    ["../../share/thumbnailers/tridi.thumbnailer", "usr/share/thumbnailers/", "644"],
+    ["../../share/mime/packages/tridi.xml", "usr/share/mime/packages/", "644"],
+    ["../../share/applications/io.github.rccnroll.tridi.desktop", "usr/share/applications/", "644"],
+    ["../../share/metainfo/io.github.rccnroll.tridi.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["../../share/icons/**/*", "usr/share/icons/", "644"],
+    ["../../LICENSE-MIT", "usr/share/doc/tridi/", "644"],
+    ["../../LICENSE-APACHE", "usr/share/doc/tridi/", "644"],
+    ["../../packaging/licenses/egui-fonts/*", "usr/share/doc/tridi/egui-fonts/", "644"],
+    ["../../target/assets/*.1", "usr/share/man/man1/", "644"],
+    ["../../target/assets/tridi.bash", "usr/share/bash-completion/completions/tridi", "644"],
+    ["../../target/assets/_tridi", "usr/share/zsh/vendor-completions/", "644"],
+    ["../../target/assets/tridi.fish", "usr/share/fish/vendor_completions.d/", "644"],
+]

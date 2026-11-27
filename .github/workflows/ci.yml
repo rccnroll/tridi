@@ -25,8 +25,12 @@ jobs:
       # the thumbnail test renders on Mesa's llvmpipe through EGL; OpenCASCADE reads STEP
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri ${{ env.OCCT }}
       - run: cargo fmt --check
-      - run: cargo clippy --all-targets --locked -- -D warnings
-      - run: cargo test --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      # the viewer without OpenCASCADE
+      - run: cargo clippy -p tridi --no-default-features --all-targets --locked -- -D warnings
+      # every crate packages and builds from what crates.io would get
+      - run: cargo publish --workspace --dry-run --locked
 
   # the oldest Rust Cargo.toml's rust-version promises
   msrv:
@@ -37,4 +41,4 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # build.rs builds the STEP side against OpenCASCADE
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ${{ env.OCCT }}
-      - run: cargo check --locked
+      - run: cargo check --workspace --locked

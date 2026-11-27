@@ -1,0 +1,25 @@
+[package]
+name = "tridi-step"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "STEP files tessellated by OpenCASCADE, in a helper process that can be killed"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["step", "cad", "opencascade", "tessellation", "mesh"]
+categories = ["graphics", "parser-implementations"]
+
+[dependencies]
+libc.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+cc.workspace = true
+occt-sys.workspace = true
+
+[lints]
+workspace = true

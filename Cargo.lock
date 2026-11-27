@@ -396,6 +396,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cmake"
+version = "0.1.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "color"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1602,6 +1611,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "occt-sys"
+version = "7.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d2199ccf5331d261cf293abbc6b6b6ca1eb7187ef2113c181c49f9365cd9ae"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2394,21 +2412,48 @@ name = "tridi"
 version = "2.11.0"
 dependencies = [
  "arboard",
- "cc",
- "clap",
- "clap_complete",
- "clap_mangen",
- "eyre",
  "glutin",
  "glutin-winit",
- "image",
  "libc",
  "thiserror 2.0.21",
  "three-d",
  "three-d-asset",
  "tracing",
- "tracing-subscriber",
+ "tridi-formats",
+ "tridi-step",
  "winit",
+]
+
+[[package]]
+name = "tridi-cli"
+version = "2.11.0"
+dependencies = [
+ "clap",
+ "clap_complete",
+ "clap_mangen",
+ "eyre",
+ "image",
+ "tracing",
+ "tracing-subscriber",
+ "tridi",
+]
+
+[[package]]
+name = "tridi-formats"
+version = "2.11.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tridi-step"
+version = "2.11.0"
+dependencies = [
+ "cc",
+ "libc",
+ "occt-sys",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]

@@ -1,8 +1,10 @@
 name: Release
 
 # git tag vX.Y.Z && git push origin vX.Y.Z: both packages, built as by hand
-# (makepkg, packaging/deb/build.sh), in a draft release whose notes are the
-# Conventional Commits since the last tag. Review the notes, then publish.
+# (makepkg, packaging/deb/build.sh), and the Python wheel
+# (packaging/wheel/build.sh), in a draft release whose notes are the
+# Conventional Commits since the last tag. Review the notes, then publish:
+# publishing sends the wheel to PyPI (pypi.yml).
 
 on:
   push:
@@ -16,11 +18,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Tag, Cargo.toml and PKGBUILD agree
+      - name: Tag, Cargo.toml, PKGBUILD and pyproject.toml agree
         run: |
           v=${GITHUB_REF_NAME#v}
           grep -qx "version = \"$v\"" Cargo.toml || { echo "Cargo.toml isn't $v"; exit 1; }
           grep -qx "pkgver=$v" packaging/arch/PKGBUILD || { echo "PKGBUILD isn't $v"; exit 1; }
+          grep -qx "version = \"$v\"" python/pyproject.toml || { echo "pyproject.toml isn't $v"; exit 1; }
 
   arch:
     needs: version
@@ -54,8 +57,55 @@ jobs:
           name: deb
           path: packaging/deb/*.deb
 
+  wheel:
+    needs: version
+    runs-on: ubuntu-24.04
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - uses: actions/checkout@v7
+      # OpenCASCADE takes long to build: what occt-sys built last time
+      # (target/OCCT) is rebuilt only where it changed
+      - uses: actions/cache@v6
+        with:
+          path: /tmp/target/OCCT
+          key: occt-manylinux_2_28-${{ hashFiles('Cargo.lock') }}
+          restore-keys: occt-manylinux_2_28-
+      - run: packaging/wheel/build.sh dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel
+          path: dist/*.whl
+      # the OpenCASCADE source the wheel's helper is built from (LGPL-2.1)
+      - uses: actions/upload-artifact@v7
+        with:
+          name: occt-source
+          path: dist/opencascade-*-source.tar.gz
+
+  # the wheel where nothing else is installed: no OpenCASCADE, the GL
+  # drivers only, as on a colleague's machine
+  wheel-test:
+    needs: wheel
+    runs-on: ubuntu-24.04
+    container: debian:12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: wheel
+          path: dist
+      - run: |
+          apt-get update -qq
+          apt-get install -y -qq python3-venv libegl1 libgl1-mesa-dri >/dev/null
+          python3 -m venv /v
+          /v/bin/pip install -q dist/*.whl
+          /v/bin/tridi thumb tests/data/cube.step /tmp/s.png 256
+          /v/bin/tridi thumb tests/data/rgb_ascii.pcd /tmp/p.png 256
+          /v/bin/python -c 'import tridi._pcd as p, numpy as np; p.write("/tmp/m.pcd", np.random.rand(100, 3), np.random.rand(100, 3))'
+          /v/bin/tridi thumb /tmp/m.pcd /tmp/m.png 256
+          test -s /tmp/s.png && test -s /tmp/p.png && test -s /tmp/m.png
+
   release:
-    needs: [arch, deb]
+    needs: [arch, deb, wheel-test]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -79,6 +129,7 @@ jobs:
           {
             printf '## Install\n\nArch:\n\n    sudo pacman -U tridi-%s-1-x86_64.pkg.tar.zst\n\n' "$v"
             printf 'Ubuntu 24.04, Debian 12:\n\n    sudo apt install ./tridi_%s-1_amd64.deb\n\n' "$v"
+            printf 'Python (Linux x86_64), the viewer and tridi.show():\n\n    pip install tridi==%s\n\n' "$v"
             cat changes.md
           } > notes.md
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "tridi $v" --notes-file notes.md dist/*

@@ -6,15 +6,11 @@ that shipped it.
 
 ## Medium
 
-- [ ] The viewer as a crate (3.0): `tridi::show(["scan.pcd", "part.step"])`
-  from any Rust program, Open3D's `draw_geometries` style, with clouds
-  from memory too. The repo becomes a workspace: `tridi-formats` (the
-  readers, no dependencies, also usable next to rerun), `tridi-step`
-  (OpenCASCADE in a small helper program embedded in the crate and run
-  from memory, so a host program has nothing to call or install),
-  `tridi` (the viewer) and
-  `tridi-cli` (the `tridi` binary, thumbnails, packaging). Thumbnails stay
-  out of the public API.
+- [ ] Live updates from code (27/11): `v = tridi.Viewer()`, `v.update(name,
+  points, colors)` without blocking, then `v.transform(name, 4x4)` to move
+  a cloud or a STEP part without sending it again (an ICP, a bead moving
+  over a CAD), maybe a timeline as rerun has. One protocol on the tridi
+  process's stdin for Python and Rust; `show()` keeps its signature.
 
 - [ ] Keys from Open3D's viewer (its `PrintVisualizerHelp`), one by one. H help is done (2.5); picked next: P screenshot (the
   thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
@@ -47,6 +43,5 @@ that shipped it.
 - [ ] More ways to install: AUR (`tridi`, or `tridi-bin` from the
   release; `packaging/aur/PKGBUILD` builds the release tag and is ready,
   but the AUR closed new accounts on 2026-10-08: push it when they reopen),
-  `cargo install tridi` (the name is free on crates.io, see the
-  rename), a Flatpak for the other distros (the app id and the metainfo
+  a Flatpak for the other distros (the app id and the metainfo
   are ready).

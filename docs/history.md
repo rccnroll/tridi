@@ -5,6 +5,74 @@ still open is in [ROADMAP.md](../ROADMAP.md); the full list of changes is in
 [CHANGELOG.md](../CHANGELOG.md). Up to 2.2.0 the project was called pcdview,
 and the sections for those releases use that name.
 
+## 3.0.0 (unreleased)
+
+### Python
+
+- `pip install tridi` (Linux x86_64), then `tridi.show(pcd, "part.step")`
+  in place of Open3D's `draw_geometries`: files, Open3D clouds, numpy
+  arrays. The wheel carries the tridi binary, with OpenCASCADE linked into
+  its STEP helper, so nothing else is installed. The window is always a
+  separate process: never OpenGL in Python, a crash there never takes
+  Python down, and the same shape will do live updates later (a cloud
+  replaced, a 4x4 transform applied) as rerun does.
+
+### Four crates
+
+- The viewer is now usable from other Rust programs:
+  `tridi::show(["scan.pcd", "part.step"])` opens the window and blocks
+  until it closes, like Open3D's `draw_geometries`, and `tridi::Viewer`
+  adds clouds a program computed. That needed a library, so the repository
+  became a Cargo workspace of four crates.
+- `tridi-formats` has the point cloud readers and depends on nothing but
+  thiserror: a program that only reads files (next to rerun, say) doesn't
+  pull in the GL and window stack, and the fuzz targets build it alone.
+- `tridi-step` reads STEP through OpenCASCADE, `tridi` is the viewer, and
+  `tridi-cli` is the `tridi` binary with thumbnails, the theme command and
+  the packaging. `tridi` builds without STEP and OpenCASCADE
+  (`default-features = false`), which is also how docs.rs builds it.
+- `cargo add tridi` needs nothing installed for STEP: without the
+  system's OpenCASCADE, tridi-step compiles one from occt-sys (as
+  opencascade-rs does) and links it statically into the helper. The first
+  build takes about 10 minutes more; the helper then needs no OpenCASCADE
+  at run time, which is also what the wheel ships. Static is fine under
+  LGPL-2.1 here because the helper's source is open: anyone can relink it.
+- Thumbnails stay out of the API. They need a headless EGL context on the
+  right GPU and Mesa pinned, which only the binary should promise; they sit
+  behind a `thumbnail` feature of `tridi` that only `tridi-cli` turns on,
+  outside the semver promise.
+
+### STEP from a helper embedded in the crate
+
+- STEP ran in a child process so a stuck file could be killed, and the
+  child was the binary itself (`current_exe step-mesh`). In a host program
+  `current_exe` is the host: it would start the host again. An `init()`
+  call at the top of the host's `main` could have caught that argument,
+  but it is one more thing every program must remember, and forgetting it
+  fails only when a STEP file opens.
+- The child is now a small C++ helper, built by `tridi-step`'s `build.rs`
+  and embedded in the crate. It is written once per process to an
+  in-memory file (memfd) and run from there, so a host program has nothing
+  to install or call.
+- Where the system forbids running from memory (`vm.memfd_noexec = 2`), the
+  helper is copied to `~/.cache/tridi/`, else to `tridi-<uid>` in the temp
+  dir, a directory refused unless it is ours and mode 0700: in a directory
+  every user writes to, another user could have put a helper of theirs
+  there.
+- The `tridi` binary no longer links OpenCASCADE, the helper does, so
+  `$auto` can't see it: the `.deb` names OpenCASCADE's packages itself,
+  each as Ubuntu 24.04's t64 name or Debian 12's plain one.
+
+### show() again
+
+- The event loop is kept per thread, so `show()` can be called again after
+  its window closes. winit allows one event loop per process: a window
+  shown from another thread is `ViewError::OtherThread`, and once the first
+  build failed for want of a display, every later one is `NoDisplay` too.
+- Closing a window stops its loaders: each thread ends before its next
+  file, and a STEP helper mid-file is killed, so nothing keeps reading for
+  a window that is gone.
+
 ## 2.8.0 (2026-10-09)
 
 ### STEP through OpenCASCADE

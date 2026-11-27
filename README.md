@@ -64,6 +64,20 @@ time it opens.
 The package itself clears every user's cached thumbnails of these formats
 on install and upgrade.
 
+## Install with cargo
+
+    cargo install tridi-cli
+
+builds the `tridi` binary into `~/.cargo/bin`. For STEP it uses the
+system's OpenCASCADE (`opencascade` on Arch and Fedora, `libocct-*-dev` on
+Debian/Ubuntu), or else compiles one in: about 10 minutes, with `cmake`
+and a C++ compiler. cargo installs the binary only:
+no MIME types, `.desktop` entry, man pages or shell completions. Without
+the MIME types the file manager doesn't know `.pcd`, `.xyz` and the
+others, and Nautilus's thumbnail sandbox doesn't see `$HOME`, so it can't
+run `~/.cargo/bin/tridi`. For thumbnails and the desktop entry, use the
+Arch or Debian package.
+
 ## File managers
 
 Every file manager that reads the freedesktop `.thumbnailer` files shows
@@ -109,10 +123,35 @@ the NVIDIA one: waking it costs seconds), and thumbnails fall back to
 llvmpipe inside Nautilus's sandbox, which has no GPU. `TRIDI_DEBUG=1`
 prints which device is used.
 
+## From Python
+
+`pip install tridi` (Linux x86_64) brings the viewer with it, STEP included:
+nothing else to install. In place of Open3D's `draw_geometries`:
+
+    import open3d as o3d, tridi
+    pcd = o3d.io.read_point_cloud("scan.pcd")
+    tridi.show(pcd, "part.step")
+
+numpy arrays and `(points, colors)` work too; see
+[python/README.md](python/README.md).
+
+## As a library
+
+The window is a crate too, for any Rust program on Linux, Open3D's
+`draw_geometries` style:
+
+    tridi::show(["scan.pcd", "part.step"])?;
+
+Clouds a program computed go in through `tridi::Viewer`; how, and how to
+build without STEP and OpenCASCADE, is in
+[crates/tridi/README.md](crates/tridi/README.md).
+The point cloud readers alone, with no window, are
+[tridi-formats](crates/tridi-formats).
+
 ## Develop
 
     cargo test                   # one test renders on llvmpipe (Mesa, no GPU)
-    cargo run --release -- FILE
+    cargo run --release -p tridi-cli -- FILE
 
 How the code is laid out, what CI checks, fuzzing, the commit style and how
 a release is cut are in
@@ -124,8 +163,9 @@ a release is cut are in
 
 1.0 was Python + Open3D launched by `uv`, with an f3d-drawn thumbnailer,
 kept in dotfiles; this repository starts at 2.0, the Rust rewrite, which
-dropped STEP until 2.2 brought it back (through OpenCASCADE since 2.8). Up to 2.2.0 it was
-called pcdview (same tags, same history).
+dropped STEP until 2.2 brought it back (through OpenCASCADE since 2.8);
+3.0 split it into crates, so the viewer works from other programs. Up to
+2.2.0 it was called pcdview (same tags, same history).
 Why and how is in [docs/history.md](docs/history.md).
 
 ## License

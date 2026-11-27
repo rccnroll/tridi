@@ -1,0 +1,19 @@
+[package]
+name = "tridi-formats"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Readers for PCD, PLY, OFF and XYZ point clouds, with nothing to depend on"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["point-cloud", "pcd", "ply", "parser"]
+categories = ["parser-implementations", "graphics"]
+
+[dependencies]
+thiserror.workspace = true
+
+[lints]
+workspace = true

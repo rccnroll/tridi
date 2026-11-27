@@ -6,14 +6,16 @@ reproduce. A pull request is welcome for anything already in
 
 ## Build and test
 
-STEP needs OpenCASCADE's headers and libraries, 7.6 or later: `opencascade`
-on Arch and Fedora, `libocct-data-exchange-dev libocct-ocaf-dev
-libocct-modeling-algorithms-dev libocct-modeling-data-dev
+STEP is fastest to build against the system's OpenCASCADE, 7.6 or later:
+`opencascade` on Arch and Fedora, `libocct-data-exchange-dev
+libocct-ocaf-dev libocct-modeling-algorithms-dev libocct-modeling-data-dev
 libocct-foundation-dev` on Debian/Ubuntu. Elsewhere, point
-`OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR` at them.
+`OCCT_INCLUDE_DIR` and `OCCT_LIB_DIR` at them. Without one, the build
+compiles OpenCASCADE from occt-sys (about 10 minutes, once per target dir);
+`TRIDI_OCCT=bundled` does that on purpose, as the wheel does.
 
     cargo build --release
-    cargo run --release -- FILE
+    cargo run --release -p tridi-cli -- FILE
     cargo test
 
 One test renders a thumbnail offscreen: with no GPU it runs on Mesa's
@@ -23,10 +25,11 @@ Arch), as in CI.
 Before pushing, what CI checks on every push and PR:
 
     cargo fmt --check
-    cargo clippy --all-targets --locked -- -D warnings
-    cargo test --locked
+    cargo clippy --workspace --all-targets --locked -- -D warnings
+    cargo test --workspace --locked
+    cargo publish --workspace --dry-run --locked
 
-plus `cargo check` on the oldest Rust supported, 1.92 (`rust-version` in
+plus `cargo check --workspace` on the oldest Rust supported, 1.92 (`rust-version` in
 `Cargo.toml`).
 
 The lints in `Cargo.toml` deny what can panic or lose data silently:
@@ -41,32 +44,48 @@ synthetic files too (`python3 scripts/samples.py`, recorded with
 
 ## Layout
 
-The crate is a library (`src/lib.rs`: readers, scene, rendering) and a
-binary on top of it (`src/main.rs`: the window, the thumbnailer command,
-the desktop integration). Dependencies go one way, down this list:
+The repository is a Cargo workspace of four crates. Dependencies go one
+way, down this list, and nothing depends on `tridi-cli`:
 
-- `src/formats/` — the point cloud readers, one file per format (pcd, ply,
-  off, xyz/xyzrgb/pts). Every byte is untrusted, and nothing here uses the
-  rest of tridi, so the fuzz targets include this folder alone.
-- `src/step/` — STEP: the child process with its deadline (`mod.rs`), the
-  OpenCASCADE side that reads, heals and meshes the parts (`occt.cpp`,
-  built by `build.rs`), and its Rust end (`tessellate.rs`).
-- `src/model.rs` — what a file is: a cloud, or a mesh (three-d-asset,
-  ply/off faces, STEP), and which way is up.
-- `src/color.rs`, `src/theme.rs` — the coloring rules and the two themes.
-- `src/render/` — the scene with eye-dome lighting, the headless EGL
-  context on the right GPU, the offscreen thumbnail.
-- `src/view.rs`, `src/thumb.rs`, `src/desktop.rs` — the binary's parts:
-  the window (navigation, keys, legend), `tridi thumb`, and `tridi theme`
-  with the thumbnail cache.
+- `crates/tridi-cli/` — the `tridi` command: `main.rs` parses the command
+  line and dispatches, `thumb.rs` is `tridi thumb` (pins Mesa's EGL, writes
+  the PNG), `desktop.rs` is `tridi theme` with the thumbnail cache. clap,
+  eyre, tracing-subscriber and image live here only. The `.deb` metadata is
+  in its `Cargo.toml`.
+- `crates/tridi/` — the viewer as a library: `show` and `Viewer`. The
+  window in `src/viewer/` (`mod.rs` the API, `app.rs` the event loop,
+  `window.rs` the window and its GL, `load.rs` the loader threads,
+  `navigate.rs` the mouse, `overlay.rs` the legend and keys); what a file is
+  (a cloud or a mesh, which way is up) in `model.rs`; the coloring rules and
+  the two themes in `color.rs` and `theme.rs`; the scene with eye-dome
+  lighting in `src/render/`. Behind the `thumbnail` feature, for
+  `tridi-cli` only and outside the semver promise: `thumbnail.rs`, with the
+  headless EGL context on the right GPU and the offscreen render. The
+  `step` feature (default) brings in `tridi-step`.
+- `crates/tridi-step/` — STEP through OpenCASCADE, in a helper process
+  embedded in the crate: `helper/occt.cpp` reads, heals and meshes the
+  parts, `helper/main.cpp` writes them to the parent, both built by
+  `build.rs`; `src/parent.rs` runs the helper with its deadline and reads
+  what it sends, `src/helper.rs` holds the embedded executable, `src/lib.rs`
+  the API.
+- `crates/tridi-formats/` — the point cloud readers, one file per format
+  (pcd, ply, off, xyz/xyzrgb/pts). Every byte is untrusted, and the crate
+  depends on nothing of tridi's, so the fuzz targets build it alone.
 - `share/` — what the packages install: thumbnailer entry, MIME types,
   `.desktop`, AppStream metainfo, icons. Under `Papirus/` only symlinks to
   our mimetype icon: GTK looks for every name of a file's icon, generic
   ones included, in the current theme before hicolor, so without them
   Papirus users get its generic file icon.
 - `packaging/` — the PKGBUILD and the `.deb` build (cargo-deb, metadata in
-  `Cargo.toml`) with their install scripts, and the licenses of the fonts
-  egui builds into the binary.
+  `crates/tridi-cli/Cargo.toml`) with their install scripts, and the
+  licenses of the fonts egui builds into the binary.
+- `python/` — the `tridi` Python package: `show()` in `tridi/__init__.py`
+  runs the tridi binary bundled in the wheel (`tridi/_bin/`, filled only by
+  the wheel build), writing clouds from memory as binary PCD
+  (`tridi/_pcd.py`) to a temp dir. Tests: `pytest python/tests`.
+- `packaging/wheel/` — the manylinux wheel: `build.sh` builds the binary
+  with `TRIDI_OCCT=bundled` (OpenCASCADE linked into the STEP helper) and
+  puts it in `tridi/_bin/`, next to the OpenCASCADE source for the release.
 - `tests/data/` — tiny fixtures: PCD and GLB written by Open3D, STEP by
   hand.
 - `fuzz/` — cargo-fuzz targets for the readers, and their seeds.
@@ -86,7 +105,7 @@ fuzzed: `cargo install cargo-fuzz`, then from `fuzz/`,
 `mkdir -p corpus/pcd && cargo +nightly fuzz run -O pcd corpus/pcd seeds/pcd`
 (or `ply`, `off`, `text`). New inputs go to the first folder, `corpus/`
 (ignored), so the seeds stay as committed. A crash lands in
-`fuzz/artifacts/`; it becomes a test in `src/formats/`, next to the reader.
+`fuzz/artifacts/`; it becomes a test in `crates/tridi-formats/src/`, next to the reader.
 
 ## Commits
 
@@ -98,8 +117,14 @@ ROADMAP.md (open), not in the commit.
 
 ## Releases
 
-1. Set the version in `Cargo.toml` and the PKGBUILD's `pkgver`, then
-   `cargo check` (for `Cargo.lock`), and add
+1. Set the version in `Cargo.toml`, in `[workspace.package]` and in the
+   `version = "..."` of the internal crates in `[workspace.dependencies]`
+   (one sed changes both, and `python/pyproject.toml`'s, OLD being the
+   current version), and the PKGBUILD's `pkgver`:
+
+       sed -i 's/version = "OLD"/version = "X.Y.Z"/' Cargo.toml python/pyproject.toml
+
+   then `cargo check` (for `Cargo.lock`), and add
    `<release version="X.Y.Z" date="YYYY-MM-DD"/>` on top of `<releases>` in
    `share/metainfo/io.github.rccnroll.tridi.metainfo.xml`.
 2. Add this release under the changelog's header (`--prepend` would
@@ -110,7 +135,12 @@ ROADMAP.md (open), not in the commit.
        mv CHANGELOG.new CHANGELOG.md
 3. Commit `chore(release): X.Y.Z`, then
    `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-4. The Release workflow builds both packages and opens a draft release
-   with them and this version's changelog. Edit the notes, publish.
-5. In `packaging/aur/PKGBUILD`, set `pkgver` and run `updpkgsums` (the
+4. The Release workflow builds both packages and the Python wheel, tries
+   the wheel in a clean Debian, and opens a draft release with them and
+   this version's changelog. Edit the notes, publish: publishing sends the
+   wheel to PyPI (the PyPI workflow).
+5. `cargo publish --workspace --locked` publishes `tridi-formats`,
+   `tridi-step`, `tridi` and `tridi-cli`, dependencies first. CI's dry run
+   has already packaged and built them.
+6. In `packaging/aur/PKGBUILD`, set `pkgver` and run `updpkgsums` (the
    tag's tarball now exists), commit `build(aur): X.Y.Z`.
