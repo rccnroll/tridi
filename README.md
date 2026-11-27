@@ -124,6 +124,18 @@ the NVIDIA one: waking it costs seconds), and thumbnails fall back to
 llvmpipe inside Nautilus's sandbox, which has no GPU. `TRIDI_DEBUG=1`
 prints which device is used.
 
+## From Python
+
+`pip install tridi` (Linux x86_64) brings the viewer with it, STEP included:
+nothing else to install. In place of Open3D's `draw_geometries`:
+
+    import open3d as o3d, tridi
+    pcd = o3d.io.read_point_cloud("scan.pcd")
+    tridi.show(pcd, "part.step")
+
+numpy arrays and `(points, colors)` work too; see
+[python/README.md](python/README.md).
+
 ## As a library
 
 The window is a crate too, for any Rust program on Linux, Open3D's

@@ -25,7 +25,9 @@ otherwise, before opening a window. `cargo run -p tridi --example show -- FILE..
 runs a longer version of this.
 
 Files load in parallel and show up as they are read. The window has a legend,
-one color per file, and the keys listed in `tridi::KEYS`.
+one color per file, and the keys listed in `tridi::KEYS`. Shift + click picks
+a point; `Viewer::output` gets a line for each (`picked #INDEX X Y Z NAME`,
+INDEX its place in the cloud as given), as the binary prints them on stdout.
 
 winit allows one event loop per process: windows must be shown from the thread
 that showed the first one. `show()` blocks that thread until its window closes.

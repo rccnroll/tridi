@@ -196,7 +196,9 @@ impl Viewer {
     }
 
     /// Where the lines tridi's binary prints go: each file's size once read,
-    /// a file turned off or on. Nowhere by default.
+    /// a file turned off or on, a point picked or removed (`picked #INDEX X Y
+    /// Z NAME`, INDEX the point's place in the file or in the cloud as
+    /// given). Nowhere by default.
     #[must_use]
     pub fn output(mut self, out: Box<dyn Write>) -> Self {
         self.out = out;

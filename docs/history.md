@@ -7,6 +7,16 @@ and the sections for those releases use that name.
 
 ## 3.0.0 (unreleased)
 
+### Python
+
+- `pip install tridi` (Linux x86_64), then `tridi.show(pcd, "part.step")`
+  in place of Open3D's `draw_geometries`: files, Open3D clouds, numpy
+  arrays. The wheel carries the tridi binary and the OpenCASCADE its STEP
+  helper loads, so nothing else is installed. The window is always a
+  separate process: never OpenGL in Python, a crash there never takes
+  Python down, and the same shape will do live updates later (a cloud
+  replaced, a 4x4 transform applied) as rerun does.
+
 ### Four crates
 
 - The viewer is now usable from other Rust programs:

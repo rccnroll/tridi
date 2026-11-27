@@ -6,6 +6,12 @@ that shipped it.
 
 ## Medium
 
+- [ ] Live updates from code (27/11): `v = tridi.Viewer()`, `v.update(name,
+  points, colors)` without blocking, then `v.transform(name, 4x4)` to move
+  a cloud or a STEP part without sending it again (an ICP, a bead moving
+  over a CAD), maybe a timeline as rerun has. One protocol on the tridi
+  process's stdin for Python and Rust; `show()` keeps its signature.
+
 - [ ] Keys from Open3D's viewer (its `PrintVisualizerHelp`), one by one. H help is done (2.5); picked next: P screenshot (the
   thumbnail's offscreen render), color modes (file / X / Y / Z ramp; not on
   0-4, which clash with our 1-9 file toggles: Shift+0-4 or a C cycle),
