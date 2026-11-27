@@ -39,7 +39,9 @@ drivers: Debian/Ubuntu `libegl1 libgl1-mesa-dri`, Arch `mesa`, Fedora
 
 ## License
 
-MIT or Apache-2.0. The wheel bundles OpenCASCADE's libraries, LGPL-2.1 with
-its exception; their license is in `tridi/_bin/licenses/`.
+MIT or Apache-2.0. tridi uses Open CASCADE Technology: the wheel bundles its
+libraries, unmodified, under LGPL-2.1 with the Open CASCADE exception. Their
+license is in `tridi/_bin/licenses/`, and the exact source they were built
+from is attached to each GitHub release (`occt-*.tar.gz`).
 
 More: https://github.com/rccnroll/tridi

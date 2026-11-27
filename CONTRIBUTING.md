@@ -77,6 +77,14 @@ way, down this list, and nothing depends on `tridi-cli`:
 - `packaging/` — the PKGBUILD and the `.deb` build (cargo-deb, metadata in
   `crates/tridi-cli/Cargo.toml`) with their install scripts, and the
   licenses of the fonts egui builds into the binary.
+- `python/` — the `tridi` Python package: `show()` in `tridi/__init__.py`
+  runs the tridi binary bundled in the wheel (`tridi/_bin/`, filled only by
+  the wheel build), writing clouds from memory as binary PCD
+  (`tridi/_pcd.py`) to a temp dir. Tests: `pytest python/tests`.
+- `packaging/wheel/` — the manylinux wheel: `occt.sh` builds OpenCASCADE
+  (none in the manylinux image), `build.sh` puts the binary and the
+  OpenCASCADE libraries the STEP helper loads in `tridi/_bin/`; the helper
+  finds them in `occt/` next to the binary.
 - `tests/data/` — tiny fixtures: PCD and GLB written by Open3D, STEP by
   hand.
 - `fuzz/` — cargo-fuzz targets for the readers, and their seeds.
@@ -110,10 +118,10 @@ ROADMAP.md (open), not in the commit.
 
 1. Set the version in `Cargo.toml`, in `[workspace.package]` and in the
    `version = "..."` of the internal crates in `[workspace.dependencies]`
-   (one sed changes both, OLD being the current version), and the
-   PKGBUILD's `pkgver`:
+   (one sed changes both, and `python/pyproject.toml`'s, OLD being the
+   current version), and the PKGBUILD's `pkgver`:
 
-       sed -i 's/version = "OLD"/version = "X.Y.Z"/' Cargo.toml
+       sed -i 's/version = "OLD"/version = "X.Y.Z"/' Cargo.toml python/pyproject.toml
 
    then `cargo check` (for `Cargo.lock`), and add
    `<release version="X.Y.Z" date="YYYY-MM-DD"/>` on top of `<releases>` in
@@ -126,8 +134,10 @@ ROADMAP.md (open), not in the commit.
        mv CHANGELOG.new CHANGELOG.md
 3. Commit `chore(release): X.Y.Z`, then
    `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-4. The Release workflow builds both packages and opens a draft release
-   with them and this version's changelog. Edit the notes, publish.
+4. The Release workflow builds both packages and the Python wheel, tries
+   the wheel in a clean Debian, and opens a draft release with them and
+   this version's changelog. Edit the notes, publish: publishing sends the
+   wheel to PyPI (the PyPI workflow).
 5. `cargo publish --workspace --locked` publishes `tridi-formats`,
    `tridi-step`, `tridi` and `tridi-cli`, dependencies first. CI's dry run
    has already packaged and built them.
