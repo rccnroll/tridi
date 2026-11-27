@@ -25,7 +25,7 @@
 #include <XCAFDoc_ColorTool.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
 #include <XCAFDoc_ShapeTool.hxx>
-#if OCC_VERSION_HEX >= 0x070800
+#if OCC_VERSION_HEX >= 0x070900
 #include <ShapeProcess_ShapeContext.hxx>
 #include <XSAlgo_ShapeProcessor.hxx>
 #endif
@@ -137,7 +137,7 @@ void walk(const TDF_Label &l, const gp_Trsf &at, std::optional<Color> tint,
 
 // What the healing did to the faces, for their colors: a face it replaced
 // takes the color of the one it came from.
-#if OCC_VERSION_HEX >= 0x070800
+#if OCC_VERSION_HEX >= 0x070900
 void follow(const Handle(ShapeProcess_ShapeContext) & ctx, Part &p) {
     if (ctx.IsNull()) {
         return;
@@ -252,7 +252,7 @@ std::vector<float> place(const Mesh &m, const Part &p) {
 
 // STEPControl_Reader keeps the default healing to itself
 struct Healing : STEPControl_Reader {
-#if OCC_VERSION_HEX >= 0x070800
+#if OCC_VERSION_HEX >= 0x070900
     using STEPControl_Reader::GetDefaultShapeFixParameters;
     using STEPControl_Reader::GetDefaultShapeProcessFlags;
 #endif
@@ -275,9 +275,9 @@ extern "C" int tridi_step_tessellate(const char *path, int coarse, const uint64_
         if (reader.ReadFile(path) != IFSelect_RetDone) {
             return NOT_STEP;
         }
-#if OCC_VERSION_HEX >= 0x070800
+#if OCC_VERSION_HEX >= 0x070900
         // the healing, the bulk of the reading, is done below a part at a
-        // time on every core; before 7.8 the reader does it, on one. After
+        // time on every core; before 7.9 the reader does it, on one. After
         // ReadFile, which sets them back, and on both readers
         reader.SetShapeProcessFlags(ShapeProcess::OperationsFlags());
         reader.ChangeReader().SetShapeProcessFlags(ShapeProcess::OperationsFlags());
@@ -310,7 +310,7 @@ extern "C" int tridi_step_tessellate(const char *path, int coarse, const uint64_
     if (ids(ctx, todo.data(), todo.size()) != 0) {
         return WRITE;
     }
-#if OCC_VERSION_HEX >= 0x070800
+#if OCC_VERSION_HEX >= 0x070900
     Healing defaults;
     auto params = defaults.GetDefaultShapeFixParameters();
     auto flags = defaults.GetDefaultShapeProcessFlags();
@@ -325,7 +325,7 @@ extern "C" int tridi_step_tessellate(const char *path, int coarse, const uint64_
             // a part OpenCASCADE throws on is lost, like one it can't mesh;
             // nothing may cross into Rust
             try {
-#if OCC_VERSION_HEX >= 0x070800
+#if OCC_VERSION_HEX >= 0x070900
                 XSAlgo_ShapeProcessor healer(params);
                 p.shape = healer.ProcessShape(p.shape, flags, Message_ProgressRange());
                 follow(healer.GetContext(), p);
